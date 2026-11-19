@@ -30,15 +30,28 @@ use crate::dirs::io_msg;
 const IO_REPARSE_TAG_MOUNT_POINT: u32 = 0xA000_0003;
 const IO_REPARSE_TAG_SYMLINK: u32 = 0xA000_000C;
 
-/// Byte offsets inside `REPARSE_DATA_BUFFER` (winnt.h); decoded manually so the code does
-/// not depend on generated union accessors.
-/// `ReparseTag` at 0, then the tag-specific header starts at 8:
-///   mount point / symlink: SubstituteNameOffset@8, SubstituteNameLength@10,
-///                          PrintNameOffset@12, PrintNameLength@14, PathBuffer@16
+/// Byte offsets inside `REPARSE_DATA_BUFFER` (winnt.h), decoded manually so the code does not
+/// depend on generated union accessors. The struct is:
+///
+///   DWORD  ReparseTag;          // 0
+///   WORD   ReparseDataLength;   // 4
+///   WORD   Reserved;            // 6
+///   union { struct {            // 8  <- tag-specific header starts here
+///       WORD SubstituteNameOffset;  // 8
+///       WORD SubstituteNameLength;  // 10
+///       WORD PrintNameOffset;       // 12
+///       WORD PrintNameLength;       // 14
+///       WCHAR PathBuffer[];         // 16
+///   } SymbolicLinkReparseBuffer;  // (also carries a leading ULONG Flags at 16 for symlinks)
+///   } PathBuffer;
+///
+/// The substitute name starts at `PathBuffer + SubstituteNameOffset`, so with offset 0 that is
+/// byte 16 for junctions and byte 20 for symlinks (after the Flags field).
 const OFF_TAG: usize = 0;
+const OFF_SUBSTITUTE_OFFSET: usize = 8;
 const OFF_SUBSTITUTE_LEN: usize = 10;
 const OFF_PATH_BUFFER: usize = 16;
-const MIN_REPARSE_BYTES: usize = OFF_PATH_BUFFER + 4;
+const MIN_REPARSE_BYTES: usize = OFF_PATH_BUFFER + 8;
 
 fn wide(path: &Path) -> Vec<u16> {
     let mut v: Vec<u16> = path.as_os_str().encode_wide().collect();
@@ -155,9 +168,17 @@ fn read_reparse(path: &Path) -> (Option<u32>, Option<PathBuf>, Option<i32>) {
         if tag != IO_REPARSE_TAG_MOUNT_POINT && tag != IO_REPARSE_TAG_SYMLINK {
             return (Some(tag), None, None);
         }
+        let sub_off =
+            u16::from_le_bytes([buf[OFF_SUBSTITUTE_OFFSET], buf[OFF_SUBSTITUTE_OFFSET + 1]])
+                as usize;
         let sub_len =
             u16::from_le_bytes([buf[OFF_SUBSTITUTE_LEN], buf[OFF_SUBSTITUTE_LEN + 1]]) as usize;
-        let name_bytes = &buf[OFF_PATH_BUFFER..(OFF_PATH_BUFFER + sub_len).min(returned as usize)];
+        let start = OFF_PATH_BUFFER + sub_off;
+        let end = (start + sub_len).min(returned as usize);
+        if start >= end {
+            return (Some(tag), None, None);
+        }
+        let name_bytes = &buf[start..end];
         let units: Vec<u16> = name_bytes
             .chunks_exact(2)
             .map(|c| u16::from_le_bytes([c[0], c[1]]))
