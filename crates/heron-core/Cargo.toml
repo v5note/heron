@@ -1,0 +1,13 @@
+[package]
+name = "heron-core"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Heron domain model: no IO, no async, no system clock."
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+semver = { workspace = true }

@@ -1,0 +1,24 @@
+# Rust
+/target
+**/*.rs.bk
+
+# Node / Tauri
+node_modules/
+dist/
+src-tauri/gen/
+src-tauri/target/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Local data
+*.db
+*.db-wal
+*.db-shm
+
+# Local cargo home (see .cargo/config.toml)
+/.cargo-home/
+
+# Local rustup home (kept out of git; see docs/adr/0001)
+/.rustup-home/

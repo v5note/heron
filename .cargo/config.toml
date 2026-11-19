@@ -1,0 +1,6 @@
+# Heron workspace-local cargo configuration.
+#
+# CARGO_HOME is redirected to <workspace>/target/.cargo-home so that builds never need
+# write access outside the repository (also makes CI and the agent sandbox consistent).
+[build]
+target-dir = "target"

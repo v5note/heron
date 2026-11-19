@@ -1,0 +1,27 @@
+[package]
+name = "heron-platform"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "The only crate allowed to carry platform-specific code."
+
+[dependencies]
+heron-core = { path = "../heron-core" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+directories = { workspace = true }
+dunce = { workspace = true }
+fs4 = { workspace = true, features = ["sync"] }
+
+[target.'cfg(windows)'.dependencies]
+junction = "2.1"
+windows-sys = { version = "0.61", features = [
+    "Win32_Foundation",
+    "Win32_Storage_FileSystem",
+    "Win32_System_IO",
+    "Win32_System_Ioctl",
+] }
+
+[dev-dependencies]
+tempfile = { workspace = true }
