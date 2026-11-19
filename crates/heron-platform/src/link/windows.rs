@@ -173,6 +173,9 @@ fn read_reparse(path: &Path) -> (Option<u32>, Option<PathBuf>, Option<i32>) {
 }
 
 pub(super) fn create(target: &Path, link: &Path, mode: ProjectionMode) -> Result<LinkOutcome, Msg> {
+    // Store an absolute target: Windows keeps the substitute name verbatim, and a relative one
+    // would resolve against the link's own directory instead of the caller's working directory.
+    let target = &absolute(target);
     let want_symlink = matches!(mode, ProjectionMode::Symlink);
     if want_symlink {
         match symlink_dir(target, link) {
@@ -193,6 +196,16 @@ pub(super) fn create(target: &Path, link: &Path, mode: ProjectionMode) -> Result
     }
     junction::create(target, link).map_err(io_msg(link))?;
     Ok(LinkOutcome::Created(LinkKind::Junction))
+}
+
+/// An absolute, normalized form of `path` (no `..`, no reliance on the current directory).
+fn absolute(path: &Path) -> PathBuf {
+    if path.is_absolute() {
+        return path.to_path_buf();
+    }
+    std::env::current_dir()
+        .map(|cwd| cwd.join(path))
+        .unwrap_or_else(|_| path.to_path_buf())
 }
 
 pub(super) fn unlink(path: &Path, kind: LinkKind) -> Result<(), Msg> {

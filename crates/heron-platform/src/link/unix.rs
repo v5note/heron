@@ -45,7 +45,16 @@ pub(super) fn probe(path: &Path) -> Result<LinkInfo, Msg> {
 
 pub(super) fn create(target: &Path, link: &Path, mode: ProjectionMode) -> Result<LinkOutcome, Msg> {
     let _ = mode; // Junctions do not exist on unix; both modes produce a symlink.
-    symlink(target, link).map_err(io_msg(link))?;
+                  // Absolute targets keep the link valid regardless of the caller's working directory, and
+                  // match what the Windows backend stores.
+    let target = if target.is_absolute() {
+        target.to_path_buf()
+    } else {
+        std::env::current_dir()
+            .map(|cwd| cwd.join(target))
+            .unwrap_or_else(|_| target.to_path_buf())
+    };
+    symlink(&target, link).map_err(io_msg(link))?;
     Ok(LinkOutcome::Created(LinkKind::SymbolicDir))
 }
 
