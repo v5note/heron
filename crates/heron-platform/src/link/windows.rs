@@ -53,6 +53,11 @@ const OFF_SUBSTITUTE_LEN: usize = 10;
 const OFF_PATH_BUFFER: usize = 16;
 const MIN_REPARSE_BYTES: usize = OFF_PATH_BUFFER + 8;
 
+/// `\\?\` — the Win32 "verbatim" path prefix.
+const VERBATIM_PREFIX: &str = "\\\\?\\";
+/// `\\??\\` — the NT object-manager prefix used inside reparse buffers.
+const NT_PREFIX: &str = "\\??\\";
+
 fn wide(path: &Path) -> Vec<u16> {
     let mut v: Vec<u16> = path.as_os_str().encode_wide().collect();
     v.push(0);
@@ -186,8 +191,8 @@ fn read_reparse(path: &Path) -> (Option<u32>, Option<PathBuf>, Option<i32>) {
             .collect();
         let name = String::from_utf16_lossy(&units);
         let stripped = name
-            .strip_prefix("\\\\\\\\?\\\\")
-            .or_else(|| name.strip_prefix("\\\\??\\\\"))
+            .strip_prefix(VERBATIM_PREFIX)
+            .or_else(|| name.strip_prefix(NT_PREFIX))
             .unwrap_or(&name);
         (Some(tag), Some(PathBuf::from(stripped)), None)
     }
