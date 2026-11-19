@@ -33,17 +33,21 @@ const IO_REPARSE_TAG_SYMLINK: u32 = 0xA000_000C;
 /// Byte offsets inside `REPARSE_DATA_BUFFER` (winnt.h), decoded manually so the code does not
 /// depend on generated union accessors. The struct is:
 ///
-///   DWORD  ReparseTag;          // 0
-///   WORD   ReparseDataLength;   // 4
-///   WORD   Reserved;            // 6
-///   union { struct {            // 8  <- tag-specific header starts here
-///       WORD SubstituteNameOffset;  // 8
-///       WORD SubstituteNameLength;  // 10
-///       WORD PrintNameOffset;       // 12
-///       WORD PrintNameLength;       // 14
-///       WCHAR PathBuffer[];         // 16
-///   } SymbolicLinkReparseBuffer;  // (also carries a leading ULONG Flags at 16 for symlinks)
-///   } PathBuffer;
+/// ```text
+/// DWORD ReparseTag;         // 0
+/// WORD  ReparseDataLength;  // 4
+/// WORD  Reserved;           // 6
+/// union {                   // 8  <- tag-specific header starts here
+///   struct {                // symbol link / mount point
+///     WORD SubstituteNameOffset;  // 8
+///     WORD SubstituteNameLength;  // 10
+///     WORD PrintNameOffset;       // 12
+///     WORD PrintNameLength;       // 14
+///     ULONG Flags;                // 16  (symlinks only)
+///     WCHAR PathBuffer[];         // 16 (junction) / 20 (symlink)
+///   };
+/// } PathBuffer;
+/// ```
 ///
 /// The substitute name starts at `PathBuffer + SubstituteNameOffset`, so with offset 0 that is
 /// byte 16 for junctions and byte 20 for symlinks (after the Flags field).
@@ -62,45 +66,6 @@ fn wide(path: &Path) -> Vec<u16> {
     let mut v: Vec<u16> = path.as_os_str().encode_wide().collect();
     v.push(0);
     v
-}
-
-/// TEMPORARY: expose raw reparse bytes for CI diagnosis.
-pub(super) fn debug_raw_reparse(path: &Path) -> String {
-    let w = wide(path);
-    // SAFETY: buffers are local and outlive the calls.
-    unsafe {
-        let handle = CreateFileW(
-            w.as_ptr(),
-            0,
-            FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
-            std::ptr::null(),
-            OPEN_EXISTING,
-            FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT,
-            std::ptr::null_mut(),
-        );
-        if handle == INVALID_HANDLE_VALUE {
-            return format!("open failed err={}", std::io::Error::last_os_error());
-        }
-        let mut buf = vec![0u8; 16 * 1024];
-        let mut returned: u32 = 0;
-        let ok = DeviceIoControl(
-            handle,
-            FSCTL_GET_REPARSE_POINT,
-            std::ptr::null(),
-            0,
-            buf.as_mut_ptr().cast(),
-            buf.len() as u32,
-            &mut returned,
-            std::ptr::null_mut(),
-        );
-        let _ = CloseHandle(handle);
-        if ok == 0 {
-            return format!("ioctl failed err={}", std::io::Error::last_os_error());
-        }
-        let n = (returned as usize).min(buf.len()).min(64);
-        let hex: Vec<String> = buf[..n].iter().map(|b| format!("{b:02x}")).collect();
-        return format!("returned={returned} head={}", hex.join(" "));
-    }
 }
 
 pub(super) fn probe(path: &Path) -> Result<LinkInfo, Msg> {
