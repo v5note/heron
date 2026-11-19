@@ -1,0 +1,20 @@
+[package]
+name = "heron-scan"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Controlled traversal, SKILL.md parsing and content fingerprints."
+
+[dependencies]
+heron-core = { path = "../heron-core" }
+heron-platform = { path = "../heron-platform" }
+serde = { workspace = true }
+serde_yaml = { workspace = true }
+blake3 = { workspace = true }
+walkdir = { workspace = true }
+rayon = { workspace = true }
+globset = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }

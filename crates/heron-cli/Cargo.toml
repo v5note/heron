@@ -1,0 +1,24 @@
+[package]
+name = "heron-cli"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Heron command line interface (M0: scan / list / detected)."
+
+[[bin]]
+name = "heron"
+path = "src/main.rs"
+
+[dependencies]
+heron-core = { path = "../heron-core" }
+heron-platform = { path = "../heron-platform" }
+heron-store = { path = "../heron-store" }
+heron-scan = { path = "../heron-scan" }
+clap = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+chrono = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }

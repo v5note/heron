@@ -95,6 +95,11 @@ pub fn comparison_key(path: &Path) -> String {
     display(path).to_lowercase()
 }
 
+/// Compare two paths for identity after lexical normalization (case-insensitive keys).
+pub fn same_path_ci(a: &Path, b: &Path) -> bool {
+    comparison_key(&normalize(a)) == comparison_key(&normalize(b))
+}
+
 /// True when `child` is `parent` or lives underneath it.
 pub fn is_same_or_inside(parent: &Path, child: &Path) -> bool {
     let p = comparison_key(&normalize(parent));

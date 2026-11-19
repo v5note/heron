@@ -1418,3 +1418,29 @@ Playwright 覆盖 6 条主路径：首次引导（含 Git 缺失引导）→ 发
 6. 按 §11 的 M0 顺序逐条推进，每个 PR 必须包含对应测试。
 
 > 本文与设计文档如有冲突，以**设计文档为准**并回写本文；新增技术决策写入 `docs/adr/`。
+
+---
+
+## 16. 落地进度（滚动更新）
+
+| 日期 | 里程碑 | 已落地的代码 | 验证方式 |
+|------|--------|--------------|----------|
+| 2026-11-19 | M0（部分） | `heron-core`：slug / version / policy / error / dto / hash；`heron-platform`：dirs / paths / atomic / lock / link（unix + windows）/ probe | `cargo test --workspace` 81 例通过；`cargo fmt --check`、`cargo clippy -D warnings` 干净；`--target x86_64-pc-windows-msvc` 静态编译通过 |
+| 2026-11-19 | M0（部分） | 链接层安全测试：`tests/link_safety.rs`（10 例，全平台）+ `tests/link_safety_windows.rs`（L1–L6，Windows 门控） | macOS 实跑 10/10；Windows 用例待 Windows CI 或真机执行 |
+| 2026-11-19 | M0（完成） | `heron-store`：迁移 0001/0002 + 6 个仓储 + 补偿事件表；`heron-scan`：walker / rules / parse / classify / fingerprint；`heron-cli`：`scan` / `list` / `detected` | 131 例测试全绿；真机扫描 219 目录 / 52 个 skill（79 ms）；`--roots` 下的 `.claude/commands` 被识别为 legacy-command |
+
+**实现中产生的决策**见 `docs/adr/`：
+
+- `0001-cargo-home-and-toolchain-isolation.md`：构建缓存与工具链隔离在工作区内；
+- `0002-drop-blake3-from-platform.md`：平台层路径指纹改用 FNV-1a，blake3 只用于内容指纹；
+- `0003-link-safety-contract.md`：链接层的五条安全契约，由测试矩阵兜底；
+- `0004-data-dir-override-owns-everything.md`：显式数据目录拥有 config/cache/log；
+- `0005-storage-holds-real-paths.md`：数据库只存真实路径，`display()` 仅用于渲染。
+
+**M1 待办（下一步）**：
+
+1. `heron-vcs`：每 Skill 独立 Git 仓库（init / commit / tag / reset）；
+2. `heron-projection`：plan / apply / verify（对接已完成的链接层）；
+3. `heron-service`：Adopt / Project / Unproject / Doctor（基础项）；
+4. 客户端矩阵从 `clients/*.toml` 加载（当前内置在 CLI 里，需外置为资源文件）；
+5. Windows CI 上跑通 `link_safety_windows` 的 L1–L6。

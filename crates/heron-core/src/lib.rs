@@ -17,8 +17,9 @@ pub mod slug;
 pub mod version;
 
 pub use error::{ErrorCode, HeronError, Msg, Result, Severity};
+pub use hash::Hash;
 pub use ids::{ClientId, MarketId, SourceId, TargetId};
 pub use platform_kind::PlatformKind;
 pub use policy::{ConflictPolicy, PinPolicy, ProjectionMode, UpgradeLane};
-pub use slug::Slug;
+pub use slug::{Slug, SlugPolicy};
 pub use version::Version;

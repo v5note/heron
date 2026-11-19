@@ -39,7 +39,11 @@ impl Dirs {
                     .msg()
                     .with("detail", "empty_data_override"));
             }
+            // An explicit data directory owns everything Heron writes, so portable installs,
+            // tests and CI never need access outside it.
             dirs.data = dir.to_path_buf();
+            dirs.config = dirs.data.join("config");
+            dirs.cache = dirs.data.join("cache");
             dirs.log = dirs.data.join("log");
         }
         Ok(dirs)
@@ -113,13 +117,18 @@ mod tests {
     }
 
     #[test]
-    fn override_moves_data_and_log_only() {
-        let base = Dirs::resolve("heron-test-dirs").unwrap();
+    fn override_owns_every_directory() {
         let tmp = Path::new("/tmp/heron-data-override");
         let d = Dirs::resolve_with_override("heron-test-dirs", Some(tmp)).unwrap();
         assert_eq!(d.data, tmp);
         assert_eq!(d.log, tmp.join("log"));
-        assert_eq!(d.config, base.config, "config stays on the system default");
+        assert_eq!(
+            d.config,
+            tmp.join("config"),
+            "an explicit data dir owns config too"
+        );
+        assert_eq!(d.cache, tmp.join("cache"));
+        assert_eq!(d.db_path(), tmp.join("heron.db"));
     }
 
     #[test]
