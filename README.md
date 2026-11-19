@@ -1,172 +1,177 @@
-# 苍鹭 Heron
+# Heron
 
-**把散落在各处的 Agent Skill 收拢成一份受版本管理的副本，再按需分发，并让升级变成一条命令。**
+**Gather the Agent Skills scattered across your machine into one versioned copy, project them where your tools actually look, and make upgrading a single command.**
 
-Heron 面向同时使用 Claude Code、Codex、Cursor 等工具的开发者：Skill 分散在 `~/.claude/skills`、
-`~/.codex/skills`、`~/.agents/skills` 和 N 个项目目录里，改一处其余仍是旧的，想升级又怕覆盖自己的改动。
-Heron 把这些问题收成三件事：**收拢（adopt）→ 分发（project）→ 升级（upgrade）**。
+> English · [中文](README.zh-CN.md)
 
-- 支持 macOS 12+ 与 Windows 10 1803+（Linux 可运行，未作为首发目标）
-- 图形界面 + 命令行，两者共用同一套逻辑，行为一致
-- 所有改动可预览、可回滚；删除任何东西前都会先备份
+Heron is for developers running several AI coding tools at once. Skills end up in `~/.claude/skills`,
+`~/.codex/skills`, `~/.agents/skills` and in the `.claude` directory of every project. Edit one copy and
+the rest go stale; upgrade one and you lose your local edits. Heron collapses that into three verbs:
+**adopt → project → upgrade**.
+
+- macOS 12+ and Windows 10 1803+ (runs on Linux; not a first-class target yet)
+- Desktop app **and** command line, backed by the same code — identical behaviour
+- Every change can be previewed and rolled back; nothing is deleted before it is backed up
 
 ---
 
-## 它解决什么
+## What it solves
 
-| 痛点 | Heron 的做法 |
+| Pain | What Heron does |
 |---|---|
-| Skill 散落在四五个隐藏目录 | `heron scan` 一次扫全，列出"已纳管 / 未纳管" |
-| 同一个 Skill 有多份拷贝 | `heron adopt` 收拢为**一份**实体，原位置变成链接 |
-| 不知道客户端到底有没有加载 | `heron verify` 区分「生效中 / 未被扫描 / 被压制 / 坏链」 |
-| 上游更新了不知道 | `heron outdated` 对比上游提交 |
-| 升级会覆盖我改过的行 | 三方合并，本地改动与上游改动都保留 |
-| 团队每人 Skill 各不相同 | `heron.lock` 导出/复现 |
-| 想从 GitHub / 市场装 Skill | `heron install` + 五个内置市场 |
+| Skills scattered across five hidden directories | `heron scan` finds everything; lists "managed" vs "unowned" |
+| The same skill copied several times | `heron adopt` keeps **one** copy and turns the other locations into links |
+| No idea whether the client actually loads it | `heron verify` distinguishes *live / not scanned / shadowed / broken* |
+| Upstream moved and nobody noticed | `heron outdated` compares against the upstream commit |
+| Upgrading overwrites my edits | Three-way merge keeps both your changes and upstream's |
+| Every teammate has a different skill set | `heron.lock` exports and reproduces it |
+| Installing skills from GitHub or a marketplace | `heron install` + five built-in marketplaces |
 
 ---
 
-## 快速开始
+## Quick start
 
-### 1. 环境要求
+### Requirements
 
-- **git 2.38+**（三方合并需要 `git merge-tree --write-tree`）。没有安装时 Heron 会给出安装指引，而不是静默降级。
-- macOS 12+ / Windows 10 1803+（Windows 需要 WebView2，Win11 自带）。
+- **git 2.38+** (three-way merges need `git merge-tree --write-tree`). If git is missing, Heron tells
+  you how to install it instead of silently degrading.
+- macOS 12+ / Windows 10 1803+ (Windows needs WebView2, built into Windows 11).
 
-### 2. 安装
+### Install
 
-**桌面应用**（推荐）：从发布页下载 `Heron.dmg`（macOS）或 `Heron_x64-setup.exe`（Windows）。
+**Desktop app** (recommended): download `Heron.dmg` (macOS) or `Heron_x64-setup.exe` (Windows).
 
-**命令行**：与桌面应用一起分发，也可单独使用：
+**Command line**, shipped alongside the app and usable on its own:
 
 ```bash
 heron --help
 ```
 
-### 3. 三步走
+### Three commands to get going
 
 ```bash
-heron scan        # 扫一遍本机，看看有什么
-heron detected    # 列出 Heron 还没接管的 Skill
-heron adopt --all # 全部收拢（会先备份、再去重）
+heron scan        # look around
+heron detected    # what Heron does not manage yet
+heron adopt --all # take it all over (backs up first, de-duplicates)
 ```
 
-收拢之后，原来的目录**不会消失**，而是变成指向 Heron 存储区的链接：
+Your original directories do not disappear — they become links into the store:
 
 ```text
-收拢前                          收拢后
-~/.agents/skills/pdf/     →     ~/.agents/skills/pdf → <数据目录>/store/pdf
-~/.claude/skills/pdf/     →     ~/.claude/skills/pdf → <数据目录>/store/pdf   （重复的自动去重）
+before                          after
+~/.agents/skills/pdf/     →     ~/.agents/skills/pdf → <data>/store/pdf
+~/.claude/skills/pdf/     →     ~/.claude/skills/pdf → <data>/store/pdf   (duplicate, deduplicated)
 ```
 
-> 第一次使用务必先跑 `heron adopt --all --dry-run`，看清每一步再执行。
+> Always run `heron adopt --all --dry-run` first: it prints every step without touching the disk.
 
 ---
 
-## 命令总览
+## Commands
 
-| 命令 | 作用 |
+| Command | Purpose |
 |---|---|
-| `heron scan` | 扫描所有已知位置，刷新索引 |
-| `heron detected` | 列出未纳管的 Skill |
-| `heron adopt <slug...> \| --all` | 收拢到存储区 |
-| `heron list` | 已纳管的 Skill |
-| `heron project <slug> [--on <target>]` | 投影到某个落点 |
-| `heron unproject <slug> [--on <target>]` | 移除投影（保留存储副本） |
-| `heron verify` | 该 Skill 在客户端里到底会不会生效 |
-| `heron doctor` | 只读体检：重复、坏链、病态嵌套、来源丢失 |
-| `heron install <url>` | 从 Git 仓库安装 |
-| `heron outdated` / `upgrade` / `rollback` | 检查更新 / 三方合并升级 / 回滚 |
-| `heron diff` / `conflict` / `resolve` | 查看改动 / 查看冲突 / 解决冲突 |
-| `heron market list\|search\|plan` | 五个内置市场 |
-| `heron lock export\|diff\|apply` | 团队协作 |
-| `heron projects` | 发现含客户端配置的项目 |
+| `heron scan` | Scan all known locations, refresh the index |
+| `heron detected` | List skills Heron does not manage yet |
+| `heron adopt <slug...> \| --all` | Move them into the store |
+| `heron list` | Managed skills |
+| `heron project <slug> [--on <target>]` | Materialize into a target directory |
+| `heron unproject <slug> [--on <target>]` | Remove a projection (store copy is kept) |
+| `heron verify` | Would a client actually load this skill? |
+| `heron doctor` | Read-only health check: duplicates, broken links, nested trees, lost sources |
+| `heron install <url>` | Install from a git repository |
+| `heron outdated` / `upgrade` / `rollback` | Check / three-way-merge upgrade / roll back |
+| `heron diff` / `conflict` / `resolve` | Inspect changes / inspect conflicts / resolve them |
+| `heron market list\|search\|plan` | Five built-in marketplaces |
+| `heron lock export\|diff\|apply` | Team workflow |
+| `heron projects` | Discover projects that contain client directories |
 
-所有命令都支持 `--json`（给脚本用）与 `--data-dir`（隔离数据目录）。
+Every command accepts `--json` (for scripts) and `--data-dir` (an isolated data directory).
 
-完整用法见 **[上手指南](docs/GUIDE.md)** 与 **[命令参考](docs/REFERENCE.md)**。
-
----
-
-## 设计取舍（值得先知道）
-
-**Heron 从不擅自破坏。** 以下行为是刻意设计，而不是遗漏：
-
-- 收拢前一定先备份到 `<数据目录>/backups/`；备份失败则整个操作中止。
-- 投影遇到**别人的实体目录**时停下并报 `E_NOT_MANAGED`，不会覆盖。
-- copy 模式下如果目标文件被外部改过，报 `E_DRIFTED` 而不是覆盖你的修改。
-- 病态嵌套（`skills/.claude/skills/…`）**只报告，不自动整理**。
-- 从上游安装的 Skill，首次安装来源不是可信来源时只展示内容摘要，不执行任何脚本。
-
-**Heron 不会假装能做的事。**
-
-- 市场分两档：`可搜索`（skills.sh、ClawHub 能直接安装）与 `仅浏览器`（qoder、SkillHub、SkillsMP 只能打开网页，然后粘贴 Git 地址回来）。
-- 未接管来源的 Skill 在 `outdated` 中显示 `not tracked`、版本为 `0.0.0`，不会被当成"可以升级"。
-- 客户端原生扫描（往客户端配置里加扫描目录）默认关闭；未经验证的客户端永远不会被写入。
+Full details: **[getting-started guide](docs/GUIDE.md)** · **[command reference](docs/REFERENCE.md)**.
 
 ---
 
-## 数据放在哪
+## Design choices worth knowing
 
-| 平台 | 数据目录 |
+**Heron never damages anything on its own.** These behaviours are deliberate, not gaps:
+
+- Adoption always backs up first; if the backup fails, the whole operation aborts.
+- Projection stops with `E_NOT_MANAGED` when someone else's real directory is in the way.
+- In `copy` mode, a destination changed by another program reports `E_DRIFTED` instead of being overwritten.
+- Pathological nesting (`skills/.claude/skills/…`) is **reported, never reorganised**.
+- Heron never executes scripts from a skill.
+
+**Heron does not pretend.** Marketplaces come in two classes: *searchable* (skills.sh and ClawHub,
+which Heron can install from) and *browser only* (qoder, SkillHub, SkillsMP — Heron opens the site and
+you paste a git URL back). Skills adopted from local disk show up as `not tracked` with version
+`0.0.0`; they are not presented as upgradable. Client native-scan injection is off by default and
+never writes to a client that has not been verified.
+
+---
+
+## Where data lives
+
+| Platform | Data directory |
 |---|---|
 | macOS | `~/Library/Application Support/io.greyheron.heron` |
 | Windows | `%LOCALAPPDATA%\heron` |
 | Linux | `~/.local/share/heron` |
 
-其中 `store/` 是唯一真相源（每个 Skill 一个 Git 仓库），`backups/` 是安全网，`trash/` 是软删除区。
-整个索引（`heron.db`）可以随时从存储区重建。
+`store/` is the single source of truth (one git repository per skill), `backups/` is the safety net,
+`trash/` is a soft-delete area. The index (`heron.db`) can be rebuilt from the store at any time.
 
-> `~/.agents/skills` **不是** Heron 的存储区。Heron 有自己的默认落点 `~/.heron/skills`，
-> `~/.agents/skills` 只作为可选的"共享映射点"，因为那个目录同时被 `npx skills` 使用。
+> `~/.agents/skills` is **not** Heron's store. Heron has its own default landing directory
+> (`~/.heron/skills`); `.agents/skills` is only an optional shared drop point, because `npx skills`
+> uses that directory too.
 
 ---
 
-## 从源码构建
+## Build from source
 
 ```bash
-# 依赖：Rust stable、Node 22、pnpm 10
+# Requires Rust stable, Node 22, pnpm 10
 pnpm --dir ui install
 pnpm --dir ui build
-cargo build -p heron-cli --release   # 命令行 → target/release/heron
-cargo build -p heron-app --release   # 桌面应用
+cargo build -p heron-cli --release   # CLI    → target/release/heron
+cargo build -p heron-app --release   # desktop app
 ```
 
-本地校验（等价于 CI）：
+Local checks (same as CI):
 
 ```bash
 scripts/dev.sh check   # fmt + clippy
-scripts/dev.sh test    # 全部测试
-scripts/dev.sh ui      # 前端类型检查 + i18n 一致性 + 构建
+scripts/dev.sh test    # all tests
+scripts/dev.sh ui      # frontend typecheck + i18n parity + build
 ```
 
-## 项目结构
+## Layout
 
 ```text
 crates/
-  heron-core        领域模型（无 IO）
-  heron-platform    唯一允许平台分支的层：链接、锁、路径、目录
-  heron-store       SQLite 索引与迁移
-  heron-scan        遍历、frontmatter 解析、内容指纹
-  heron-vcs         每个 Skill 一个 Git 仓库、三方合并
-  heron-git         远端裸仓缓存与子目录检出
-  heron-source      URL 解析、catalog、市场适配器
-  heron-projection  投影计划 / 执行 / 可见性判定
-  heron-service     用例编排（CLI 与 GUI 共用）
-  heron-cli         命令行
-src-tauri/          Tauri 2 外壳（薄适配层）
-ui/                 Vue 3 前端
-docs/               设计、实现、指南与决策记录（ADR）
+  heron-core        domain model (no IO)
+  heron-platform    the only platform-specific layer: links, locks, paths, dirs
+  heron-store       SQLite index and migrations
+  heron-scan        traversal, frontmatter parsing, content fingerprints
+  heron-vcs         one git repository per skill, three-way merges
+  heron-git         bare cache and subdirectory checkouts
+  heron-source      URL parsing, catalogs, marketplace adapters
+  heron-projection  projection planning / execution / visibility
+  heron-service     use cases shared by the CLI and the GUI
+  heron-cli         command line
+src-tauri/          Tauri 2 shell (thin adapter)
+ui/                 Vue 3 frontend
+docs/               design, implementation, guides and decision records
 ```
 
-## 文档
+## Documentation
 
-- [设计文档](docs/DESIGN-heron-v2.md) —— 为什么这样设计
-- [实现文档](docs/IMPLEMENTATION-heron-v1.md) —— 怎么落地、按什么顺序
-- [上手指南](docs/GUIDE.md) —— 从一个乱糟糟的机器开始
-- [命令参考](docs/REFERENCE.md) —— 每条命令、每个错误码
-- [决策记录](docs/adr/) —— 实现中踩到的坑与取舍
+- [Design](docs/DESIGN-heron-v2.md) — why it works this way
+- [Implementation](docs/IMPLEMENTATION-heron-v1.md) — how it is built, in what order
+- [Getting started](docs/GUIDE.md) — from a messy machine to a managed set
+- [Command reference](docs/REFERENCE.md) — every command, every error code
+- [Decision records](docs/adr/) — the trade-offs made along the way
 
-## 许可
+## License
 
 MIT OR Apache-2.0

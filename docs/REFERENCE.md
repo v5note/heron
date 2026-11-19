@@ -1,5 +1,7 @@
 # 命令参考
 
+> [Back to README](../README.md) · [中文说明](../README.zh-CN.md)
+
 所有命令都支持：
 
 | 参数 | 说明 |
