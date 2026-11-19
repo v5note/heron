@@ -302,11 +302,18 @@ fn detach_directory_reparse(path: &Path) -> Result<(), Msg> {
         let clear_err = std::io::Error::last_os_error();
         let _ = CloseHandle(handle);
         if cleared == 0 {
-            return Err(io_msg(path)(if clear_err.raw_os_error() != Some(0) {
-                clear_err
-            } else {
-                first_err
-            }));
+            return Err(ErrorCode::Permission
+                .msg()
+                .with("path", path.display().to_string())
+                .with(
+                    "detail",
+                    format!(
+                        "remove_dir_err={:?} ioctl_err={:?} tag={:?}",
+                        first_err.raw_os_error(),
+                        clear_err.raw_os_error(),
+                        tag
+                    ),
+                ));
         }
     }
     // The directory is now a plain empty directory; remove_dir never recurses.
