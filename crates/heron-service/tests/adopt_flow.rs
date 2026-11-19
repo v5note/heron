@@ -172,13 +172,15 @@ fn project_creates_default_landing_and_verify_reports_visibility() -> Result<()>
     let (plan, request) = project::plan(&ctx, &req)?;
     let outcome = project::apply(&mut ctx, &req, &plan, &request)?;
     assert!(outcome.applied);
+    // Compare components, not a literal string: Windows uses '\' as the separator.
+    let expected_suffix = PathBuf::from("skills").join("pdf");
     assert!(
-        outcome.path.ends_with("skills/pdf"),
+        outcome.path.ends_with(&expected_suffix),
         "projected path: {}",
         outcome.path
     );
 
-    let landing = env.home.join(".heron/skills/pdf");
+    let landing = env.home.join(".heron").join("skills").join("pdf");
     assert!(
         landing.join("SKILL.md").is_file(),
         "projected into the default landing"
