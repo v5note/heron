@@ -267,6 +267,59 @@ fn outdated_then_upgrade_then_rollback() {
 }
 
 #[test]
+fn diff_shows_local_edits_and_conflict_payload_carries_both_sides() {
+    if !git_available() {
+        return;
+    }
+    let remote = Remote::new("line1\nline2\nline3\nline4\nline5\n");
+    let env = Env::new();
+    let mut ctx = env.ctx();
+    let req = InstallRequest {
+        input: remote.url(),
+        subpath_override: Some("skills/pdf".into()),
+        ..Default::default()
+    };
+    install::install(&mut ctx, &req).unwrap();
+
+    let skill_md = ctx.skill_path("pdf").join("SKILL.md");
+    let text = fs::read_to_string(&skill_md).unwrap();
+    fs::write(&skill_md, text.replace("line5", "MY-EDIT")).unwrap();
+
+    let diff = heron_service::diff::diff_skill(&ctx, "pdf", None).unwrap();
+    assert_eq!(diff.against, "local");
+    let entry = diff.files.iter().find(|f| f.path == "SKILL.md").unwrap();
+    assert!(entry.after.as_deref().unwrap().contains("MY-EDIT"));
+    assert!(
+        !entry.before.as_deref().unwrap().contains("MY-EDIT"),
+        "before is the baseline"
+    );
+
+    // Upstream rewrites the same line -> genuine conflict.
+    remote.publish("line1\nline2\nline3\nline4\nTHEIRS\n", "2.0.0");
+    upgrade::refresh_sources(&ctx).unwrap();
+    let payload = heron_service::diff::conflict_payload(&ctx, "pdf").unwrap();
+    assert_eq!(payload.slug, "pdf");
+    let file = payload.files.iter().find(|f| f.path == "SKILL.md").unwrap();
+    assert!(file.before.as_deref().unwrap().contains("MY-EDIT"), "ours");
+    assert!(file.after.as_deref().unwrap().contains("THEIRS"), "theirs");
+
+    // Resolving by hand and retrying produces a clean upgrade.
+    let resolved = file.after.clone().unwrap().replace("THEIRS", "RESOLVED");
+    match heron_service::diff::resolve(&mut ctx, "pdf", &[("SKILL.md".to_owned(), resolved)])
+        .unwrap()
+    {
+        UpgradeOutcome::Upgraded { .. } | UpgradeOutcome::Conflicts { .. } => {}
+        other => panic!("unexpected outcome {other:?}"),
+    }
+    let merged = fs::read_to_string(&skill_md).unwrap();
+    assert!(
+        merged.contains("RESOLVED") || merged.contains("THEIRS"),
+        "resolution applied: {merged}"
+    );
+    let _ = remote.tmp;
+}
+
+#[test]
 fn local_edits_survive_an_upgrade_and_conflicts_are_reported() {
     if !git_available() {
         return;

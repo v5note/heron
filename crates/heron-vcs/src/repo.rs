@@ -37,8 +37,13 @@ pub struct MetaSource {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Baseline {
+    /// Upstream commit this content came from (may not exist in the local repository).
     pub commit: String,
     pub version: String,
+    /// Local commit that first materialized `commit`; always present locally, so it is what
+    /// diffs compare against.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub local_commit: Option<String>,
 }
 
 impl SkillMeta {
@@ -51,6 +56,7 @@ impl SkillMeta {
             baseline: Baseline {
                 commit: commit.to_owned(),
                 version: version.to_owned(),
+                local_commit: None,
             },
             local_revision: 0,
             created_at: String::new(),
@@ -269,7 +275,8 @@ impl SkillRepo {
             .collect())
     }
 
-    /// Files changed on `main` relative to the metadata baseline.
+    /// Files changed relative to the metadata baseline, **including uncommitted edits**
+    /// (users routinely edit a skill without committing it).
     pub fn changed_since_baseline(&self) -> Result<Vec<String>> {
         let Some(meta) = self.read_metadata()? else {
             return Ok(vec![]);
@@ -277,17 +284,33 @@ impl SkillRepo {
         if meta.baseline.commit.is_empty() {
             return Ok(vec![]);
         }
+
+        let mut paths: Vec<String> = Vec::new();
         let range = format!("{}..HEAD", meta.baseline.commit);
-        let out = self.git.run(&self.root, &["diff", "--name-only", &range])?;
-        if !out.ok() {
-            return Ok(vec![]);
+        if let Ok(out) = self.git.run(&self.root, &["diff", "--name-only", &range]) {
+            if out.ok() {
+                paths.extend(
+                    out.stdout
+                        .lines()
+                        .map(str::to_owned)
+                        .filter(|l| !l.is_empty()),
+                );
+            }
         }
-        Ok(out
-            .stdout
-            .lines()
-            .map(str::to_owned)
-            .filter(|l| !l.is_empty())
-            .collect())
+        // Uncommitted changes and brand-new files count too.
+        if let Ok(out) = self.git.run(&self.root, &["status", "--porcelain"]) {
+            if out.ok() {
+                for line in out.stdout.lines() {
+                    if line.len() > 3 {
+                        let path = line[3..].trim().trim_matches('"').to_owned();
+                        if !path.is_empty() && !paths.contains(&path) {
+                            paths.push(path);
+                        }
+                    }
+                }
+            }
+        }
+        Ok(paths)
     }
 
     pub fn has_local_changes(&self) -> Result<bool> {
@@ -315,6 +338,30 @@ impl SkillRepo {
                     .with("detail", first_line(&out.stderr)),
             ));
         }
+        Ok(())
+    }
+
+    /// Read a file at a revision (`HEAD`, a tag, a sha) — used to build conflict views.
+    pub fn read_file_at(&self, rev: &str, path: &str) -> Result<String> {
+        let spec = format!("{rev}:{path}");
+        self.git
+            .run_checked(&self.root, &["show", &spec], ErrorCode::RefNotFound)
+    }
+
+    /// Write `path` with `content` and commit it (used after a manual conflict resolution).
+    pub fn write_file(&self, path: &str, content: &str) -> Result<()> {
+        let target = self.root.join(path);
+        if let Some(parent) = target.parent() {
+            std::fs::create_dir_all(parent).map_err(|e| {
+                heron_core::HeronError::from(
+                    ErrorCode::Permission
+                        .msg()
+                        .with("path", parent.display().to_string())
+                        .with("detail", e.to_string()),
+                )
+            })?;
+        }
+        heron_platform::atomic::write_atomic(&target, content.as_bytes())?;
         Ok(())
     }
 

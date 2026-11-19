@@ -293,6 +293,13 @@ pub fn install(ctx: &mut Ctx, req: &InstallRequest) -> Result<InstallReport> {
     });
     let vrepo = heron_vcs::SkillRepo::open(&dest);
     vrepo.init(&meta)?;
+    // Remember the local commit that materialized this upstream revision: diffs and rollbacks
+    // use it, because the upstream sha may never exist in this repository.
+    let installed_head = vrepo.head()?;
+    meta.baseline.local_commit = Some(installed_head.clone());
+    vrepo.write_metadata(&meta)?;
+    vrepo.commit_all("heron: record baseline")?;
+    meta.baseline.local_commit = Some(vrepo.head()?);
     // The upstream commit lives in the *remote* repository; in the skill's own repository the
     // equivalent is the commit Heron just created. Tag that, and keep the upstream sha in
     // `heron.skill.json` as the merge base.

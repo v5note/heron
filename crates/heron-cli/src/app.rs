@@ -111,6 +111,21 @@ pub enum Command {
         #[arg(long)]
         to: String,
     },
+    /// Show local changes (or the diff against a version).
+    Diff {
+        slug: String,
+        #[arg(long)]
+        against: Option<String>,
+    },
+    /// Show the two sides of an upgrade conflict.
+    Conflict { slug: String },
+    /// Resolve a conflict by taking one side for every file.
+    Resolve {
+        slug: String,
+        /// `ours` keeps the local content, `theirs` takes upstream for every conflicting file.
+        #[arg(long, default_value = "theirs")]
+        take: String,
+    },
     /// Manage skill markets (search + install plan).
     Market {
         #[command(subcommand)]
@@ -239,6 +254,9 @@ pub fn run() -> Result<ExitCode> {
             );
             Ok(ExitCode::SUCCESS)
         }
+        Command::Diff { slug, against } => cmd_diff(&ctx, &slug, against, cli.json),
+        Command::Conflict { slug } => cmd_conflict(&ctx, &slug, cli.json),
+        Command::Resolve { slug, take } => cmd_resolve(&mut ctx, &slug, &take, cli.json),
         Command::Market { action } => cmd_market(action, cli.json),
         Command::Lock { action } => cmd_lock(&mut ctx, action, cli.json),
         Command::Projects {
@@ -960,6 +978,82 @@ fn cmd_projects(
         println!(
             "registered {registered} project(s); projections into them stay off until enabled"
         );
+    }
+    Ok(ExitCode::SUCCESS)
+}
+
+fn cmd_diff(ctx: &Ctx, slug: &str, against: Option<String>, json: bool) -> Result<ExitCode> {
+    let report = heron_service::diff::diff_skill(ctx, slug, against.as_deref())?;
+    if json {
+        println!("{}", serde_json::to_string_pretty(&report).unwrap());
+        return Ok(ExitCode::SUCCESS);
+    }
+    if report.files.is_empty() {
+        println!("{slug} matches {}\n", report.against);
+        return Ok(ExitCode::SUCCESS);
+    }
+    for file in &report.files {
+        println!("✎ {}", file.path);
+        let before = file.before.clone().unwrap_or_default();
+        let after = file.after.clone().unwrap_or_default();
+        for line in after.lines() {
+            if !before.lines().any(|b| b == line) {
+                println!("  + {line}");
+            }
+        }
+        for line in before.lines() {
+            if !after.lines().any(|a| a == line) {
+                println!("  - {line}");
+            }
+        }
+    }
+    Ok(ExitCode::SUCCESS)
+}
+
+fn cmd_conflict(ctx: &Ctx, slug: &str, json: bool) -> Result<ExitCode> {
+    let payload = heron_service::diff::conflict_payload(ctx, slug)?;
+    if json {
+        println!("{}", serde_json::to_string_pretty(&payload).unwrap());
+        return Ok(ExitCode::SUCCESS);
+    }
+    println!("{slug}: {} conflicting file(s)", payload.files.len());
+    for file in &payload.files {
+        println!("  {}", file.path);
+    }
+    println!();
+    println!("resolve with: heron resolve {slug} --take theirs   (or --take ours)");
+    Ok(ExitCode::SUCCESS)
+}
+
+fn cmd_resolve(ctx: &mut Ctx, slug: &str, take: &str, json: bool) -> Result<ExitCode> {
+    let payload = heron_service::diff::conflict_payload(ctx, slug)?;
+    let resolved: Vec<(String, String)> = payload
+        .files
+        .iter()
+        .map(|file| {
+            let content = match take {
+                "ours" => file.before.clone().unwrap_or_default(),
+                _ => file.after.clone().unwrap_or_default(),
+            };
+            (file.path.clone(), content)
+        })
+        .collect();
+    let outcome = heron_service::diff::resolve(ctx, slug, &resolved)?;
+    if json {
+        println!("{}", serde_json::to_string_pretty(&outcome).unwrap());
+    } else {
+        match &outcome {
+            heron_service::upgrade::UpgradeOutcome::Upgraded { to, .. } => {
+                println!("resolved {slug} and upgraded to {}", &to[..8.min(to.len())])
+            }
+            heron_service::upgrade::UpgradeOutcome::Conflicts { files, .. } => {
+                println!(
+                    "resolved {slug}, but {} file(s) still conflict",
+                    files.len()
+                )
+            }
+            other => println!("{other:?}"),
+        }
     }
     Ok(ExitCode::SUCCESS)
 }

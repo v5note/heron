@@ -12,6 +12,7 @@
 pub mod adopt;
 pub mod clients;
 pub mod context;
+pub mod diff;
 pub mod doctor;
 pub mod install;
 pub mod lockfile;

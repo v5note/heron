@@ -47,16 +47,17 @@ impl CachedRepo {
         if !self.dir.join("HEAD").is_file() {
             self.init_bare()?;
         }
+        // `--depth=200` keeps recent history locally: three-way merges need a real ancestry,
+        // while a full clone would cost minutes on large skill repositories.
         let out = self.git.run(
             &self.dir,
             &[
                 "fetch",
                 "--prune",
-                "--depth=1",
-                "--no-tags",
+                "--depth=200",
+                "--tags",
                 self.remote.url.as_str(),
                 "+refs/heads/*:refs/remotes/origin/*",
-                "+refs/tags/*:refs/tags/*",
             ],
         )?;
         if !out.ok() {
@@ -67,9 +68,9 @@ impl CachedRepo {
                 &[
                     "fetch",
                     "--prune",
+                    "--tags",
                     self.remote.url.as_str(),
                     "+refs/heads/*:refs/remotes/origin/*",
-                    "+refs/tags/*:refs/tags/*",
                 ],
             )?;
             if !retry.ok() {

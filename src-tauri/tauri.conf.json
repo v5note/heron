@@ -25,9 +25,30 @@
   },
   "bundle": {
     "active": true,
-    "targets": "all",
+    "targets": [
+      "dmg",
+      "nsis"
+    ],
     "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.ico",
       "icons/icon.png"
-    ]
+    ],
+    "macOS": {
+      "minimumSystemVersion": "12.0"
+    },
+    "windows": {
+      "webviewInstallMode": {
+        "type": "downloadBootstrapper"
+      },
+      "nsis": {
+        "installMode": "perMachine"
+      }
+    },
+    "resources": [],
+    "shortDescription": "Local skill manager",
+    "longDescription": "Heron gathers the Agent Skills scattered across Claude Code, Codex, .agents and projects into one versioned store, projects them into the places clients actually scan, and upgrades them with a three-way merge."
   }
 }
