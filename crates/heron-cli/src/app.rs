@@ -1,30 +1,24 @@
-//! Argument parsing and command dispatch.
+//! Argument parsing and dispatch. Every command delegates to `heron-service`.
 
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
 use clap::{Parser, Subcommand};
-use heron_core::{ErrorCode, HeronError, Result};
-use heron_scan::classify::{Classification, Classifier, HitKind, Scope};
-use heron_scan::walker::{scan, ScanOptions};
+use heron_core::{ErrorCode, HeronError, ProjectionMode, Result};
+use heron_service::adopt::{self, AdoptPlacement};
+use heron_service::project::{self, ProjectRequest};
+use heron_service::scan::{self, ScanRequest};
+use heron_service::{doctor, verify, Ctx};
 use heron_store::db::Db;
-use heron_store::models::{ClientRow, DetectedUpsert, TargetRow};
-use heron_store::repos::{client, detected, skill, target};
+use heron_store::repos::{detected, skill, target};
 
-use crate::clients::{builtin_specs, default_landing};
-use crate::render::{human_bytes, print_hits, print_scan};
+use crate::render::human_bytes;
 
 #[derive(Parser, Debug)]
-#[command(
-    name = "heron",
-    version,
-    about = "Heron - local skill manager (M0 preview)"
-)]
+#[command(name = "heron", version, about = "Heron - local skill manager")]
 pub struct Cli {
-    /// Machine-readable output.
     #[arg(long, global = true)]
     pub json: bool,
-    /// Override the data directory (defaults to the platform location).
     #[arg(long, global = true)]
     pub data_dir: Option<PathBuf>,
     #[command(subcommand)]
@@ -35,12 +29,10 @@ pub struct Cli {
 pub enum Command {
     /// Scan every known skill location and refresh the index.
     Scan {
-        /// Additional roots to include (extra projects, external volumes).
         #[arg(long = "roots")]
         roots: Vec<PathBuf>,
         #[arg(long)]
         max_dirs: Option<usize>,
-        /// Print every hit, including nested suspects.
         #[arg(long)]
         verbose: bool,
     },
@@ -48,39 +40,82 @@ pub enum Command {
     List,
     /// Show what exists on disk that Heron does not manage yet.
     Detected {
-        /// candidate | ignored | adopted | conflict | all
         #[arg(long, default_value = "all")]
         state: String,
-        /// Include nested suspects in the listing.
         #[arg(long)]
         all: bool,
     },
+    /// Bring detected skills into the managed store.
+    Adopt {
+        /// Slugs or paths to adopt; omit with --all to take every candidate.
+        targets: Vec<String>,
+        #[arg(long)]
+        all: bool,
+        #[arg(long)]
+        dry_run: bool,
+        /// Keep the original where it is instead of replacing it with a projection.
+        #[arg(long)]
+        keep_original: bool,
+    },
+    /// Materialize a managed skill into a target directory.
+    Project {
+        slug: String,
+        /// Target id, e.g. `heron:global` or `claude:global` (defaults to the default target).
+        #[arg(long)]
+        on: Option<String>,
+        #[arg(long)]
+        mode: Option<String>,
+        #[arg(long)]
+        dry_run: bool,
+    },
+    /// Remove a projection (the store copy is kept).
+    Unproject {
+        slug: String,
+        #[arg(long)]
+        on: Option<String>,
+    },
+    /// Show where skills are projected and whether a client would load them.
+    Verify { slug: Option<String> },
+    /// Read-only health check.
+    Doctor,
+    /// List targets known to the index.
+    Targets,
 }
 
 pub fn run() -> Result<ExitCode> {
     let cli = Cli::parse();
     let dirs = heron_platform::dirs::Dirs::resolve_with_override("heron", cli.data_dir.as_deref())
         .map_err(HeronError::from)?;
-    if std::env::var_os("HERON_DEBUG_DIRS").is_some() {
-        eprintln!(
-            "debug: data={} config={} cache={} log={}",
-            heron_platform::paths::display(&dirs.data),
-            heron_platform::paths::display(&dirs.config),
-            heron_platform::paths::display(&dirs.cache),
-            heron_platform::paths::display(&dirs.log)
-        );
-    }
     dirs.ensure().map_err(HeronError::from)?;
+    let home = home_dir()?;
+    let db = Db::open(&dirs.db_path())?;
+    let mut ctx = Ctx::new(dirs, db, "cli");
+    heron_service::clients::bootstrap(&mut ctx.db, &home)?;
 
-    let mut db = Db::open(&dirs.db_path())?;
     match cli.command {
         Command::Scan {
             roots,
             max_dirs,
             verbose,
-        } => cmd_scan(&mut db, &roots, max_dirs, verbose, cli.json),
-        Command::List => cmd_list(&db, cli.json),
-        Command::Detected { state, all } => cmd_detected(&db, &state, all, cli.json),
+        } => cmd_scan(&mut ctx, &home, roots, max_dirs, verbose, cli.json),
+        Command::List => cmd_list(&ctx, cli.json),
+        Command::Detected { state, all } => cmd_detected(&ctx, &state, all, cli.json),
+        Command::Adopt {
+            targets,
+            all,
+            dry_run,
+            keep_original,
+        } => cmd_adopt(&mut ctx, &targets, all, dry_run, keep_original, cli.json),
+        Command::Project {
+            slug,
+            on,
+            mode,
+            dry_run,
+        } => cmd_project(&mut ctx, &slug, on, mode, dry_run, cli.json),
+        Command::Unproject { slug, on } => cmd_unproject(&mut ctx, &slug, on),
+        Command::Verify { slug } => cmd_verify(&ctx, slug.as_deref(), cli.json),
+        Command::Doctor => cmd_doctor(&ctx, cli.json),
+        Command::Targets => cmd_targets(&ctx, cli.json),
     }
 }
 
@@ -97,221 +132,50 @@ fn home_dir() -> Result<PathBuf> {
 }
 
 fn cmd_scan(
-    db: &mut Db,
-    roots: &[PathBuf],
+    ctx: &mut Ctx,
+    home: &Path,
+    roots: Vec<PathBuf>,
     max_dirs: Option<usize>,
     verbose: bool,
     json: bool,
 ) -> Result<ExitCode> {
-    let home = home_dir()?;
-    bootstrap(db, &home)?;
-
-    let specs = client_specs(db)?;
-    let projects = project_roots(db)?;
-    // Roots passed on the command line behave as extra project roots.
-    let mut projects = projects;
-    for root in roots {
-        if !projects
-            .iter()
-            .any(|p| heron_platform::paths::same_path_ci(p, root))
-        {
-            projects.push(root.clone());
+    let req = ScanRequest {
+        extra_roots: roots,
+        max_dirs,
+        extra_excludes: vec![],
+    };
+    let report = scan::run(ctx, home, &req)?;
+    if verbose && !json {
+        for row in detected::list_by_state(ctx.db.conn(), "candidate")? {
+            let name = row.observed_slug.clone().unwrap_or_else(|| "?".to_owned());
+            let shown = heron_platform::paths::display(Path::new(&row.path));
+            println!("  {name:<28} {:<16} {shown}", row.kind);
         }
     }
-    let classifier = Classifier::new(specs, projects);
-
-    let mut options = ScanOptions::default();
-    if let Some(limit) = max_dirs {
-        options.max_dirs = limit;
-    }
-    let result = scan(&classifier, &options)?;
-
-    let mut seen = std::collections::HashSet::new();
-    db.write(|tx| {
-        for hit in &result.hits {
-            let path = hit.path.to_string_lossy().to_string();
-            seen.insert(path.clone());
-            let (mtime_ns, size_bytes) = file_stats(&hit.path);
-            detected::upsert(
-                tx,
-                &DetectedUpsert {
-                    path,
-                    real_path: Some(hit.real_path.to_string_lossy().to_string()),
-                    client_id: hit.client.clone(),
-                    scope: hit.scope.map(scope_str),
-                    project_path: hit
-                        .project
-                        .as_ref()
-                        .map(|p| p.to_string_lossy().to_string()),
-                    observed_slug: hit.slug.clone(),
-                    content_hash: None,
-                    frontmatter_ok: Some(hit.frontmatter_ok()),
-                    kind: kind_str(hit.kind),
-                    mtime_ns,
-                    size_bytes,
-                },
-            )?;
-        }
-        detected::prune_not_in(tx, &seen)?;
-        Ok(())
-    })?;
-    db.kv_set("last_scan_at", &chrono::Utc::now().to_rfc3339())?;
-
     if json {
-        let out = serde_json::json!({
-            "skills": result.hits.iter().filter(|h| h.kind == HitKind::Skill).count(),
-            "legacyCommands": result.hits.iter().filter(|h| h.kind == HitKind::LegacyCommand).count(),
-            "nestedSuspects": result.nested.len(),
-            "needsAttention": result.hits.iter().filter(|h| !h.frontmatter_ok()).count(),
-            "dirsVisited": result.stats.dirs_visited,
-            "durationMs": result.stats.duration_ms,
-            "truncated": result.stats.truncated,
-            "rootsMissing": result.stats.roots_missing.iter().map(|p| heron_platform::paths::display(p)).collect::<Vec<_>>(),
-        });
-        println!("{}", serde_json::to_string_pretty(&out).unwrap());
+        println!("{}", serde_json::to_string_pretty(&report).unwrap());
     } else {
-        print_scan(&result);
-        if verbose {
-            println!();
-            print_hits(&result, true);
+        println!(
+            "scanned {} directories in {} ms",
+            report.dirs_visited, report.duration_ms
+        );
+        println!("  skills          {}", report.skills);
+        println!("  legacy commands {}", report.legacy_commands);
+        println!(
+            "  nested suspects {}   (reported only - nothing is moved)",
+            report.nested_suspects
+        );
+        println!("  needs attention {}", report.needs_attention);
+        for missing in &report.roots_missing {
+            println!("  skipped (not found) {missing}");
         }
     }
     Ok(ExitCode::SUCCESS)
 }
 
-fn scope_str(scope: Scope) -> String {
-    match scope {
-        Scope::Global => "global".to_owned(),
-        Scope::Project => "project".to_owned(),
-    }
-}
-
-fn kind_str(kind: HitKind) -> String {
-    match kind {
-        HitKind::Skill => "skill",
-        HitKind::LegacyCommand => "legacy-command",
-        HitKind::NestedSuspect => "nested-suspect",
-    }
-    .to_owned()
-}
-
-fn file_stats(path: &Path) -> (Option<i64>, Option<i64>) {
-    let Ok(meta) = std::fs::metadata(path) else {
-        return (None, None);
-    };
-    let mtime = meta
-        .modified()
-        .ok()
-        .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
-        .map(|d| d.as_nanos() as i64);
-    (mtime, Some(meta.len() as i64))
-}
-
-/// Seed the client matrix and the default landing target on first run.
-fn bootstrap(db: &mut Db, home: &Path) -> Result<()> {
-    if db.kv_get("bootstrap_done")?.as_deref() == Some("1") {
-        return Ok(());
-    }
-    let specs = builtin_specs(home);
-    db.write(|tx| {
-        for spec in &specs {
-            client::upsert(
-                tx,
-                &ClientRow {
-                    id: spec.id.clone(),
-                    display_name: spec.display_name.clone(),
-                    // Stored values are real filesystem paths; `display()` is presentation only.
-                    global_paths: spec
-                        .global_paths
-                        .iter()
-                        .map(|p| p.to_string_lossy().to_string())
-                        .collect(),
-                    project_paths: spec
-                        .project_paths
-                        .iter()
-                        .map(|p| p.to_string_lossy().to_string())
-                        .collect(),
-                    link_modes: vec!["symlink".into(), "junction".into(), "copy".into()],
-                    global_commands: spec
-                        .command_paths
-                        .iter()
-                        .map(|p| p.to_string_lossy().to_string())
-                        .collect(),
-                    project_commands: spec
-                        .project_command_paths
-                        .iter()
-                        .map(|p| p.to_string_lossy().to_string())
-                        .collect(),
-                    priority: spec.priority,
-                    native_scan: None,
-                    verified_at: Some("2026-11-19".into()),
-                    verified_by: Some("doc".into()),
-                },
-            )?;
-        }
-        // The default landing is owned by Heron itself (decision D10), so it needs its own
-        // client row: targets reference `client.id`.
-        client::upsert(
-            tx,
-            &ClientRow {
-                id: "heron".into(),
-                display_name: "Heron landing".into(),
-                global_paths: vec![default_landing(home).to_string_lossy().to_string()],
-                project_paths: vec![".heron/skills".into()],
-                link_modes: vec!["symlink".into(), "junction".into(), "copy".into()],
-                global_commands: vec![],
-                project_commands: vec![],
-                priority: 0,
-                native_scan: None,
-                verified_at: Some("2026-11-19".into()),
-                verified_by: Some("design".into()),
-            },
-        )?;
-        target::upsert(
-            tx,
-            &TargetRow {
-                id: "heron:global".into(),
-                kind: "heron".into(),
-                scope: "global".into(),
-                project_path: None,
-                path: default_landing(home).to_string_lossy().to_string(),
-                enabled: true,
-                is_default: true,
-                discover: "manual".into(),
-            },
-        )?;
-        Ok(())
-    })?;
-    db.kv_set("bootstrap_done", "1")?;
-    Ok(())
-}
-
-fn client_specs(db: &Db) -> Result<Vec<heron_scan::classify::ClientSpec>> {
-    Ok(client::list(db.conn())?
-        .into_iter()
-        .map(|row| heron_scan::classify::ClientSpec {
-            id: row.id,
-            display_name: row.display_name,
-            global_paths: row.global_paths.iter().map(PathBuf::from).collect(),
-            project_paths: row.project_paths.iter().map(PathBuf::from).collect(),
-            command_paths: row.global_commands.iter().map(PathBuf::from).collect(),
-            project_command_paths: row.project_commands.iter().map(PathBuf::from).collect(),
-            priority: row.priority,
-        })
-        .collect())
-}
-
-fn project_roots(db: &Db) -> Result<Vec<PathBuf>> {
-    Ok(target::list(db.conn())?
-        .into_iter()
-        .filter(|t| t.scope == "project")
-        .filter_map(|t| t.project_path.map(PathBuf::from))
-        .collect())
-}
-
-fn cmd_list(db: &Db, json: bool) -> Result<ExitCode> {
-    let skills = skill::list(db.conn(), false)?;
-    let all = detected::list_all(db.conn())?;
+fn cmd_list(ctx: &Ctx, json: bool) -> Result<ExitCode> {
+    let skills = skill::list(ctx.db.conn(), false)?;
+    let all = detected::list_all(ctx.db.conn())?;
     if json {
         println!(
             "{}",
@@ -325,17 +189,17 @@ fn cmd_list(db: &Db, json: bool) -> Result<ExitCode> {
         println!("(found on disk: {} items)", all.len());
     } else {
         for s in &skills {
-            println!("{:<28} {:<10} {}", s.slug, s.origin, s.display_name);
+            println!("{:<28} {:<12} {}", s.slug, s.origin, s.display_name);
         }
     }
     Ok(ExitCode::SUCCESS)
 }
 
-fn cmd_detected(db: &Db, state: &str, all: bool, json: bool) -> Result<ExitCode> {
+fn cmd_detected(ctx: &Ctx, state: &str, all: bool, json: bool) -> Result<ExitCode> {
     let rows = if state == "all" {
-        detected::list_all(db.conn())?
+        detected::list_all(ctx.db.conn())?
     } else {
-        detected::list_by_state(db.conn(), state)?
+        detected::list_by_state(ctx.db.conn(), state)?
     };
     if json {
         println!("{}", serde_json::to_string_pretty(&rows).unwrap());
@@ -381,5 +245,241 @@ fn cmd_detected(db: &Db, state: &str, all: bool, json: bool) -> Result<ExitCode>
     Ok(ExitCode::SUCCESS)
 }
 
-#[allow(dead_code)]
-fn _classification_marker(_: &Classification) {}
+fn cmd_adopt(
+    ctx: &mut Ctx,
+    wanted: &[String],
+    all: bool,
+    dry_run: bool,
+    keep_original: bool,
+    json: bool,
+) -> Result<ExitCode> {
+    let candidates = detected::list_by_state(ctx.db.conn(), "candidate")?;
+    let selected: Vec<_> = if all {
+        candidates
+            .into_iter()
+            .filter(|r| r.kind != "nested-suspect" && r.observed_slug.is_some())
+            .collect()
+    } else if wanted.is_empty() {
+        return Err(HeronError::from(
+            ErrorCode::SlugInvalid
+                .msg()
+                .with("detail", "specify a slug/path or --all"),
+        ));
+    } else {
+        candidates
+            .into_iter()
+            .filter(|r| {
+                wanted.iter().any(|w| {
+                    r.observed_slug.as_deref() == Some(w.as_str())
+                        || r.path == *w
+                        || r.path.ends_with(&format!("/{w}/SKILL.md"))
+                })
+            })
+            .collect()
+    };
+
+    if selected.is_empty() {
+        println!("nothing to adopt (no matching detected skills)");
+        return Ok(ExitCode::SUCCESS);
+    }
+
+    // Planning is stateful (dedup against the library), so plan sequentially and simulate each
+    // planned slug so that two identical copies in one batch are reported as one adoption.
+    if dry_run {
+        let mut virtual_library: Vec<String> = Vec::new();
+        let mut plans = Vec::new();
+        for row in &selected {
+            let plan = adopt::plan(ctx, row)?;
+            let duplicate = plan
+                .duplicate_of
+                .clone()
+                .or_else(|| plan.slug.clone().filter(|s| virtual_library.contains(s)));
+            if let (Some(slug), None) = (plan.slug.clone(), duplicate.as_ref()) {
+                virtual_library.push(slug);
+            }
+            plans.push((plan, duplicate));
+        }
+        for (plan, duplicate) in &plans {
+            let slug = plan.slug.clone().unwrap_or_else(|| "?".into());
+            let dup = duplicate
+                .as_ref()
+                .map(|d| format!(" (same content as {d}: no second copy)"))
+                .unwrap_or_default();
+            println!("would adopt {slug}{dup}");
+            if duplicate.is_none() {
+                for step in &plan.steps {
+                    println!("  - {}", serde_json::to_string(step).unwrap());
+                }
+            }
+        }
+        return Ok(ExitCode::SUCCESS);
+    }
+
+    let placement = if keep_original {
+        AdoptPlacement::KeepOriginal
+    } else {
+        AdoptPlacement::Replace
+    };
+    let mut adopted = Vec::new();
+    // Re-plan per item so dedup sees what earlier iterations adopted.
+    for row in &selected {
+        let plan = adopt::plan(ctx, row)?;
+        let report = adopt::execute(ctx, &plan, placement)?;
+        adopted.extend(report.adopted);
+        for skipped in report.skipped {
+            println!("skipped: {skipped}");
+        }
+        for error in report.errors {
+            println!("error: {error}");
+        }
+    }
+    if json {
+        println!("{}", serde_json::to_string_pretty(&adopted).unwrap());
+    } else {
+        for slug in &adopted {
+            println!("adopted {slug}");
+        }
+        if !adopted.is_empty() {
+            println!();
+            println!("next: heron project <slug>   (or --on claude:global for a specific client)");
+        }
+    }
+    Ok(ExitCode::SUCCESS)
+}
+
+fn parse_mode(raw: Option<String>) -> Result<Option<ProjectionMode>> {
+    raw.map(|m| match m.as_str() {
+        "copy" => Ok(ProjectionMode::Copy),
+        "symlink" => Ok(ProjectionMode::Symlink),
+        "junction" => Ok(ProjectionMode::Junction),
+        "pointer" => Ok(ProjectionMode::Pointer),
+        other => Err(HeronError::from(
+            ErrorCode::SlugInvalid.msg().with("raw", other),
+        )),
+    })
+    .transpose()
+}
+
+fn resolve_target(ctx: &Ctx, on: Option<String>) -> Result<String> {
+    match on {
+        Some(id) => Ok(id),
+        None => target::get_default(ctx.db.conn())?
+            .map(|t| t.id)
+            .ok_or_else(|| {
+                HeronError::from(ErrorCode::TargetNotFound.msg().with("target", "default"))
+            }),
+    }
+}
+
+fn cmd_project(
+    ctx: &mut Ctx,
+    slug: &str,
+    on: Option<String>,
+    mode: Option<String>,
+    dry_run: bool,
+    json: bool,
+) -> Result<ExitCode> {
+    let slug = project::managed_slug(ctx, slug)?;
+    let req = ProjectRequest {
+        slug: slug.clone(),
+        target_id: resolve_target(ctx, on)?,
+        mode: parse_mode(mode)?,
+        link_name: None,
+    };
+    let (plan, request) = project::plan(ctx, &req)?;
+    if dry_run {
+        for step in &plan.steps {
+            println!("{}", serde_json::to_string(step).unwrap());
+        }
+        if plan.is_blocked() {
+            return Ok(ExitCode::from(3));
+        }
+        return Ok(ExitCode::SUCCESS);
+    }
+    let outcome = project::apply(ctx, &req, &plan, &request)?;
+    if json {
+        println!("{}", serde_json::to_string_pretty(&outcome).unwrap());
+    } else if outcome.applied {
+        println!(
+            "projected {} -> {} [{}]",
+            outcome.slug, outcome.path, outcome.mode
+        );
+    } else {
+        println!("{} already projected at {}", outcome.slug, outcome.path);
+    }
+    Ok(ExitCode::SUCCESS)
+}
+
+fn cmd_unproject(ctx: &mut Ctx, slug: &str, on: Option<String>) -> Result<ExitCode> {
+    let slug = project::managed_slug(ctx, slug)?;
+    let target = resolve_target(ctx, on)?;
+    project::unproject(ctx, &slug, &target)?;
+    println!("removed projections of {slug} from {target} (store copy kept)");
+    Ok(ExitCode::SUCCESS)
+}
+
+fn cmd_verify(ctx: &Ctx, slug: Option<&str>, json: bool) -> Result<ExitCode> {
+    let reports = verify::verify(ctx, slug)?;
+    if json {
+        println!("{}", serde_json::to_string_pretty(&reports).unwrap());
+        return Ok(ExitCode::SUCCESS);
+    }
+    if reports.is_empty() {
+        println!("no projections yet - use `heron project <slug>`");
+        return Ok(ExitCode::SUCCESS);
+    }
+    for report in &reports {
+        println!(
+            "{:<28} {:<16} {:<9} {}",
+            report.slug,
+            report.target_id,
+            report.mode,
+            verify::describe(&report.visibility)
+        );
+    }
+    Ok(ExitCode::SUCCESS)
+}
+
+fn cmd_doctor(ctx: &Ctx, json: bool) -> Result<ExitCode> {
+    let report = doctor::run(ctx)?;
+    if json {
+        println!("{}", serde_json::to_string_pretty(&report).unwrap());
+        return Ok(ExitCode::SUCCESS);
+    }
+    if report.issues.is_empty() {
+        println!("no issues found");
+        return Ok(ExitCode::SUCCESS);
+    }
+    for issue in &report.issues {
+        println!(
+            "{:<10} {:<20} {}",
+            format!("{:?}", issue.severity).to_lowercase(),
+            issue.id,
+            issue.subject
+        );
+    }
+    let code = if report.count(doctor::Severity::Error) > 0 {
+        ExitCode::from(1)
+    } else {
+        ExitCode::SUCCESS
+    };
+    Ok(code)
+}
+
+fn cmd_targets(ctx: &Ctx, json: bool) -> Result<ExitCode> {
+    let targets = target::list(ctx.db.conn())?;
+    if json {
+        println!("{}", serde_json::to_string_pretty(&targets).unwrap());
+    } else {
+        for t in targets {
+            let star = if t.is_default { "*" } else { " " };
+            println!(
+                "{star} {:<22} {:<10} {}",
+                t.id,
+                t.kind,
+                heron_platform::paths::display(Path::new(&t.path))
+            );
+        }
+    }
+    Ok(ExitCode::SUCCESS)
+}

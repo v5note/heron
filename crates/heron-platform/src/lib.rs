@@ -12,5 +12,6 @@ pub mod link;
 pub mod lock;
 pub mod paths;
 pub mod probe;
+pub mod time;
 
 pub use heron_core::{HeronError, Msg, Result};

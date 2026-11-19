@@ -405,7 +405,9 @@ dependencies = [
  "clap",
  "heron-core",
  "heron-platform",
+ "heron-projection",
  "heron-scan",
+ "heron-service",
  "heron-store",
  "serde",
  "serde_json",
@@ -438,6 +440,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "heron-projection"
+version = "0.1.0"
+dependencies = [
+ "heron-core",
+ "heron-platform",
+ "heron-scan",
+ "serde",
+ "serde_json",
+ "tempfile",
+]
+
+[[package]]
 name = "heron-scan"
 version = "0.1.0"
 dependencies = [
@@ -453,6 +467,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "heron-service"
+version = "0.1.0"
+dependencies = [
+ "blake3",
+ "heron-core",
+ "heron-platform",
+ "heron-projection",
+ "heron-scan",
+ "heron-store",
+ "heron-vcs",
+ "rusqlite",
+ "serde",
+ "serde_json",
+ "tempfile",
+]
+
+[[package]]
 name = "heron-store"
 version = "0.1.0"
 dependencies = [
@@ -460,6 +491,17 @@ dependencies = [
  "heron-core",
  "heron-platform",
  "rusqlite",
+ "serde",
+ "serde_json",
+ "tempfile",
+]
+
+[[package]]
+name = "heron-vcs"
+version = "0.1.0"
+dependencies = [
+ "heron-core",
+ "heron-platform",
  "serde",
  "serde_json",
  "tempfile",

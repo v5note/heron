@@ -5,6 +5,9 @@ members = [
     "crates/heron-platform",
     "crates/heron-store",
     "crates/heron-scan",
+    "crates/heron-vcs",
+    "crates/heron-projection",
+    "crates/heron-service",
     "crates/heron-cli",
 ]
 

@@ -6,7 +6,6 @@
 use std::process::ExitCode;
 
 mod app;
-mod clients;
 mod render;
 
 fn main() -> ExitCode {

@@ -1,0 +1,22 @@
+[package]
+name = "heron-service"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Use cases shared by the CLI and the GUI: scan, adopt, project, verify."
+
+[dependencies]
+heron-core = { path = "../heron-core" }
+heron-platform = { path = "../heron-platform" }
+heron-store = { path = "../heron-store" }
+heron-scan = { path = "../heron-scan" }
+heron-vcs = { path = "../heron-vcs" }
+heron-projection = { path = "../heron-projection" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+rusqlite = { workspace = true }
+blake3 = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }

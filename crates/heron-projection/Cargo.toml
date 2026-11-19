@@ -1,0 +1,17 @@
+[package]
+name = "heron-projection"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Materialize store skills into client directories: plan, apply, verify."
+
+[dependencies]
+heron-core = { path = "../heron-core" }
+heron-platform = { path = "../heron-platform" }
+heron-scan = { path = "../heron-scan" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }

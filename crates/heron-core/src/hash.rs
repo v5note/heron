@@ -63,10 +63,13 @@ impl serde::Serialize for Hash {
 /// Files and directories that never contribute to a fingerprint.
 pub const HASH_IGNORED_NAMES: &[&str] = &[
     ".git",
+    // Heron's own bookkeeping (written when a skill is adopted); it must never change identity.
+    ".gitignore",
+    "heron.skill.json",
+    ".heron",
+    "desktop.ini",
     ".DS_Store",
     "Thumbs.db",
-    ".heron",
-    "heron.skill.json",
 ];
 
 /// Normalize a relative path for hashing: forward slashes, no leading `./`,
@@ -157,6 +160,8 @@ mod tests {
         assert!(is_ignored(".git/config"));
         assert!(is_ignored("sub/.DS_Store"));
         assert!(is_ignored("heron.skill.json"));
+        // Heron's own bookkeeping must never change a skill's identity.
+        assert!(is_ignored(".gitignore"));
         assert!(!is_ignored("SKILL.md"));
         assert!(!is_ignored("references/guide.md"));
     }
