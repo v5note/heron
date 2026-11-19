@@ -124,22 +124,145 @@ heron adopt --all # 全部收拢（会先备份、再去重）
 
 ---
 
+## 开发环境
+
+### 前置工具
+
+| 工具 | 版本 | 说明 |
+|---|---|---|
+| Rust | stable | `rust-toolchain.toml` 已固定版本，rustup 会自动识别 |
+| Node.js | 22+ | 前端需要 |
+| pnpm | 10+ | `corepack enable` 即可获得 |
+| git | 2.38+ | 三方合并依赖 `git merge-tree --write-tree` |
+
+Linux 上 Tauri 还需要系统库：
+
+```bash
+sudo apt install libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev
+```
+
+### 一次性准备
+
+```bash
+pnpm --dir ui install     # 前端依赖
+cargo build --workspace   # 首次编译 Rust（需要几分钟）
+```
+
+> **受限环境 / 只读 HOME：** 本项目所有 Cargo 命令都要求 `CARGO_HOME` 指向可写目录。
+> 若 `~/.cargo` 不可写，先 `export CARGO_HOME=$PWD/.cargo-home`——
+> `.cargo-home/` 已在 `.gitignore` 中。
+
+### 启动方式
+
+```bash
+scripts/dev.sh dev      # 桌面应用，前后端热重载（需 tauri-cli）
+scripts/dev.sh web      # 只跑前端，在浏览器里看，没有 Rust 后端
+scripts/dev.sh cli …    # 用隔离的数据目录跑命令行
+```
+
+**一体化启动桌面应用**（前后端都热重载）：
+
+```bash
+cargo install tauri-cli --version '^2' --locked   # 装一次
+scripts/dev.sh dev        # 等价于 cargo tauri dev
+```
+
+Tauri 会占用 **5183** 端口（strict 模式，端口被占会直接报错而不是悄悄换端口），
+Rust 改动会自动重编，窗口加载 `http://localhost:5183`。
+
+**两个进程分开跑**（没装 tauri-cli 时 `scripts/dev.sh dev` 会提示你这么做，
+这也是单独调前端最方便的方式）：
+
+```bash
+# 终端 1 —— 只跑前端，热重载
+pnpm --dir ui dev
+# 终端 2 —— Rust 外壳
+cargo run -p heron-app
+```
+
+**只调前端**（不启动 Rust）：
+
+```bash
+scripts/dev.sh web        # 浏览器打开 http://localhost:5183
+```
+
+此时调用后端命令会报错（没有 Rust 进程），这是预期的——排版和样式的迭代用这个最快。
+
+**命令行：**
+
+```bash
+scripts/dev.sh cli scan                              # 数据目录隔离在 /tmp/heron-dev
+HERON_DEV_DATA=/tmp/mine scripts/dev.sh cli list     # 指定隔离目录
+cargo run -p heron-cli -- --data-dir /tmp/x scan     # 不用包装脚本
+```
+
+### 别碰你真实的 Skill
+
+开发时绝对不能扫到你自己的 `~/.claude`、`~/.codex`。两个隔离开关：
+
+```bash
+# 1. 隔离数据目录（索引、存储区、备份一起搬走）
+./target/debug/heron --data-dir /tmp/heron-dev scan
+
+# 2. 隔离扫描器看到的家目录
+HOME=/tmp/fake-home ./target/debug/heron --data-dir /tmp/heron-dev scan
+```
+
+`--data-dir` 会同时接管 data / config / cache / **log** 四类目录，不会往系统路径写任何东西。
+在 `/tmp/fake-home` 下造几个假 Skill（`~/.claude/skills/foo/SKILL.md` 之类），
+就能安全地演练收拢流程。
+
+### 调试手段
+
+| 场景 | 做法 |
+|---|---|
+| Rust 日志 | `RUST_LOG=debug cargo run -p heron-app`；命令行部分命令支持 `--verbose` |
+| WebView 开发者工具 | 开发版窗口右键 → 检查，或 `cmd+opt+I` / `ctrl+shift+I` |
+| 前端调用链路 | 控制台里每次后端调用都是一次 `invoke`，入口在 `ui/src/api/index.ts` |
+| 前端报错 | `useAppStore().toasts`——任何失败命令都会以本地化提示弹出 |
+| 看索引内容 | `sqlite3 <数据目录>/heron.db '.tables'`、`select * from skill;` |
+| 看某个 Skill 的历史 | `git -C <数据目录>/store/<slug> log --oneline` |
+| 为什么某个 Skill 不生效 | `heron verify`——区分「未被扫描 / 被压制 / 坏链」 |
+| 为什么升级冲突 | `heron conflict <slug>`（加 `--json` 可拿到完整文件内容） |
+| 后端 panic | `RUST_BACKTRACE=1 cargo run -p heron-app` |
+
+跑单个测试并看输出：
+
+```bash
+cargo test -p heron-service --test remote_flow -- --nocapture
+cargo test -p heron-platform --test link_safety_windows -- --nocapture   # 仅 Windows
+```
+
+联网用例默认 `#[ignore]`，保证 CI 不依赖外网：
+
+```bash
+cargo test -p heron-source --test live_markets -- --ignored --nocapture
+```
+
+### 提交前
+
+```bash
+scripts/dev.sh check    # fmt + clippy，与 CI 完全一致
+scripts/dev.sh test     # 全部测试
+scripts/dev.sh ui       # 类型检查 + i18n 一致性 + 构建
+```
+
+前端文案只存在于 `ui/src/i18n/locales/{zh-CN,en-US}.json`，两边必须同步——
+只在一边有 key 时 `scripts/dev.sh ui` 会直接失败。Rust 侧不产出任何面向用户的句子，
+它只返回 `Msg { code, params }`，由界面渲染 `errors.<code>`。
+
+### 固定工具链
+
+`rust-toolchain.toml` 锁定了 Rust 版本，所有人和 CI 用同一个编译器。
+如果 `~/.cargo` 不可写，请改 `CARGO_HOME`（见上文），而不是去改版本锁定。
+
 ## 从源码构建
 
 ```bash
-# 依赖：Rust stable、Node 22、pnpm 10
-pnpm --dir ui install
 pnpm --dir ui build
 cargo build -p heron-cli --release   # 命令行 → target/release/heron
 cargo build -p heron-app --release   # 桌面应用
-```
-
-本地校验（等价于 CI）：
-
-```bash
-scripts/dev.sh check   # fmt + clippy
-scripts/dev.sh test    # 全部测试
-scripts/dev.sh ui      # 前端类型检查 + i18n 一致性 + 构建
+scripts/dev.sh bundle                # dmg / NSIS 安装包（需 tauri-cli）
 ```
 
 ## 项目结构

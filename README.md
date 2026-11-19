@@ -127,22 +127,147 @@ never writes to a client that has not been verified.
 
 ---
 
+## Development
+
+### Prerequisites
+
+| Tool | Version | Notes |
+|---|---|---|
+| Rust | stable | `rust-toolchain.toml` pins it; rustup picks it up automatically |
+| Node.js | 22+ | needed for the frontend |
+| pnpm | 10+ | `corepack enable` installs it |
+| git | 2.38+ | three-way merges need `git merge-tree --write-tree` |
+
+On Linux, Tauri also needs system libraries:
+
+```bash
+sudo apt install libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev
+```
+
+### One-time setup
+
+```bash
+pnpm --dir ui install     # frontend dependencies
+cargo build --workspace   # first Rust build (several minutes)
+```
+
+> **Sandboxed / air-gapped machines:** every Cargo command in this project expects
+> `CARGO_HOME` to point at a writable directory. If `~/.cargo` is not writable, export
+> `CARGO_HOME=$PWD/.cargo-home` before building — `.cargo-home/` is already git-ignored.
+
+### Running it
+
+```bash
+scripts/dev.sh dev      # desktop app with hot reload (needs tauri-cli)
+scripts/dev.sh web      # frontend only, in a browser, no Rust backend
+scripts/dev.sh cli …    # the CLI against an isolated data dir
+```
+
+**Full desktop app, one process** (hot reload for both halves):
+
+```bash
+cargo install tauri-cli --version '^2' --locked   # once
+scripts/dev.sh dev        # equivalent to: cargo tauri dev
+```
+
+Tauri starts Vite on port **5183** (strict, so a port clash fails loudly) and rebuilds Rust on
+change. The app loads `http://localhost:5183`.
+
+**Two processes, no tauri-cli** — this is what `scripts/dev.sh dev` tells you to do when
+tauri-cli is missing, and it is also the easiest way to debug the frontend alone:
+
+```bash
+# terminal 1 — frontend with hot reload only
+pnpm --dir ui dev
+# terminal 2 — Rust shell
+cargo run -p heron-app
+```
+
+**Frontend only, no Rust:**
+
+```bash
+scripts/dev.sh web        # open http://localhost:5183 in any browser
+```
+
+Tauri commands will reject with an error there (there is no Rust side). That is expected;
+it is the fastest loop for layout and styling work.
+
+**CLI:**
+
+```bash
+scripts/dev.sh cli scan                              # isolated data dir under /tmp/heron-dev
+HERON_DEV_DATA=/tmp/mine scripts/dev.sh cli list     # choose the isolated dir
+cargo run -p heron-cli -- --data-dir /tmp/x scan     # plain cargo, no wrapper
+```
+
+### Isolating your real skills
+
+Development must never touch `~/.claude` or `~/.codex`. Two levers:
+
+```bash
+# 1. isolate the data directory (index, store, backups all move together)
+./target/debug/heron --data-dir /tmp/heron-dev scan
+
+# 2. isolate the home directory seen by the scanner
+HOME=/tmp/fake-home ./target/debug/heron --data-dir /tmp/heron-dev scan
+```
+
+`--data-dir` redirects data, config, cache **and** logs, so nothing lands in system paths.
+Build a fixture tree under `/tmp/fake-home` (`~/.claude/skills/foo/SKILL.md`, …) to exercise
+adoption without risking your own configuration.
+
+### Debugging
+
+| What | How |
+|---|---|
+| Rust logs | `RUST_LOG=debug cargo run -p heron-app`; CLI uses `--verbose` where available |
+| WebView devtools | right-click → Inspect (dev builds), or `cmd+opt+I` / `ctrl+shift+I` |
+| Frontend network/RPC | devtools console; every Tauri call is one `invoke`, see `ui/src/api/index.ts` |
+| Frontend errors | `useAppStore().toasts` — every failed command surfaces as a localised toast |
+| Inspect the index | `sqlite3 <data>/heron.db '.tables'` and `select * from skill;` |
+| Inspect a skill's history | `git -C <data>/store/<slug> log --oneline` |
+| Why a skill is invisible | `heron verify` — distinguishes *not scanned* from *shadowed* from *broken* |
+| Why an upgrade conflicted | `heron conflict <slug>` (add `--json` for full file contents) |
+| Backend panic | `RUST_BACKTRACE=1 cargo run -p heron-app` |
+
+A single Rust test with output:
+
+```bash
+cargo test -p heron-service --test remote_flow -- --nocapture
+cargo test -p heron-platform --test link_safety_windows -- --nocapture   # Windows only
+```
+
+Live marketplace checks are `#[ignore]`d so CI stays offline-safe:
+
+```bash
+cargo test -p heron-source --test live_markets -- --ignored --nocapture
+```
+
+### Before you push
+
+```bash
+scripts/dev.sh check    # fmt + clippy, exactly as CI runs it
+scripts/dev.sh test     # all tests
+scripts/dev.sh ui       # typecheck + i18n parity + build
+```
+
+Frontend strings live only in `ui/src/i18n/locales/{zh-CN,en-US}.json` and must stay in sync —
+`scripts/dev.sh ui` fails if a key exists in one file but not the other. Rust never emits
+user-facing prose; it returns `Msg { code, params }` and the UI renders `errors.<code>`.
+
+### Locking down the toolchain
+
+`rust-toolchain.toml` pins the Rust version, so every contributor and CI builds with the same
+compiler. If `~/.cargo` is read-only, point `CARGO_HOME` somewhere writable (see above) rather
+than editing the pin.
+
 ## Build from source
 
 ```bash
-# Requires Rust stable, Node 22, pnpm 10
-pnpm --dir ui install
 pnpm --dir ui build
 cargo build -p heron-cli --release   # CLI    → target/release/heron
 cargo build -p heron-app --release   # desktop app
-```
-
-Local checks (same as CI):
-
-```bash
-scripts/dev.sh check   # fmt + clippy
-scripts/dev.sh test    # all tests
-scripts/dev.sh ui      # frontend typecheck + i18n parity + build
+scripts/dev.sh bundle                # dmg / NSIS installer (needs tauri-cli)
 ```
 
 ## Layout
