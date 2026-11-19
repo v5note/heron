@@ -3,7 +3,8 @@
 import { defineStore } from "pinia";
 import { api, type AppError } from "../api";
 import type {
-  DetectedRow, DoctorReport, SkillRow, TargetRow, UpgradeCandidate, VisibilityReport,
+  DetectedRow, DoctorReport, SkillRow, TargetRow, UpgradeCandidate, UpgradeOutcome,
+  VisibilityReport,
 } from "../api/types";
 import { messageFor } from "../i18n";
 
@@ -122,8 +123,9 @@ export const useAppStore = defineStore("app", {
     },
     async upgrade(slugs: string[]) {
       this.busy = true;
+      let outcomes: UpgradeOutcome[] = [];
       try {
-        const outcomes = await api.upgrade(slugs, false);
+        outcomes = await api.upgrade(slugs, false);
         const conflicts = outcomes.filter((o) => o.result === "conflicts").length;
         this.toast(conflicts ? "warn" : "ok", `${outcomes.length - conflicts} upgraded, ${conflicts} conflicts`);
         await this.loadUpgrades();
@@ -133,6 +135,7 @@ export const useAppStore = defineStore("app", {
       } finally {
         this.busy = false;
       }
+      return outcomes;
     },
     async runDoctor() {
       this.busy = true;

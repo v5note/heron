@@ -121,3 +121,30 @@ export interface Drift {
   slug: string;
   kind: string;
 }
+
+export interface FileDiff {
+  path: string;
+  before: string | null;
+  after: string | null;
+}
+
+export interface DiffReport {
+  against: string;
+  files: FileDiff[];
+}
+
+export interface ConflictPayload {
+  slug: string;
+  base_commit: string;
+  upstream_commit: string;
+  files: FileDiff[];
+}
+
+export interface NativeScanStatus {
+  client: string;
+  display_name: string;
+  supported: boolean;
+  evidence: string;
+  config_path: string | null;
+  state: string;
+}

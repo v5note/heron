@@ -5,9 +5,9 @@
 
 import { invoke } from "@tauri-apps/api/core";
 import type {
-  DetectedRow, DoctorReport, Drift, InstallPlan, InstallPreview, LockFile, MarketInfo,
-  MarketItem, ScanReport, SkillRow, TargetRow, UpgradeCandidate, UpgradeOutcome,
-  VisibilityReport,
+  ConflictPayload, DetectedRow, DiffReport, DoctorReport, Drift, InstallPlan, InstallPreview,
+  LockFile, MarketInfo, MarketItem, NativeScanStatus, ScanReport, SkillRow, TargetRow,
+  UpgradeCandidate, UpgradeOutcome, VisibilityReport,
 } from "./types";
 
 export interface AppError {
@@ -60,4 +60,10 @@ export const api = {
   lockDiff: (file: string) => call<Drift[]>("lock_diff", { file }),
   projects: (roots: string[], register: boolean) =>
     call<{ root: string; clients: string[] }[]>("projects", { roots, register }),
+  diff: (slug: string, against?: string) => call<DiffReport>("diff_skill_cmd", { slug, against: against ?? null }),
+  conflict: (slug: string) => call<ConflictPayload>("conflict_payload_cmd", { slug }),
+  resolve: (slug: string, resolutions: [string, string][]) =>
+    call<UpgradeOutcome>("resolve_conflict", { slug, resolutions }),
+  nativeScanStatus: () => call<NativeScanStatus[]>("native_scan_status"),
+  nativeScanPlan: (client: string) => call<{ client: string; config_path: string; diff: string }>("native_scan_plan", { client }),
 };

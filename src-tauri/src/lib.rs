@@ -270,6 +270,49 @@ fn install_skill(
 }
 
 #[tauri::command]
+fn conflict_payload_cmd(
+    state: State<'_, AppState>,
+    slug: String,
+) -> Result<heron_service::diff::ConflictPayload, Msg> {
+    let ctx = state.ctx.lock().unwrap();
+    heron_service::diff::conflict_payload(&ctx, &slug).map_err(err)
+}
+
+#[tauri::command]
+fn diff_skill_cmd(
+    state: State<'_, AppState>,
+    slug: String,
+    against: Option<String>,
+) -> Result<heron_service::diff::DiffReport, Msg> {
+    let ctx = state.ctx.lock().unwrap();
+    heron_service::diff::diff_skill(&ctx, &slug, against.as_deref()).map_err(err)
+}
+
+#[tauri::command]
+fn resolve_conflict(
+    state: State<'_, AppState>,
+    slug: String,
+    resolutions: Vec<(String, String)>,
+) -> Result<upgrade::UpgradeOutcome, Msg> {
+    let mut ctx = state.ctx.lock().unwrap();
+    heron_service::diff::resolve(&mut ctx, &slug, &resolutions).map_err(err)
+}
+
+#[tauri::command]
+fn native_scan_status() -> Result<Vec<heron_service::native_scan::NativeScanStatus>, Msg> {
+    heron_service::native_scan::status().map_err(err)
+}
+
+#[tauri::command]
+fn native_scan_plan(
+    state: State<'_, AppState>,
+    client: String,
+) -> Result<heron_service::native_scan::InjectPlan, Msg> {
+    let ctx = state.ctx.lock().unwrap();
+    heron_service::native_scan::plan(&ctx, &state.home, &client).map_err(err)
+}
+
+#[tauri::command]
 fn lock_export(
     state: State<'_, AppState>,
     dir: String,
@@ -363,6 +406,11 @@ pub fn run() {
             lock_export,
             lock_diff,
             projects_discover,
+            conflict_payload_cmd,
+            diff_skill_cmd,
+            resolve_conflict,
+            native_scan_status,
+            native_scan_plan,
         ])
         .run(tauri::generate_context!())
         .expect("error while running Heron");

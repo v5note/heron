@@ -118,7 +118,11 @@
     "git": "Git",
     "gitMissing": "未检测到 git",
     "nativeScan": "客户端原生扫描",
-    "nativeScanOff": "默认关闭：未验证的客户端不写入任何配置（D6）"
+    "nativeScanOff": "默认关闭：未验证的客户端不写入任何配置（D6）",
+    "capability": "能力",
+    "evidence": "依据",
+    "supported": "支持（需显式开启）",
+    "unsupported": "不支持"
   },
   "errors": {
     "E_GIT_MISSING": "未检测到 git，请先安装",
@@ -140,5 +144,15 @@
     "restart_required": "需重启会话",
     "broken": "坏链",
     "unknown": "未知"
+  },
+  "conflict": {
+    "title": "解决冲突",
+    "files": "个文件",
+    "ours": "本地（你的改动）",
+    "theirs": "上游（新版本）",
+    "takeOurs": "采用本地",
+    "takeTheirs": "采用上游",
+    "saveAndRetry": "保存并重试升级",
+    "resolved": "冲突已解决，已重新升级"
   }
 }

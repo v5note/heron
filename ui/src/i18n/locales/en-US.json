@@ -118,7 +118,11 @@
     "git": "Git",
     "gitMissing": "git not found",
     "nativeScan": "Client native scan",
-    "nativeScanOff": "Off by default: nothing is written to unverified clients (D6)"
+    "nativeScanOff": "Off by default: nothing is written to unverified clients (D6)",
+    "capability": "Capability",
+    "evidence": "Evidence",
+    "supported": "supported (opt-in)",
+    "unsupported": "not supported"
   },
   "errors": {
     "E_GIT_MISSING": "git was not found; please install it",
@@ -140,5 +144,15 @@
     "restart_required": "needs session restart",
     "broken": "broken",
     "unknown": "unknown"
+  },
+  "conflict": {
+    "title": "Resolve conflicts",
+    "files": "files",
+    "ours": "Local (your changes)",
+    "theirs": "Upstream (new version)",
+    "takeOurs": "Take local",
+    "takeTheirs": "Take upstream",
+    "saveAndRetry": "Save & retry upgrade",
+    "resolved": "Conflicts resolved and upgrade retried"
   }
 }

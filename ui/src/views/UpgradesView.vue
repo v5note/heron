@@ -1,14 +1,14 @@
 <script setup lang="ts">
-import { computed, onMounted } from "vue";
+import { computed, onMounted, ref } from "vue";
 import { useI18n } from "vue-i18n";
+import ConflictEditor from "../components/ConflictEditor.vue";
 import { useAppStore } from "../stores/app";
 
 const store = useAppStore();
 const { t } = useI18n();
 const selected = ref<string[]>([]);
+const editing = ref<string | null>(null);
 onMounted(() => store.loadUpgrades());
-
-import { ref } from "vue";
 
 const eligible = computed(() =>
   store.upgrades.filter((u) => u.state === "has_update" || u.state === "diverged"),
@@ -23,8 +23,17 @@ function label(state: string) {
 async function upgradeSelected() {
   const slugs = selected.value.length ? selected.value : eligible.value.map((u) => u.slug);
   if (!slugs.length) return;
-  await store.upgrade(slugs);
+  const outcomes = await store.upgrade(slugs);
+  // A conflict is a decision for the user, not an error: open the editor for the first one.
+  const conflict = outcomes.find((o) => o.result === "conflicts");
+  if (conflict && conflict.result === "conflicts") editing.value = conflict.slug;
   selected.value = [];
+}
+
+async function retryAfterResolve() {
+  editing.value = null;
+  await store.loadUpgrades();
+  await store.loadSkills();
 }
 </script>
 
@@ -66,6 +75,12 @@ async function upgradeSelected() {
         </tr>
       </tbody>
     </table>
+    <ConflictEditor
+      v-if="editing"
+      :slug="editing"
+      @done="retryAfterResolve"
+      @cancel="editing = null"
+    />
   </section>
 </template>
 
