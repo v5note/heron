@@ -86,10 +86,12 @@ pub(super) fn probe(path: &Path) -> Result<LinkInfo, Msg> {
         Some(IO_REPARSE_TAG_SYMLINK) => LinkKind::SymbolicFile,
         _ => LinkKind::SymbolicDir,
     };
-    let resolved_exists = target
-        .as_deref()
-        .map(Path::exists)
-        .unwrap_or_else(|| path.exists());
+    let resolved_exists = match target.as_deref() {
+        Some(t) => t.exists(),
+        // We could not read the target: fall back to asking the filesystem, which follows the
+        // link for real directories and reports false for dangling ones.
+        None => path.exists(),
+    };
     Ok(LinkInfo {
         kind,
         target,
@@ -103,9 +105,11 @@ fn read_reparse(path: &Path) -> (Option<u32>, Option<PathBuf>) {
     // SAFETY: every pointer passed to Win32 refers to a buffer that outlives the call, and
     // the handle is closed on all paths.
     unsafe {
+        // Read-only access: FSCTL_GET_REPARSE_POINT needs no write permission, and
+        // GENERIC_WRITE would fail on links we did not create (non-elevated runners).
         let handle = CreateFileW(
             w.as_ptr(),
-            GENERIC_WRITE,
+            0,
             FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
             std::ptr::null(),
             OPEN_EXISTING,

@@ -178,6 +178,40 @@ fn broken_link_is_detected_and_removable() {
     assert!(!link_path.exists());
 }
 
+/// L-core-7b: on Windows a non-elevated runner may only get a junction; either kind must behave
+/// identically through probe / create-again / remove.
+#[test]
+fn windows_downgraded_junction_behaves_like_a_link() {
+    let root = tempfile::tempdir().unwrap();
+    let target = make_target(&root);
+    let link_path = root.path().join("skills").join("pdf");
+
+    link::create_dir_link(&target, &link_path, ProjectionMode::Symlink).unwrap();
+    let info = link::probe(&link_path).unwrap();
+    assert!(
+        info.kind.is_link(),
+        "expected a link of some kind, got {:?}",
+        info.kind
+    );
+    assert!(info.resolved_exists, "link must resolve to the target");
+    assert_eq!(
+        info.target.as_deref(),
+        Some(target.as_path()),
+        "target must be readable without write access"
+    );
+
+    let again = link::create_dir_link(&target, &link_path, ProjectionMode::Symlink).unwrap();
+    assert_eq!(
+        again,
+        LinkOutcome::AlreadyPresent,
+        "linking twice is idempotent"
+    );
+
+    link::remove_link(&link_path).unwrap();
+    assert!(!link_path.exists());
+    assert_target_intact(&target);
+}
+
 /// L-core-8: copy/pointer modes must not be handled by the link layer.
 #[test]
 fn link_layer_rejects_copy_and_pointer() {
