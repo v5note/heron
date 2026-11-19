@@ -283,20 +283,30 @@ fn detach_directory_reparse(path: &Path) -> Result<(), Msg> {
         if handle == INVALID_HANDLE_VALUE {
             return Err(io_msg(path)(first_err));
         }
+        // FSCTL_DELETE_REPARSE_POINT takes a REPARSE_DATA_BUFFER describing the point:
+        // the fixed 8-byte header (tag + zero-length payload) is enough to clear it.
+        let (tag, _, _) = read_reparse(path);
+        let mut input = [0u8; 8];
+        input[0..4].copy_from_slice(&tag.unwrap_or(IO_REPARSE_TAG_SYMLINK).to_le_bytes());
         let mut returned: u32 = 0;
         let cleared = DeviceIoControl(
             handle,
             FSCTL_DELETE_REPARSE_POINT,
-            std::ptr::null(),
-            0,
+            input.as_ptr().cast(),
+            input.len() as u32,
             std::ptr::null_mut(),
             0,
             &mut returned,
             std::ptr::null_mut(),
         );
+        let clear_err = std::io::Error::last_os_error();
         let _ = CloseHandle(handle);
         if cleared == 0 {
-            return Err(io_msg(path)(first_err));
+            return Err(io_msg(path)(if clear_err.raw_os_error() != Some(0) {
+                clear_err
+            } else {
+                first_err
+            }));
         }
     }
     // The directory is now a plain empty directory; remove_dir never recurses.
