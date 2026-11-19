@@ -212,12 +212,20 @@ fn read_reparse(path: &Path) -> (Option<u32>, Option<PathBuf>, Option<i32>) {
         if tag != IO_REPARSE_TAG_MOUNT_POINT && tag != IO_REPARSE_TAG_SYMLINK {
             return (Some(tag), None, None);
         }
+        // The tag-specific header differs between junctions and symlinks:
+        //   mount point: PathBuffer starts at 16
+        //   symlink:     a ULONG Flags occupies 16..20, so PathBuffer starts at 20
+        // SubstituteNameOffset/Length are byte counts relative to PathBuffer.
+        let path_buffer = match tag {
+            IO_REPARSE_TAG_SYMLINK => OFF_PATH_BUFFER + 4,
+            _ => OFF_PATH_BUFFER,
+        };
         let sub_off =
             u16::from_le_bytes([buf[OFF_SUBSTITUTE_OFFSET], buf[OFF_SUBSTITUTE_OFFSET + 1]])
                 as usize;
         let sub_len =
             u16::from_le_bytes([buf[OFF_SUBSTITUTE_LEN], buf[OFF_SUBSTITUTE_LEN + 1]]) as usize;
-        let start = OFF_PATH_BUFFER + sub_off;
+        let start = path_buffer + sub_off;
         let end = (start + sub_len).min(returned as usize);
         if start >= end {
             return (Some(tag), None, None);
