@@ -216,7 +216,7 @@ mod tests {
         let matrix = builtin().unwrap();
         assert_eq!(matrix.len(), 5);
         let claude = matrix.iter().find(|c| c.id == "claude").unwrap();
-        assert_eq!(claude.global_skills, ".claude/skills");
+        assert_eq!(claude.global_skills, ".claude/skills"); // config values always use '/'
         assert_eq!(claude.global_commands.as_deref(), Some(".claude/commands"));
         assert_eq!(claude.verified_by.as_deref(), Some("doc"));
         assert!(
@@ -240,7 +240,9 @@ mod tests {
         let clients = client::list(db.conn()).unwrap();
         assert_eq!(clients.len(), 6, "five clients plus the heron landing");
         let landing = target::get_default(db.conn()).unwrap().unwrap();
-        assert_eq!(landing.path, "/home/u/.heron/skills");
+        // Build the expectation with PathBuf so the separator matches the platform.
+        let expected = PathBuf::from("/home/u").join(".heron").join("skills");
+        assert_eq!(PathBuf::from(&landing.path), expected);
         let targets = target::list(db.conn()).unwrap();
         assert!(targets.iter().any(|t| t.id == "claude:global"));
         assert_eq!(targets.iter().filter(|t| t.is_default).count(), 1);
