@@ -1427,6 +1427,7 @@ Playwright 覆盖 6 条主路径：首次引导（含 Git 缺失引导）→ 发
 |------|--------|--------------|----------|
 | 2026-11-19 | M0（部分） | `heron-core`：slug / version / policy / error / dto / hash；`heron-platform`：dirs / paths / atomic / lock / link（unix + windows）/ probe | `cargo test --workspace` 81 例通过；`cargo fmt --check`、`cargo clippy -D warnings` 干净；`--target x86_64-pc-windows-msvc` 静态编译通过 |
 | 2026-11-19 | M0（部分） | 链接层安全测试：`tests/link_safety.rs`（10 例，全平台）+ `tests/link_safety_windows.rs`（L1–L6，Windows 门控） | macOS 实跑 10/10；Windows 用例待 Windows CI 或真机执行 |
+| 2026-11-19 | M2（核心完成） | `heron-git`（每 URL 一个裸仓缓存、ref 解析、`git archive` 子目录检出、tar 解包含路径穿越防护）、`heron-source`（四种 URL 形态 + GitLab 歧义候选 + catalog 三级优先）、service `install/outdated/upgrade/rollback`、CLI 同名命令 | 209 例测试全绿；真机演练（本地 bare 远端）：安装 → 本地改一行 → 上游发布 1.2.0 → 三方合并保留双方改动 → 标签 v1.1.0/v1.2.0 → 回滚成功 |
 | 2026-11-19 | M1（核心完成） | `heron-vcs`（每 Skill 独立 Git 仓库、`merge-tree` 三方合并、回滚标签）、`heron-projection`（plan/apply/verify + 三种投影互转）、`heron-service`（scan/adopt/project/unproject/verify/doctor）、CLI 接入 `adopt/project/unproject/verify/doctor/targets` | 174 例测试全绿；真机演练：2 份 pdf 收拢为 1 份 store、两处原位置变链接且 `verify` 均判 visible；legacy 命令只接管单个文件；`project --on claude:global` 可用 |
 | 2026-11-19 | M0（完成） | `heron-store`：迁移 0001/0002 + 6 个仓储 + 补偿事件表；`heron-scan`：walker / rules / parse / classify / fingerprint；`heron-cli`：`scan` / `list` / `detected` | 131 例测试全绿；真机扫描 219 目录 / 52 个 skill（79 ms）；`--roots` 下的 `.claude/commands` 被识别为 legacy-command |
 
@@ -1438,11 +1439,13 @@ Playwright 覆盖 6 条主路径：首次引导（含 Git 缺失引导）→ 发
 - `0004-data-dir-override-owns-everything.md`：显式数据目录拥有 config/cache/log；
 - `0005-storage-holds-real-paths.md`：数据库只存真实路径，`display()` 仅用于渲染；
 - `0006-projection-identity-and-targets.md`：投影按"位置"标识，客户端目录自动成为目标；
-- `0007-bookkeeping-ignored-by-identity.md`：Heron 记账文件不参与内容指纹。
+- `0007-bookkeeping-ignored-by-identity.md`：Heron 记账文件不参与内容指纹；
+- `0008-upstream-objects-and-version-tags.md`：升级导入上游对象、`--merge-base` 传 tree、版本标签打在本地提交。
 
-**M1 收尾待办**：
+**M2 收尾 / M3 待办**：
 
-1. 客户端矩阵外置为 `resources/clients/*.toml`（当前写在 `heron-service::clients`）；
-2. 项目目标的自动发现（扫描时识别项目根并登记 `<proj>/.claude/skills` 等）；
-3. `heron install <url>`（远程安装）与 `outdated / upgrade / rollback`（M2 主线）；
-4. Windows CI 上跑通 `link_safety_windows` 的 L1–L6。
+1. 市场适配器（`MarketAdapter`：skills.sh 索引、ClawHub REST、三个引导式站点）；
+2. `heron.lock` 导出/导入与 `heron sync`（团队协作）；
+3. 客户端矩阵外置为 `resources/clients/*.toml`；项目目标自动发现；
+4. 冲突解决界面所需的 `diff` / `merge_resolve` 命令；
+5. Windows CI 上跑通 `link_safety_windows` 的 L1–L6，以及 `git` 相关用例的 Windows 版本。

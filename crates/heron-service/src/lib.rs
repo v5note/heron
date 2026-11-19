@@ -13,8 +13,10 @@ pub mod adopt;
 pub mod clients;
 pub mod context;
 pub mod doctor;
+pub mod install;
 pub mod project;
 pub mod scan;
+pub mod upgrade;
 pub mod verify;
 
 pub use context::Ctx;

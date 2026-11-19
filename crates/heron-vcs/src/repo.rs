@@ -294,9 +294,44 @@ impl SkillRepo {
         Ok(!self.changed_since_baseline()?.is_empty())
     }
 
+    /// Import objects from another repository (usually the bare cache) so commits fetched
+    /// from upstream can be merged locally. Equivalent to `git fetch <path> <sha>`.
+    pub fn import_objects(&self, from: &Path, rev: &str) -> Result<()> {
+        let out = self.git.run(
+            &self.root,
+            &[
+                "fetch",
+                "-q",
+                "--no-tags",
+                from.to_str().unwrap_or_default(),
+                rev,
+            ],
+        )?;
+        if !out.ok() {
+            return Err(heron_core::HeronError::from(
+                ErrorCode::RefNotFound
+                    .msg()
+                    .with("ref", rev.to_owned())
+                    .with("detail", first_line(&out.stderr)),
+            ));
+        }
+        Ok(())
+    }
+
+    /// True when the working tree has changes that are not committed yet.
+    pub fn worktree_differs_from_head(&self) -> Result<bool> {
+        if self.head_raw().is_none() {
+            return Ok(false);
+        }
+        let out = self.git.run(&self.root, &["status", "--porcelain"])?;
+        Ok(out.ok() && !out.stdout.trim().is_empty())
+    }
+
     /// Three-way merge `theirs` on top of the current working tree.
     ///
     /// The working tree is **not** touched when there are conflicts: the caller decides.
+    /// `base` is the commit recorded as the merge baseline; both `base` and `theirs` must
+    /// already exist in this repository (see [`Self::import_objects`]).
     pub fn merge_from_upstream(&self, theirs: &str, base: &str) -> Result<MergeOutcome> {
         let ours = self.head()?;
         if !self.git.supports_merge_tree(&self.root) {
@@ -306,7 +341,9 @@ impl SkillRepo {
                     .with("detail", "merge-tree requires git >= 2.38"),
             ));
         }
-        merge_tree(&self.git, &self.root, base, &ours, theirs)
+        // `--merge-base` takes a tree, not a commit.
+        let base_tree = self.rev_parse(&format!("{base}^{{tree}}"))?;
+        merge_tree(&self.git, &self.root, &base_tree, &ours, theirs)
     }
 
     /// Apply a clean merge commit produced by [`Self::merge_from_upstream`].
@@ -355,6 +392,10 @@ impl SkillRepo {
             .run_checked(&self.root, &["clean", "-q", "-fd"], ErrorCode::Internal)?;
         Ok(())
     }
+}
+
+fn first_line(text: &str) -> String {
+    text.lines().next().unwrap_or_default().trim().to_owned()
 }
 
 fn short(sha: &str) -> String {

@@ -12,6 +12,8 @@ heron-platform = { path = "../heron-platform" }
 heron-store = { path = "../heron-store" }
 heron-scan = { path = "../heron-scan" }
 heron-vcs = { path = "../heron-vcs" }
+heron-git = { path = "../heron-git" }
+heron-source = { path = "../heron-source" }
 heron-projection = { path = "../heron-projection" }
 serde = { workspace = true }
 serde_json = { workspace = true }

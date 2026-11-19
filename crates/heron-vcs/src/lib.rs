@@ -14,6 +14,7 @@ pub mod git;
 pub mod merge;
 pub mod repo;
 
+pub use git::Git;
 pub use heron_core::{HeronError, Msg, Result};
 pub use merge::{ConflictFile, MergeOutcome};
-pub use repo::{CommitInfo, SkillMeta, SkillRepo};
+pub use repo::{CommitInfo, MetaSource, SkillMeta, SkillRepo};

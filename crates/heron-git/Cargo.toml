@@ -1,0 +1,17 @@
+[package]
+name = "heron-git"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Remote access: bare repository cache, ref resolution and sparse checkouts."
+
+[dependencies]
+heron-core = { path = "../heron-core" }
+heron-platform = { path = "../heron-platform" }
+heron-vcs = { path = "../heron-vcs" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }

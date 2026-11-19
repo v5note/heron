@@ -6,8 +6,10 @@ use std::process::ExitCode;
 use clap::{Parser, Subcommand};
 use heron_core::{ErrorCode, HeronError, ProjectionMode, Result};
 use heron_service::adopt::{self, AdoptPlacement};
+use heron_service::install::{self, InstallRequest};
 use heron_service::project::{self, ProjectRequest};
 use heron_service::scan::{self, ScanRequest};
+use heron_service::upgrade::{self, UpgradeOutcome, UpgradeState};
 use heron_service::{doctor, verify, Ctx};
 use heron_store::db::Db;
 use heron_store::repos::{detected, skill, target};
@@ -80,6 +82,35 @@ pub enum Command {
     Doctor,
     /// List targets known to the index.
     Targets,
+    /// Install a skill from a repository URL, \`owner/repo\` or tree link.
+    Install {
+        input: String,
+        #[arg(long = "ref")]
+        ref_override: Option<String>,
+        #[arg(long)]
+        subpath: Option<String>,
+        #[arg(long = "as")]
+        as_slug: Option<String>,
+        #[arg(long)]
+        dry_run: bool,
+    },
+    /// List managed skills whose upstream has moved on.
+    Outdated,
+    /// Merge upstream changes into local skills.
+    Upgrade {
+        /// Slugs to upgrade; omit to upgrade everything with an update.
+        slugs: Vec<String>,
+        #[arg(long)]
+        all: bool,
+        #[arg(long)]
+        dry_run: bool,
+    },
+    /// Return a skill to an earlier landed version.
+    Rollback {
+        slug: String,
+        #[arg(long)]
+        to: String,
+    },
 }
 
 pub fn run() -> Result<ExitCode> {
@@ -116,6 +147,35 @@ pub fn run() -> Result<ExitCode> {
         Command::Verify { slug } => cmd_verify(&ctx, slug.as_deref(), cli.json),
         Command::Doctor => cmd_doctor(&ctx, cli.json),
         Command::Targets => cmd_targets(&ctx, cli.json),
+        Command::Install {
+            input,
+            ref_override,
+            subpath,
+            as_slug,
+            dry_run,
+        } => cmd_install(
+            &mut ctx,
+            input,
+            ref_override,
+            subpath,
+            as_slug,
+            dry_run,
+            cli.json,
+        ),
+        Command::Outdated => cmd_outdated(&ctx, cli.json),
+        Command::Upgrade {
+            slugs,
+            all,
+            dry_run,
+        } => cmd_upgrade(&mut ctx, &slugs, all, dry_run, cli.json),
+        Command::Rollback { slug, to } => {
+            let previous = upgrade::rollback(&mut ctx, &slug, &to)?;
+            println!(
+                "rolled {slug} back to {to} (was {})",
+                &previous[..8.min(previous.len())]
+            );
+            Ok(ExitCode::SUCCESS)
+        }
     }
 }
 
@@ -482,4 +542,166 @@ fn cmd_targets(ctx: &Ctx, json: bool) -> Result<ExitCode> {
         }
     }
     Ok(ExitCode::SUCCESS)
+}
+
+fn cmd_install(
+    ctx: &mut Ctx,
+    input: String,
+    ref_override: Option<String>,
+    subpath: Option<String>,
+    as_slug: Option<String>,
+    dry_run: bool,
+    json: bool,
+) -> Result<ExitCode> {
+    let req = InstallRequest {
+        input,
+        ref_override,
+        subpath_override: subpath,
+        as_slug,
+    };
+    let preview = install::preview(ctx, &req)?;
+    if dry_run {
+        if json {
+            println!("{}", serde_json::to_string_pretty(&preview).unwrap());
+        } else {
+            println!("source   {}", heron_source::url::describe(&preview.source));
+            println!("skill    {}", preview.selected.as_deref().unwrap_or("-"));
+            println!("slug     {}", preview.slug);
+            println!(
+                "commit   {}",
+                &preview.commit[..8.min(preview.commit.len())]
+            );
+            if preview.available.len() > 1 {
+                println!("also available:");
+                for item in preview
+                    .available
+                    .iter()
+                    .filter(|p| Some(*p) != preview.selected.as_ref())
+                {
+                    println!("  {item}");
+                }
+            }
+            if preview.existing {
+                println!(
+                    "note     already installed - use heron upgrade {}",
+                    preview.slug
+                );
+            }
+        }
+        return Ok(ExitCode::SUCCESS);
+    }
+
+    let report = install::install(ctx, &req)?;
+    if json {
+        println!("{}", serde_json::to_string_pretty(&report).unwrap());
+    } else {
+        println!(
+            "installed {} {} from {}",
+            report.slug, report.version, report.source
+        );
+        println!("  at {}", report.path);
+        println!();
+        println!("next: heron project {}", report.slug);
+    }
+    Ok(ExitCode::SUCCESS)
+}
+
+fn cmd_outdated(ctx: &Ctx, json: bool) -> Result<ExitCode> {
+    upgrade::refresh_sources(ctx)?;
+    let candidates = upgrade::outdated(ctx, heron_core::PinPolicy::Semver)?;
+    if json {
+        println!("{}", serde_json::to_string_pretty(&candidates).unwrap());
+        return Ok(ExitCode::SUCCESS);
+    }
+    let mut any = false;
+    for c in &candidates {
+        let state = match c.state {
+            UpgradeState::HasUpdate => "update available",
+            UpgradeState::UpToDate => "up to date",
+            UpgradeState::Pinned => "pinned",
+            UpgradeState::LocalModified => "local changes",
+            UpgradeState::Diverged => "diverged (local + upstream)",
+            UpgradeState::UpstreamGone => "upstream gone",
+            UpgradeState::NotTracked => "not tracked",
+        };
+        println!("{:<28} {:<28} {}", c.slug, state, c.installed);
+        any |= matches!(c.state, UpgradeState::HasUpdate | UpgradeState::Diverged);
+    }
+    if !any {
+        println!();
+        println!("everything is up to date");
+    }
+    Ok(ExitCode::SUCCESS)
+}
+
+fn cmd_upgrade(
+    ctx: &mut Ctx,
+    slugs: &[String],
+    all: bool,
+    dry_run: bool,
+    json: bool,
+) -> Result<ExitCode> {
+    upgrade::refresh_sources(ctx)?;
+    let candidates = upgrade::outdated(ctx, heron_core::PinPolicy::Semver)?;
+    let selected: Vec<String> = if all || slugs.is_empty() {
+        candidates
+            .iter()
+            .filter(|c| matches!(c.state, UpgradeState::HasUpdate | UpgradeState::Diverged))
+            .map(|c| c.slug.clone())
+            .collect()
+    } else {
+        slugs.to_vec()
+    };
+
+    if selected.is_empty() {
+        println!("nothing to upgrade");
+        return Ok(ExitCode::SUCCESS);
+    }
+    if dry_run {
+        for slug in &selected {
+            let cand = candidates.iter().find(|c| &c.slug == slug);
+            let latest = cand.and_then(|c| c.latest.clone()).unwrap_or_default();
+            println!("would upgrade {slug} -> {}", &latest[..8.min(latest.len())]);
+        }
+        return Ok(ExitCode::SUCCESS);
+    }
+
+    let mut conflicts = 0;
+    let mut outcomes = Vec::new();
+    for slug in &selected {
+        let outcome = upgrade::upgrade(ctx, slug)?;
+        if let UpgradeOutcome::Conflicts { .. } = &outcome {
+            conflicts += 1;
+        }
+        outcomes.push(outcome);
+    }
+    if json {
+        println!("{}", serde_json::to_string_pretty(&outcomes).unwrap());
+    } else {
+        for outcome in &outcomes {
+            match outcome {
+                UpgradeOutcome::Upgraded { slug, from, to, .. } => {
+                    println!(
+                        "upgraded {slug} {} -> {}",
+                        &from[..8.min(from.len())],
+                        &to[..8.min(to.len())]
+                    )
+                }
+                UpgradeOutcome::UpToDate { slug } => println!("{slug} already up to date"),
+                UpgradeOutcome::Skipped { slug, reason } => println!("skipped {slug}: {reason}"),
+                UpgradeOutcome::Conflicts { slug, files } => {
+                    println!("conflict in {slug}:");
+                    for file in files {
+                        println!("  {}", file.path);
+                    }
+                    println!("  the skill was left untouched; resolve it manually or roll back");
+                }
+            }
+        }
+    }
+    Ok(if conflicts > 0 {
+        ExitCode::from(3)
+    } else {
+        ExitCode::SUCCESS
+    })
 }

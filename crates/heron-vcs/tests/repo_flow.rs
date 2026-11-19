@@ -92,7 +92,9 @@ fn clean_three_way_merge_combines_both_sides() {
     }
     let tmp = tempfile::tempdir().unwrap();
     let repo = repo(tmp.path());
-    let base = repo.head().unwrap();
+    let base = repo
+        .rev_parse(&format!("{}^{{tree}}", repo.head().unwrap()))
+        .unwrap();
 
     // 1) upstream rewrites the last line (lands on main first, so it becomes the ancestor
     //    from which the local edit diverges in this linear simulation).
