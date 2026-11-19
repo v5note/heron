@@ -98,20 +98,26 @@ pub(super) fn probe(path: &Path) -> Result<LinkInfo, Msg> {
     }
 
     let (tag, target, read_error) = read_reparse(path);
+    // A dangling link cannot be classified by its target (there is nothing to stat), so ask the
+    // symlink itself: `FileTypeExt::is_symlink_dir` reads the reparse buffer directly.
+    let link_is_dir = || {
+        std::fs::symlink_metadata(path)
+            .map(|m| {
+                use std::os::windows::fs::FileTypeExt;
+                m.file_type().is_symlink_dir()
+            })
+            .unwrap_or(false)
+    };
     let kind = match tag {
         Some(IO_REPARSE_TAG_MOUNT_POINT) => LinkKind::Junction,
-        Some(IO_REPARSE_TAG_SYMLINK)
-            if target.as_deref().map(Path::is_dir).unwrap_or(false) || path.is_dir() =>
-        {
-            LinkKind::SymbolicDir
-        }
+        Some(IO_REPARSE_TAG_SYMLINK) if link_is_dir() || path.is_dir() => LinkKind::SymbolicDir,
         Some(IO_REPARSE_TAG_SYMLINK) => LinkKind::SymbolicFile,
         _ => LinkKind::SymbolicDir,
     };
     let resolved_exists = match target.as_deref() {
         Some(t) => t.exists(),
-        // We could not read the target: fall back to asking the filesystem, which follows the
-        // link for real directories and reports false for dangling ones.
+        // Unreadable target: ask the filesystem, which follows the link and reports false for
+        // dangling ones (which is exactly what we want to report).
         None => path.exists(),
     };
     if read_error.is_some() {
