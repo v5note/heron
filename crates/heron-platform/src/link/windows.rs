@@ -75,7 +75,7 @@ pub(super) fn probe(path: &Path) -> Result<LinkInfo, Msg> {
         });
     }
 
-    let (tag, target) = read_reparse(path);
+    let (tag, target, read_error) = read_reparse(path);
     let kind = match tag {
         Some(IO_REPARSE_TAG_MOUNT_POINT) => LinkKind::Junction,
         Some(IO_REPARSE_TAG_SYMLINK)
@@ -92,6 +92,13 @@ pub(super) fn probe(path: &Path) -> Result<LinkInfo, Msg> {
         // link for real directories and reports false for dangling ones.
         None => path.exists(),
     };
+    if read_error.is_some() {
+        // A reparse point we cannot read is a real operational problem (permissions, an
+        // unexpected tag). Surfacing it beats silently reporting "target missing".
+        return Err(io_msg(path)(std::io::Error::from_raw_os_error(
+            read_error.unwrap_or(0),
+        )));
+    }
     Ok(LinkInfo {
         kind,
         target,
@@ -100,7 +107,8 @@ pub(super) fn probe(path: &Path) -> Result<LinkInfo, Msg> {
 }
 
 /// Read the reparse tag and the substitute name of a reparse point.
-fn read_reparse(path: &Path) -> (Option<u32>, Option<PathBuf>) {
+/// Returns (reparse tag, substitute name, win32 error if reading failed).
+fn read_reparse(path: &Path) -> (Option<u32>, Option<PathBuf>, Option<i32>) {
     let w = wide(path);
     // SAFETY: every pointer passed to Win32 refers to a buffer that outlives the call, and
     // the handle is closed on all paths.
@@ -117,7 +125,8 @@ fn read_reparse(path: &Path) -> (Option<u32>, Option<PathBuf>) {
             std::ptr::null_mut(),
         );
         if handle == INVALID_HANDLE_VALUE {
-            return (None, None);
+            let err = std::io::Error::last_os_error();
+            return (None, None, Some(err.raw_os_error().unwrap_or(0)));
         }
         let mut buf = vec![0u8; 16 * 1024];
         let mut returned: u32 = 0;
@@ -133,7 +142,8 @@ fn read_reparse(path: &Path) -> (Option<u32>, Option<PathBuf>) {
         );
         let _ = CloseHandle(handle);
         if ok == 0 || (returned as usize) < MIN_REPARSE_BYTES {
-            return (None, None);
+            let err = std::io::Error::last_os_error();
+            return (None, None, Some(err.raw_os_error().unwrap_or(0)));
         }
 
         let tag = u32::from_le_bytes([
@@ -143,7 +153,7 @@ fn read_reparse(path: &Path) -> (Option<u32>, Option<PathBuf>) {
             buf[OFF_TAG + 3],
         ]);
         if tag != IO_REPARSE_TAG_MOUNT_POINT && tag != IO_REPARSE_TAG_SYMLINK {
-            return (Some(tag), None);
+            return (Some(tag), None, None);
         }
         let sub_len =
             u16::from_le_bytes([buf[OFF_SUBSTITUTE_LEN], buf[OFF_SUBSTITUTE_LEN + 1]]) as usize;
@@ -158,7 +168,7 @@ fn read_reparse(path: &Path) -> (Option<u32>, Option<PathBuf>) {
             .strip_prefix("\\\\\\\\?\\\\")
             .or_else(|| name.strip_prefix("\\\\??\\\\"))
             .unwrap_or(&name);
-        (Some(tag), Some(PathBuf::from(stripped)))
+        (Some(tag), Some(PathBuf::from(stripped)), None)
     }
 }
 
