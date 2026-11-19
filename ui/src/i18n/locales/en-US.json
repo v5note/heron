@@ -1,0 +1,144 @@
+{
+  "app": {
+    "title": "Heron",
+    "subtitle": "Local skill manager"
+  },
+  "nav": {
+    "overview": "Overview",
+    "library": "My skills",
+    "discover": "Discover",
+    "sources": "Sources & markets",
+    "projects": "Projects",
+    "upgrades": "Updates",
+    "doctor": "Health",
+    "settings": "Settings"
+  },
+  "common": {
+    "refresh": "Refresh",
+    "scan": "Scan",
+    "adopt": "Adopt",
+    "project": "Enable",
+    "unproject": "Disable",
+    "verify": "Verify",
+    "cancel": "Cancel",
+    "confirm": "Confirm",
+    "dryRun": "Preview",
+    "search": "Search",
+    "loading": "Loading…",
+    "empty": "Nothing here yet",
+    "yes": "Yes",
+    "no": "No",
+    "close": "Close",
+    "applied": "Applied",
+    "skipped": "Skipped",
+    "error": "Something went wrong"
+  },
+  "overview": {
+    "title": "Overview",
+    "skills": "Managed skills",
+    "unmanaged": "Unowned",
+    "upgradable": "Upgradable",
+    "issues": "Health issues",
+    "lastScan": "Last scan",
+    "never": "never",
+    "quickScan": "Scan this machine",
+    "quickDoctor": "Run health check",
+    "hint": "Scan first, then pick the skills you want to own."
+  },
+  "library": {
+    "title": "My skills",
+    "slug": "Name",
+    "origin": "Origin",
+    "status": "Status",
+    "targets": "Enabled in",
+    "none": "No managed skills yet. Adopt some from Discover.",
+    "enabled": "enabled",
+    "notEnabled": "not enabled"
+  },
+  "discover": {
+    "title": "Discover",
+    "subtitle": "These skills exist on disk but Heron does not manage them yet.",
+    "path": "Path",
+    "client": "Client",
+    "scope": "Scope",
+    "kind": "Kind",
+    "selectAll": "Select all",
+    "adoptSelected": "Adopt selected",
+    "keepOriginal": "Keep original in place",
+    "nestedWarning": "Nested skills are reported only, never modified (design D8).",
+    "needsAttention": "frontmatter problem"
+  },
+  "sources": {
+    "title": "Sources & markets",
+    "capability": "Capability",
+    "indexed": "Searchable",
+    "guided": "Browser only",
+    "disabled": "disabled by default",
+    "searchHint": "Search this market",
+    "installable": "installable",
+    "browseOnly": "open in browser",
+    "openInBrowser": "Open in browser",
+    "pasteUrl": "Paste a git URL and press Enter"
+  },
+  "projects": {
+    "title": "Projects",
+    "root": "Project root",
+    "clients": "Clients",
+    "register": "Register selected"
+  },
+  "upgrades": {
+    "title": "Updates",
+    "slug": "Skill",
+    "state": "State",
+    "installed": "Installed",
+    "upgradeAll": "Upgrade all",
+    "conflicts": "conflicts",
+    "upToDate": "up to date",
+    "states": {
+      "up_to_date": "up to date",
+      "has_update": "update available",
+      "pinned": "pinned",
+      "local_modified": "local changes",
+      "diverged": "local + upstream changes",
+      "upstream_gone": "upstream gone",
+      "not_tracked": "not tracked"
+    }
+  },
+  "doctor": {
+    "title": "Health",
+    "noIssues": "No issues found",
+    "run": "Run health check",
+    "actions": "Suggested actions"
+  },
+  "settings": {
+    "title": "Settings",
+    "language": "Language",
+    "theme": "Theme",
+    "dataDir": "Data directory",
+    "git": "Git",
+    "gitMissing": "git not found",
+    "nativeScan": "Client native scan",
+    "nativeScanOff": "Off by default: nothing is written to unverified clients (D6)"
+  },
+  "errors": {
+    "E_GIT_MISSING": "git was not found; please install it",
+    "E_NETWORK": "Network request failed; check your proxy and retry",
+    "E_SOURCE_AMBIGUOUS": "That address is ambiguous and needs your choice",
+    "E_SLUG_CONFLICT": "A skill with that name already exists",
+    "E_REF_NOT_FOUND": "Branch, tag or path not found",
+    "E_DRIFTED": "The destination was changed by something else; stopped",
+    "E_NOT_MANAGED": "That location is not managed by Heron",
+    "E_MARKET_UNAVAILABLE": "The market is unreachable right now",
+    "E_SAFETY_REFUSED": "Refused for safety",
+    "E_PERMISSION": "No permission for that path",
+    "E_INTERNAL": "Internal error"
+  },
+  "visibility": {
+    "visible": "live",
+    "not_scanned": "not scanned",
+    "shadowed": "shadowed",
+    "restart_required": "needs session restart",
+    "broken": "broken",
+    "unknown": "unknown"
+  }
+}

@@ -1,0 +1,144 @@
+{
+  "app": {
+    "title": "Heron 苍鹭",
+    "subtitle": "本地 Skill 管理器"
+  },
+  "nav": {
+    "overview": "概览",
+    "library": "我的 Skill",
+    "discover": "发现",
+    "sources": "来源与市场",
+    "projects": "项目",
+    "upgrades": "更新",
+    "doctor": "体检",
+    "settings": "设置"
+  },
+  "common": {
+    "refresh": "刷新",
+    "scan": "扫描",
+    "adopt": "收拢",
+    "project": "启用",
+    "unproject": "停用",
+    "verify": "校验",
+    "cancel": "取消",
+    "confirm": "确认",
+    "dryRun": "预览",
+    "search": "搜索",
+    "loading": "加载中…",
+    "empty": "暂无数据",
+    "yes": "是",
+    "no": "否",
+    "close": "关闭",
+    "applied": "已生效",
+    "skipped": "已跳过",
+    "error": "出错了"
+  },
+  "overview": {
+    "title": "概览",
+    "skills": "已纳管 Skill",
+    "unmanaged": "未纳管",
+    "upgradable": "可升级",
+    "issues": "体检问题",
+    "lastScan": "上次扫描",
+    "never": "从未",
+    "quickScan": "扫描本机",
+    "quickDoctor": "运行体检",
+    "hint": "先扫描，再挑出要收拢的 Skill。"
+  },
+  "library": {
+    "title": "我的 Skill",
+    "slug": "名称",
+    "origin": "来源",
+    "status": "状态",
+    "targets": "启用位置",
+    "none": "还没有纳管的 Skill。去“发现”页收拢一些吧。",
+    "enabled": "已启用",
+    "notEnabled": "未启用"
+  },
+  "discover": {
+    "title": "发现",
+    "subtitle": "这些是磁盘上存在、但 Heron 尚未接管的 Skill。",
+    "path": "路径",
+    "client": "客户端",
+    "scope": "范围",
+    "kind": "类型",
+    "selectAll": "全选",
+    "adoptSelected": "收拢所选",
+    "keepOriginal": "保留原位置",
+    "nestedWarning": "病态嵌套只报告，不会自动改动（见设计 D8）。",
+    "needsAttention": "frontmatter 有问题"
+  },
+  "sources": {
+    "title": "来源与市场",
+    "capability": "能力",
+    "indexed": "可搜索",
+    "guided": "仅浏览器",
+    "disabled": "默认关闭",
+    "searchHint": "输入关键词搜索这个市场",
+    "installable": "可安装",
+    "browseOnly": "需在浏览器中查看",
+    "openInBrowser": "在浏览器打开",
+    "pasteUrl": "粘贴 Git 地址后回车安装"
+  },
+  "projects": {
+    "title": "项目",
+    "root": "项目根",
+    "clients": "客户端",
+    "register": "登记所选"
+  },
+  "upgrades": {
+    "title": "更新",
+    "slug": "Skill",
+    "state": "状态",
+    "installed": "当前版本",
+    "upgradeAll": "全部升级",
+    "conflicts": "冲突",
+    "upToDate": "已是最新",
+    "states": {
+      "up_to_date": "已是最新",
+      "has_update": "有更新",
+      "pinned": "已锁定",
+      "local_modified": "有本地改动",
+      "diverged": "本地与上游都有改动",
+      "upstream_gone": "上游已消失",
+      "not_tracked": "未追踪来源"
+    }
+  },
+  "doctor": {
+    "title": "体检",
+    "noIssues": "没有发现问题",
+    "run": "运行体检",
+    "actions": "建议操作"
+  },
+  "settings": {
+    "title": "设置",
+    "language": "语言",
+    "theme": "主题",
+    "dataDir": "数据目录",
+    "git": "Git",
+    "gitMissing": "未检测到 git",
+    "nativeScan": "客户端原生扫描",
+    "nativeScanOff": "默认关闭：未验证的客户端不写入任何配置（D6）"
+  },
+  "errors": {
+    "E_GIT_MISSING": "未检测到 git，请先安装",
+    "E_NETWORK": "网络请求失败，请检查代理或稍后重试",
+    "E_SOURCE_AMBIGUOUS": "地址有歧义，需要你确认",
+    "E_SLUG_CONFLICT": "同名 Skill 已存在",
+    "E_REF_NOT_FOUND": "找不到该分支/标签/路径",
+    "E_DRIFTED": "目标位置被别的程序改过，已停止",
+    "E_NOT_MANAGED": "该位置不是 Heron 管理的",
+    "E_MARKET_UNAVAILABLE": "市场暂时不可达",
+    "E_SAFETY_REFUSED": "为安全起见拒绝了该操作",
+    "E_PERMISSION": "没有权限访问该路径",
+    "E_INTERNAL": "内部错误"
+  },
+  "visibility": {
+    "visible": "生效中",
+    "not_scanned": "未被扫描",
+    "shadowed": "被压制",
+    "restart_required": "需重启会话",
+    "broken": "坏链",
+    "unknown": "未知"
+  }
+}

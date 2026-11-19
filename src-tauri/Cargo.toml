@@ -1,0 +1,28 @@
+[package]
+name = "heron-app"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Heron desktop shell (Tauri 2). All logic lives in heron-service."
+
+[lib]
+name = "heron_app_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+heron-core = { path = "../crates/heron-core" }
+heron-platform = { path = "../crates/heron-platform" }
+heron-store = { path = "../crates/heron-store" }
+heron-scan = { path = "../crates/heron-scan" }
+heron-vcs = { path = "../crates/heron-vcs" }
+heron-source = { path = "../crates/heron-source" }
+heron-projection = { path = "../crates/heron-projection" }
+heron-service = { path = "../crates/heron-service" }
+tauri = { version = "2", features = [] }
+tauri-plugin-opener = "2"
+serde = { workspace = true }
+serde_json = { workspace = true }

@@ -11,6 +11,7 @@ members = [
     "crates/heron-projection",
     "crates/heron-service",
     "crates/heron-cli",
+    "src-tauri",
 ]
 
 [workspace.package]

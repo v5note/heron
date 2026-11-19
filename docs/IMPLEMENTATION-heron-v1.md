@@ -1427,6 +1427,7 @@ Playwright 覆盖 6 条主路径：首次引导（含 Git 缺失引导）→ 发
 |------|--------|--------------|----------|
 | 2026-11-19 | M0（部分） | `heron-core`：slug / version / policy / error / dto / hash；`heron-platform`：dirs / paths / atomic / lock / link（unix + windows）/ probe | `cargo test --workspace` 81 例通过；`cargo fmt --check`、`cargo clippy -D warnings` 干净；`--target x86_64-pc-windows-msvc` 静态编译通过 |
 | 2026-11-19 | M0（部分） | 链接层安全测试：`tests/link_safety.rs`（10 例，全平台）+ `tests/link_safety_windows.rs`（L1–L6，Windows 门控） | macOS 实跑 10/10；Windows 用例待 Windows CI 或真机执行 |
+| 2026-11-19 | M4（GUI 首版） | `src-tauri`（Tauri 2 外壳 + 20 个 command，全部委托 service）+ `ui/`（Vue 3 + TS + Pinia + Router + vue-i18n，7 个页面） | `cargo build -p heron-app` 通过；`vue-tsc` 无错误；`pnpm build` 产出 171 KB（gzip 64 KB）；中英 114 个 i18n key 一致；应用可正常启动并初始化数据目录 |
 | 2026-11-19 | M3（核心完成） | 市场适配器（skills.sh sitemap 索引、ClawHub REST、三家引导式）、`heron.lock` 导出/差异/复现、项目自动发现（默认关闭投影）、客户端矩阵外置为 `resources/clients/*.toml` | 273 例测试全绿；实测：skills.sh 解析出 `anthropics/skills/pdf` → GitHub 安装计划，ClawHub 搜索可用但全部为平台托管（引导式）；`heron.lock` 在新数据目录一键复现并检出内容漂移 |
 | 2026-11-19 | M2（核心完成） | `heron-git`（每 URL 一个裸仓缓存、ref 解析、`git archive` 子目录检出、tar 解包含路径穿越防护）、`heron-source`（四种 URL 形态 + GitLab 歧义候选 + catalog 三级优先）、service `install/outdated/upgrade/rollback`、CLI 同名命令 | 209 例测试全绿；真机演练（本地 bare 远端）：安装 → 本地改一行 → 上游发布 1.2.0 → 三方合并保留双方改动 → 标签 v1.1.0/v1.2.0 → 回滚成功 |
 | 2026-11-19 | M1（核心完成） | `heron-vcs`（每 Skill 独立 Git 仓库、`merge-tree` 三方合并、回滚标签）、`heron-projection`（plan/apply/verify + 三种投影互转）、`heron-service`（scan/adopt/project/unproject/verify/doctor）、CLI 接入 `adopt/project/unproject/verify/doctor/targets` | 174 例测试全绿；真机演练：2 份 pdf 收拢为 1 份 store、两处原位置变链接且 `verify` 均判 visible；legacy 命令只接管单个文件；`project --on claude:global` 可用 |
@@ -1442,11 +1443,12 @@ Playwright 覆盖 6 条主路径：首次引导（含 Git 缺失引导）→ 发
 - `0006-projection-identity-and-targets.md`：投影按"位置"标识，客户端目录自动成为目标；
 - `0007-bookkeeping-ignored-by-identity.md`：Heron 记账文件不参与内容指纹；
 - `0008-upstream-objects-and-version-tags.md`：升级导入上游对象、`--merge-base` 传 tree、版本标签打在本地提交；
-- `0009-markets-and-lock.md`：市场适配分可搜索/仅浏览器两级，`heron.lock` 不记绝对路径。
+- `0009-markets-and-lock.md`：市场适配分可搜索/仅浏览器两级，`heron.lock` 不记绝对路径；
+- `0010-gui-shell-thin-adapter.md`：GUI 是薄壳，逻辑全在 service，CLI 与 GUI 行为一致。
 
-**M4 / GUI 待办**：
+**剩余待办**：
 
 1. `heron diff` 与 `heron merge_resolve`（冲突解决界面所需）；
 2. 原生扫描注入口（能力表已就位，默认关闭）；
-3. Tauri 2 外壳 + Vue 3 前端（页面已在设计 §12 定义）；
-4. Windows CI 上跑通 `link_safety_windows` 的 L1–L6 与 git 相关用例。
+3. Windows CI 上跑通 `link_safety_windows` 的 L1–L6 与 git 相关用例；
+4. 打包与签名（dmg / NSIS + 公证）。
