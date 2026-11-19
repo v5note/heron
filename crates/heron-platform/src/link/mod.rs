@@ -97,6 +97,12 @@ pub fn probe(path: &Path) -> Result<LinkInfo, Msg> {
 /// * `ProjectionMode::Junction` — junction on Windows, symbolic link elsewhere.
 /// * `ProjectionMode::Copy` / `Pointer` — rejected here; those are materialized by the
 ///   projection crate, which owns copying and pointer generation.
+/// TEMPORARY diagnostic hook (Windows only).
+#[cfg(windows)]
+pub fn debug_raw_reparse(path: &std::path::Path) -> String {
+    windows::debug_raw_reparse(path)
+}
+
 pub fn create_dir_link(
     target: &Path,
     link: &Path,

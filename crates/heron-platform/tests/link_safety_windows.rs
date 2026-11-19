@@ -154,3 +154,14 @@ fn l6_broken_junction_reports_missing_target() {
     link::remove_link(&link_path).unwrap();
     assert!(!link_path.exists());
 }
+
+#[test]
+fn diag_raw_bytes() {
+    let root = tempfile::tempdir().unwrap();
+    let target = make_target(&root, "diag2");
+    let link_path = root.path().join("skills").join("diag2");
+    let outcome = link::create_dir_link(&target, &link_path, ProjectionMode::Symlink).unwrap();
+    eprintln!("DIAG outcome={outcome:?}");
+    eprintln!("DIAG raw={}", link::debug_raw_reparse(&link_path));
+    eprintln!("DIAG probe={:?}", link::probe(&link_path));
+}
