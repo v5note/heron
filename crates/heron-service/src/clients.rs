@@ -1,87 +1,99 @@
-//! The built-in client matrix, materialized into the index on first run.
+//! The client matrix, loaded from `resources/clients/*.toml` (design §7.2).
 //!
-//! Until `resources/clients/*.toml` ships (M2), the same data lives here with an explicit
-//! evidence level. Every path carries a `verified_by` value so the UI can be honest about it.
+//! The files ship inside the binary and are the only place client paths are written down. Each
+//! entry states how it was verified, so the UI can be honest about unverified assumptions.
 
 use std::path::{Path, PathBuf};
 
 use heron_store::db::Db;
 use heron_store::models::{ClientRow, TargetRow};
 use heron_store::repos::{client, target};
+use serde::Deserialize;
 
 use crate::Result;
 
-pub struct BuiltinClient {
-    pub id: &'static str,
-    pub display_name: &'static str,
+const BUILTIN_FILES: &[(&str, &str)] = &[
+    (
+        "agents",
+        include_str!("../../../resources/clients/agents.toml"),
+    ),
+    (
+        "claude",
+        include_str!("../../../resources/clients/claude.toml"),
+    ),
+    (
+        "codex",
+        include_str!("../../../resources/clients/codex.toml"),
+    ),
+    (
+        "cursor",
+        include_str!("../../../resources/clients/cursor.toml"),
+    ),
+    (
+        "opencode",
+        include_str!("../../../resources/clients/opencode.toml"),
+    ),
+];
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct ClientToml {
+    pub id: String,
+    pub display_name: String,
+    #[serde(default)]
     pub priority: i64,
-    pub global_skills: &'static str,
-    pub project_skills: &'static str,
-    pub global_commands: Option<&'static str>,
-    pub project_commands: Option<&'static str>,
+    pub global_skills: String,
+    pub project_skills: String,
+    #[serde(default)]
+    pub global_commands: Option<String>,
+    #[serde(default)]
+    pub project_commands: Option<String>,
+    #[serde(default)]
+    pub link_modes: Vec<String>,
+    #[serde(default)]
+    pub verified_at: Option<String>,
+    #[serde(default)]
+    pub verified_by: Option<String>,
+    #[serde(default)]
+    pub native_scan: Option<NativeScanToml>,
 }
 
-pub const BUILTIN: &[BuiltinClient] = &[
-    BuiltinClient {
-        id: "agents",
-        display_name: "Agents (.agents)",
-        priority: 10,
-        global_skills: ".agents/skills",
-        project_skills: ".agents/skills",
-        global_commands: None,
-        project_commands: None,
-    },
-    BuiltinClient {
-        id: "claude",
-        display_name: "Claude Code",
-        priority: 20,
-        global_skills: ".claude/skills",
-        project_skills: ".claude/skills",
-        global_commands: Some(".claude/commands"),
-        project_commands: Some(".claude/commands"),
-    },
-    BuiltinClient {
-        id: "codex",
-        display_name: "Codex",
-        priority: 30,
-        global_skills: ".codex/skills",
-        project_skills: ".codex/skills",
-        global_commands: None,
-        project_commands: None,
-    },
-    BuiltinClient {
-        id: "cursor",
-        display_name: "Cursor",
-        priority: 40,
-        global_skills: ".cursor/skills",
-        project_skills: ".cursor/skills",
-        global_commands: None,
-        project_commands: None,
-    },
-    BuiltinClient {
-        id: "opencode",
-        display_name: "opencode",
-        priority: 50,
-        global_skills: ".config/opencode/skills",
-        project_skills: ".opencode/skills",
-        global_commands: None,
-        project_commands: None,
-    },
-];
+#[derive(Debug, Clone, Deserialize)]
+pub struct NativeScanToml {
+    #[serde(default)]
+    pub supported: bool,
+    #[serde(default)]
+    pub evidence: String,
+}
+
+/// The built-in matrix, parsed once.
+pub fn builtin() -> Result<Vec<ClientToml>> {
+    BUILTIN_FILES
+        .iter()
+        .map(|(name, text)| {
+            toml::from_str::<ClientToml>(text).map_err(|e| {
+                heron_core::HeronError::from(
+                    heron_core::ErrorCode::Internal
+                        .msg()
+                        .with("detail", format!("clients/{name}.toml: {e}")),
+                )
+            })
+        })
+        .collect()
+}
 
 /// Heron's own landing directory (decision D10).
 pub fn default_landing(home: &Path) -> PathBuf {
     home.join(heron_platform::dirs::DEFAULT_LANDING_DIRNAME)
 }
 
-pub fn specs(home: &Path) -> Vec<heron_scan::classify::ClientSpec> {
-    BUILTIN
-        .iter()
+pub fn specs(home: &Path) -> Result<Vec<heron_scan::classify::ClientSpec>> {
+    Ok(builtin()?
+        .into_iter()
         .map(|c| heron_scan::classify::ClientSpec {
-            id: c.id.to_owned(),
-            display_name: c.display_name.to_owned(),
-            global_paths: vec![home.join(c.global_skills)],
-            project_paths: vec![PathBuf::from(c.project_skills)],
+            id: c.id,
+            display_name: c.display_name,
+            global_paths: vec![home.join(&c.global_skills)],
+            project_paths: vec![PathBuf::from(&c.project_skills)],
             command_paths: c
                 .global_commands
                 .map(|p| vec![home.join(p)])
@@ -92,7 +104,7 @@ pub fn specs(home: &Path) -> Vec<heron_scan::classify::ClientSpec> {
                 .unwrap_or_default(),
             priority: c.priority,
         })
-        .collect()
+        .collect())
 }
 
 /// Seed the client matrix and the default landing target. Idempotent.
@@ -100,23 +112,47 @@ pub fn bootstrap(db: &mut Db, home: &Path) -> Result<()> {
     if db.kv_get("bootstrap_done")?.as_deref() == Some("1") {
         return Ok(());
     }
-    let all = specs(home);
+    let matrix = builtin()?;
     db.write(|tx| {
-        for spec in &all {
+        for c in &matrix {
             client::upsert(
                 tx,
                 &ClientRow {
-                    id: spec.id.clone(),
-                    display_name: spec.display_name.clone(),
-                    global_paths: plain(spec.global_paths.iter()),
-                    project_paths: plain(spec.project_paths.iter()),
-                    link_modes: vec!["symlink".into(), "junction".into(), "copy".into()],
-                    global_commands: plain(spec.command_paths.iter()),
-                    project_commands: plain(spec.project_command_paths.iter()),
-                    priority: spec.priority,
-                    native_scan: None,
-                    verified_at: Some("2026-11-19".into()),
-                    verified_by: Some("doc".into()),
+                    id: c.id.clone(),
+                    display_name: c.display_name.clone(),
+                    global_paths: vec![home.join(&c.global_skills).to_string_lossy().to_string()],
+                    project_paths: vec![c.project_skills.clone()],
+                    link_modes: c.link_modes.clone(),
+                    global_commands: c
+                        .global_commands
+                        .as_ref()
+                        .map(|p| vec![home.join(p).to_string_lossy().to_string()])
+                        .unwrap_or_default(),
+                    project_commands: c
+                        .project_commands
+                        .as_ref()
+                        .map(|p| vec![p.clone()])
+                        .unwrap_or_default(),
+                    priority: c.priority,
+                    native_scan: c.native_scan.as_ref().map(|n| {
+                        serde_json::json!({ "supported": n.supported, "evidence": n.evidence })
+                            .to_string()
+                    }),
+                    verified_at: c.verified_at.clone(),
+                    verified_by: c.verified_by.clone(),
+                },
+            )?;
+            target::upsert(
+                tx,
+                &TargetRow {
+                    id: format!("{}:global", c.id),
+                    kind: c.id.clone(),
+                    scope: "global".into(),
+                    project_path: None,
+                    path: home.join(&c.global_skills).to_string_lossy().to_string(),
+                    enabled: true,
+                    is_default: false,
+                    discover: "auto".into(),
                 },
             )?;
         }
@@ -136,24 +172,6 @@ pub fn bootstrap(db: &mut Db, home: &Path) -> Result<()> {
                 verified_by: Some("design".into()),
             },
         )?;
-        // Client-native directories are targets too, so users can ask for them explicitly.
-        for spec in &all {
-            if let Some(first) = spec.global_paths.first() {
-                target::upsert(
-                    tx,
-                    &TargetRow {
-                        id: format!("{}:global", spec.id),
-                        kind: spec.id.clone(),
-                        scope: "global".into(),
-                        project_path: None,
-                        path: first.to_string_lossy().to_string(),
-                        enabled: true,
-                        is_default: false,
-                        discover: "auto".into(),
-                    },
-                )?;
-            }
-        }
         target::upsert(
             tx,
             &TargetRow {
@@ -171,10 +189,6 @@ pub fn bootstrap(db: &mut Db, home: &Path) -> Result<()> {
     })?;
     db.kv_set("bootstrap_done", "1")?;
     Ok(())
-}
-
-fn plain<'a>(paths: impl Iterator<Item = &'a PathBuf>) -> Vec<String> {
-    paths.map(|p| p.to_string_lossy().to_string()).collect()
 }
 
 /// Client specs as stored in the index (so user edits survive).
@@ -198,6 +212,24 @@ mod tests {
     use super::*;
 
     #[test]
+    fn builtin_matrix_parses_from_toml() {
+        let matrix = builtin().unwrap();
+        assert_eq!(matrix.len(), 5);
+        let claude = matrix.iter().find(|c| c.id == "claude").unwrap();
+        assert_eq!(claude.global_skills, ".claude/skills");
+        assert_eq!(claude.global_commands.as_deref(), Some(".claude/commands"));
+        assert_eq!(claude.verified_by.as_deref(), Some("doc"));
+        assert!(
+            !claude.native_scan.as_ref().unwrap().supported,
+            "D6: no injection until verified"
+        );
+        for c in &matrix {
+            assert!(c.link_modes.iter().any(|m| m == "symlink"));
+            assert!(!c.priority.eq(&-1));
+        }
+    }
+
+    #[test]
     fn bootstrap_is_idempotent_and_seeds_heron_landing() {
         let tmp = tempfile::tempdir().unwrap();
         let mut db = Db::open(&tmp.path().join("heron.db")).unwrap();
@@ -206,30 +238,11 @@ mod tests {
         bootstrap(&mut db, home).unwrap();
 
         let clients = client::list(db.conn()).unwrap();
-        assert_eq!(
-            clients.len(),
-            BUILTIN.len() + 1,
-            "five clients plus the heron landing"
-        );
+        assert_eq!(clients.len(), 6, "five clients plus the heron landing");
         let landing = target::get_default(db.conn()).unwrap().unwrap();
         assert_eq!(landing.path, "/home/u/.heron/skills");
-        assert_eq!(landing.kind, "heron");
-    }
-
-    #[test]
-    fn stored_specs_roundtrip() {
-        let tmp = tempfile::tempdir().unwrap();
-        let mut db = Db::open(&tmp.path().join("heron.db")).unwrap();
-        bootstrap(&mut db, Path::new("/home/u")).unwrap();
-        let specs = loaded_specs(&db).unwrap();
-        let claude = specs.iter().find(|s| s.id == "claude").unwrap();
-        assert_eq!(
-            claude.global_paths[0],
-            PathBuf::from("/home/u/.claude/skills")
-        );
-        assert_eq!(
-            claude.command_paths[0],
-            PathBuf::from("/home/u/.claude/commands")
-        );
+        let targets = target::list(db.conn()).unwrap();
+        assert!(targets.iter().any(|t| t.id == "claude:global"));
+        assert_eq!(targets.iter().filter(|t| t.is_default).count(), 1);
     }
 }

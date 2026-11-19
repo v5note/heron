@@ -108,7 +108,6 @@ impl Env {
         let db = Db::open(&dirs.db_path()).unwrap();
         Ctx::new(dirs, db, "cli")
     }
-
 }
 
 fn git_available() -> bool {
@@ -157,7 +156,6 @@ fn install_from_a_repo_subdirectory() {
         Some("skills/pdf")
     );
     assert_eq!(meta.baseline.version, "1.0.0");
-
 }
 
 #[test]

@@ -5,7 +5,6 @@ use std::path::PathBuf;
 use heron_projection::verify::{classify, VerifyInput, Visibility};
 use heron_store::repos::{client, projection, target};
 
-use crate::clients::BUILTIN;
 use crate::{Ctx, Result};
 
 #[derive(Debug, Clone, serde::Serialize)]
@@ -103,7 +102,10 @@ fn occupied_names(_kind: &str, _project: Option<&str>) -> Vec<String> {
 
 /// Is this client known at all? Used by the CLI to warn about unknown target kinds.
 pub fn known_client(id: &str) -> bool {
-    id == "heron" || BUILTIN.iter().any(|c| c.id == id)
+    id == "heron"
+        || crate::clients::builtin()
+            .map(|m| m.iter().any(|c| c.id == id))
+            .unwrap_or(false)
 }
 
 /// Helper so the report can be rendered in one line.

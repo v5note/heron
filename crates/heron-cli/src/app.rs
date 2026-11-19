@@ -111,6 +111,69 @@ pub enum Command {
         #[arg(long)]
         to: String,
     },
+    /// Manage skill markets (search + install plan).
+    Market {
+        #[command(subcommand)]
+        action: MarketCmd,
+    },
+    /// Team workflow: export / import a reproducible skill set.
+    Lock {
+        #[command(subcommand)]
+        action: LockCmd,
+    },
+    /// Discover project roots that contain client skill directories.
+    Projects {
+        /// Roots to scan for projects (defaults to the home directory's first level).
+        #[arg(long = "roots")]
+        roots: Vec<PathBuf>,
+        /// Register what is found (recorded disabled until enabled).
+        #[arg(long)]
+        register: bool,
+        #[arg(long, default_value_t = 3)]
+        depth: usize,
+    },
+}
+
+#[derive(Subcommand, Debug)]
+pub enum MarketCmd {
+    /// List the built-in markets and their capability.
+    List,
+    /// Search one market.
+    Search {
+        /// Market id (see `heron market list`).
+        market: String,
+        /// What to look for.
+        query: String,
+        #[arg(long, default_value_t = 10)]
+        limit: usize,
+    },
+    /// Show how an item would be installed.
+    Plan { market: String, key: String },
+}
+
+#[derive(Subcommand, Debug)]
+pub enum LockCmd {
+    /// Write heron.lock from what is installed.
+    Export {
+        /// Directory that receives `heron.lock`.
+        #[arg(long, default_value = ".")]
+        dir: PathBuf,
+        /// Print the lock instead of writing it (for piping / review).
+        #[arg(long, conflicts_with = "dir")]
+        print: bool,
+    },
+    /// Compare heron.lock with the local store.
+    Diff {
+        #[arg(long, default_value = "heron.lock")]
+        file: PathBuf,
+    },
+    /// Install whatever the lock lists but the store lacks.
+    Apply {
+        #[arg(long, default_value = "heron.lock")]
+        file: PathBuf,
+        #[arg(long)]
+        dry_run: bool,
+    },
 }
 
 pub fn run() -> Result<ExitCode> {
@@ -176,6 +239,13 @@ pub fn run() -> Result<ExitCode> {
             );
             Ok(ExitCode::SUCCESS)
         }
+        Command::Market { action } => cmd_market(action, cli.json),
+        Command::Lock { action } => cmd_lock(&mut ctx, action, cli.json),
+        Command::Projects {
+            roots,
+            register,
+            depth,
+        } => cmd_projects(&mut ctx, &home, roots, register, depth, cli.json),
     }
 }
 
@@ -704,4 +774,192 @@ fn cmd_upgrade(
     } else {
         ExitCode::SUCCESS
     })
+}
+
+fn cmd_market(action: MarketCmd, json: bool) -> Result<ExitCode> {
+    match action {
+        MarketCmd::List => {
+            let rows: Vec<_> = heron_source::MARKETS
+                .iter()
+                .map(|m| {
+                    serde_json::json!({
+                        "id": m.id,
+                        "name": m.name,
+                        "capability": m.capability,
+                        "enabledByDefault": m.enabled_by_default,
+                        "url": m.base_url,
+                    })
+                })
+                .collect();
+            if json {
+                println!("{}", serde_json::to_string_pretty(&rows).unwrap());
+            } else {
+                for m in heron_source::MARKETS {
+                    let cap = match m.capability {
+                        heron_source::Capability::Indexed => "searchable",
+                        heron_source::Capability::Guided => "browser only",
+                    };
+                    let flag = if m.enabled_by_default { " " } else { "*" };
+                    println!(
+                        "{flag} {:<12} {:<10} {:<14} {}",
+                        m.id, cap, m.name, m.base_url
+                    );
+                }
+                println!();
+                println!("* = disabled by default (decision D1)");
+            }
+        }
+        MarketCmd::Search {
+            market,
+            query,
+            limit,
+        } => {
+            let adapter = heron_source::adapter(&market)?;
+            let items = adapter.search(&query, limit)?;
+            if json {
+                println!("{}", serde_json::to_string_pretty(&items).unwrap());
+            } else if items.is_empty() {
+                println!("no results for {query}");
+            } else {
+                for item in &items {
+                    let installable = matches!(
+                        adapter.install_plan(&item.key),
+                        Ok(heron_source::InstallPlan::Git { .. })
+                    );
+                    let mark = if installable { "+" } else { "~" };
+                    println!(
+                        "{mark} {:<40} {}",
+                        item.key,
+                        item.summary.chars().take(60).collect::<String>()
+                    );
+                    println!("  {}", item.url);
+                }
+                println!();
+                println!("+ installable by Heron   ~ open in browser");
+            }
+        }
+        MarketCmd::Plan { market, key } => {
+            let adapter = heron_source::adapter(&market)?;
+            let plan = adapter.install_plan(&key)?;
+            match plan {
+                heron_source::InstallPlan::Git {
+                    ref url,
+                    ref subpath,
+                    ..
+                } => {
+                    println!("heron install {url} --subpath {subpath}");
+                }
+                heron_source::InstallPlan::Guided { ref open_url, .. } => {
+                    println!("open {open_url}");
+                    println!("then paste the skill's git URL back: heron install <url>");
+                }
+            }
+        }
+    }
+    Ok(ExitCode::SUCCESS)
+}
+
+fn cmd_lock(ctx: &mut Ctx, action: LockCmd, json: bool) -> Result<ExitCode> {
+    match action {
+        LockCmd::Export { dir, print } => {
+            let lock = heron_service::lockfile::export(ctx)?;
+            if print {
+                println!("{}", serde_json::to_string_pretty(&lock).unwrap());
+            } else {
+                // `--dir` receives the file, never becomes one itself.
+                let target = dir.join(heron_service::lockfile::LOCK_FILE_NAME);
+                let path = heron_service::lockfile::write(&target, &lock)?;
+                println!("wrote {} ({} skills)", path.display(), lock.skills.len());
+            }
+        }
+        LockCmd::Diff { file } => {
+            let lock = heron_service::lockfile::read(&file)?;
+            let drift = heron_service::lockfile::diff(ctx, &lock)?;
+            if json {
+                println!("{}", serde_json::to_string_pretty(&drift).unwrap());
+            } else if drift.is_empty() {
+                println!(
+                    "in sync with {} ({} skills)",
+                    file.display(),
+                    lock.skills.len()
+                );
+            } else {
+                for item in &drift {
+                    println!("{:<28} {:?}", item.slug, item.kind);
+                }
+            }
+        }
+        LockCmd::Apply { file, dry_run } => {
+            let lock = heron_service::lockfile::read(&file)?;
+            if dry_run {
+                let drift = heron_service::lockfile::diff(ctx, &lock)?;
+                for item in &drift {
+                    match item.kind {
+                        heron_service::lockfile::DriftKind::Missing => {
+                            let entry = &lock.skills[&item.slug];
+                            println!("would install {} from {}", item.slug, entry.source);
+                        }
+                        kind => println!("{} {:?} (needs attention)", item.slug, kind),
+                    }
+                }
+                return Ok(ExitCode::SUCCESS);
+            }
+            let report = heron_service::lockfile::apply(ctx, &lock)?;
+            if json {
+                println!("{}", serde_json::to_string_pretty(&report).unwrap());
+            } else {
+                println!(
+                    "installed {}  up to date {}  drift {}",
+                    report.installed.len(),
+                    report.up_to_date.len(),
+                    report.drift.len()
+                );
+                for d in &report.drift {
+                    println!("  drift: {} {:?}", d.slug, d.kind);
+                }
+            }
+        }
+    }
+    Ok(ExitCode::SUCCESS)
+}
+
+fn cmd_projects(
+    ctx: &mut Ctx,
+    home: &Path,
+    roots: Vec<PathBuf>,
+    register: bool,
+    depth: usize,
+    json: bool,
+) -> Result<ExitCode> {
+    let scan_roots = if roots.is_empty() {
+        vec![home.to_path_buf()]
+    } else {
+        roots
+    };
+    let found = heron_service::projects::discover(home, &scan_roots, depth);
+    if json {
+        println!("{}", serde_json::to_string_pretty(&found).unwrap());
+        return Ok(ExitCode::SUCCESS);
+    }
+    if found.is_empty() {
+        println!("no project roots with client skill directories found");
+        return Ok(ExitCode::SUCCESS);
+    }
+    for project in &found {
+        let shown = heron_platform::paths::display(&project.root);
+        println!("{:<48} {}", shown, project.clients.join(", "));
+    }
+    if register {
+        let mut registered = 0;
+        for project in &found {
+            if heron_service::projects::register(ctx, &project.root, &project.clients)? {
+                registered += 1;
+            }
+        }
+        println!();
+        println!(
+            "registered {registered} project(s); projections into them stay off until enabled"
+        );
+    }
+    Ok(ExitCode::SUCCESS)
 }

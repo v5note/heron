@@ -341,6 +341,6 @@ fn scan_is_available_without_git_installed() {
     env.write_skill(".agents/skills/pdf", "pdf");
     let mut ctx = env.ctx("cli");
     assert_eq!(env.scan(&mut ctx).skills, 1);
-    let _ = clients::BUILTIN.len();
+    let _ = clients::builtin().unwrap().len();
     let _: &Path = env.tmp.path();
 }

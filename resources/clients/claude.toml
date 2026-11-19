@@ -1,0 +1,17 @@
+# Claude Code — scan locations.
+# Every path is relative to the home directory (global) or the project root (project).
+# verified_by: spec | doc | probe  (see design §7.2)
+id = "claude"
+display_name = "Claude Code"
+priority = 20
+global_skills = ".claude/skills"
+project_skills = ".claude/skills"
+global_commands = ".claude/commands"
+project_commands = ".claude/commands"
+link_modes = ["symlink", "junction", "copy"]
+verified_at = "2026-11-19"
+verified_by = "doc"
+
+[native_scan]
+supported = false
+evidence = "no documented extra-skill-dir setting as of 2026-11-19"

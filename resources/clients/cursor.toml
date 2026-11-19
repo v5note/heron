@@ -1,0 +1,17 @@
+# Cursor — scan locations.
+# Every path is relative to the home directory (global) or the project root (project).
+# verified_by: spec | doc | probe  (see design §7.2)
+id = "cursor"
+display_name = "Cursor"
+priority = 40
+global_skills = ".cursor/skills"
+project_skills = ".cursor/skills"
+# global_commands = ""   (legacy slash-command directory, see D9)
+# project_commands = ""
+link_modes = ["symlink", "junction", "copy"]
+verified_at = "2026-11-19"
+verified_by = "doc"
+
+[native_scan]
+supported = false
+evidence = "no documented extra-skill-dir setting as of 2026-11-19"
