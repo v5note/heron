@@ -172,10 +172,10 @@ fn project_creates_default_landing_and_verify_reports_visibility() -> Result<()>
     let (plan, request) = project::plan(&ctx, &req)?;
     let outcome = project::apply(&mut ctx, &req, &plan, &request)?;
     assert!(outcome.applied);
-    // Compare components, not a literal string: Windows uses '\' as the separator.
-    let expected_suffix = PathBuf::from("skills").join("pdf");
+    // Compare path components, not a literal string: Windows uses '\' as the separator.
+    let expected_suffix = Path::new("skills").join("pdf");
     assert!(
-        outcome.path.ends_with(&expected_suffix),
+        Path::new(&outcome.path).ends_with(&expected_suffix),
         "projected path: {}",
         outcome.path
     );
