@@ -79,7 +79,7 @@
 .h-sec .line{flex:1;height:1px;background:var(--h-line)}
 /* chips */
 .h-chip{display:inline-flex;align-items:center;gap:6px;height:21px;padding:0 8px;border-radius:999px;font-size:11px;font-weight:500;border:1px solid transparent;white-space:nowrap}
-.h-chip::before{content:"";width:5px;height:5px;border-radius:50%;background:currentColor;opacity:.9}
+.h-chip::before{content:"";width:5px;height:5px;border-radius:50%;background:currentColor;opacity:.9;flex:none}
 .h-chip.good{color:var(--h-good);background:color-mix(in srgb,var(--h-good) 12%,transparent)}
 .h-chip.warn{color:var(--h-warn);background:color-mix(in srgb,var(--h-warn) 12%,transparent)}
 .h-chip.bad{color:var(--h-bad);background:color-mix(in srgb,var(--h-bad) 12%,transparent)}
@@ -145,11 +145,13 @@
 .h-input{height:32px;padding:0 10px;border:1px solid var(--h-line2);border-radius:7px;background:var(--h-raised);color:var(--h-text);font-size:12.5px;outline:none;width:100%}
 .h-input:focus{border-color:var(--h-text)}
 .h-seg{display:inline-flex;border:1px solid var(--h-line2);border-radius:7px;overflow:hidden}
+button{font:inherit;border:0;background:none;padding:0;color:inherit;cursor:pointer;line-height:normal}
+input[type=checkbox]{-webkit-appearance:none;appearance:none}
 .h-seg button{height:26px;padding:0 9px;font-size:11.5px;color:var(--h-dim)}
 .h-seg button.is-active{background:var(--h-text);color:var(--h-bg);font-weight:600}
 </style>
 <script>
-const ICON = {"overview":"<path d=\"M3 12h4l2.5-6 4 12 2.5-6H21\"/>","library":"<rect x=\"3.5\" y=\"4\" width=\"4\" height=\"16\" rx=\"1\"/><rect x=\"9.5\" y=\"4\" width=\"4\" height=\"16\" rx=\"1\"/><path d=\"M15.5 5.2l3.6 14.6\"/>","discover":"<circle cx=\"11\" cy=\"11\" r=\"6.5\"/><path d=\"M16 16l4.5 4.5\"/>","sources":"<path d=\"M4 7h16M4 12h10M4 17h13\"/><circle cx=\"18.5\" cy=\"16.5\" r=\"2.5\"/>","projects":"<path d=\"M3.5 7.5A1.5 1.5 0 0 1 5 6h4l2 2h8a1.5 1.5 0 0 1 1.5 1.5V18A1.5 1.5 0 0 1 19 19.5H5A1.5 1.5 0 0 1 3.5 18z\"/>","upgrades":"<path d=\"M12 20V4\"/><path d=\"M6.5 9.5 12 4l5.5 5.5\"/>","doctor":"<path d=\"M3.5 12h4l1.5-4 3 8 2-4h6.5\"/>","settings":"<circle cx=\"12\" cy=\"12\" r=\"3\"/><path d=\"M12 3.5v2M12 18.5v2M3.5 12h2M18.5 12h2M6 6l1.4 1.4M16.6 16.6 18 18M6 18l1.4-1.4M16.6 7.4 18 6\"/>","sun":"<circle cx=\"12\" cy=\"12\" r=\"4\"/><path d=\"M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6l1.4 1.4M17 17l1.4 1.4M5.6 18.4 7 17M17 7l1.4-1.4\"/>","moon":"<path d=\"M20 14.2A8 8 0 1 1 9.8 4a6.4 6.4 0 0 0 10.2 10.2z\"/>","search":"<circle cx=\"11\" cy=\"11\" r=\"6\"/><path d=\"M15.5 15.5 20 20\"/>","refresh":"<path d=\"M19.5 12a7.5 7.5 0 1 1-2.2-5.3\"/><path d=\"M19.5 4v4h-4\"/>","check":"<path d=\"M5 12.5l4.5 4.5L19 7\"/>","x":"<path d=\"M6 6l12 12M18 6 6 18\"/>","chevron":"<path d=\"M9 6l6 6-6 6\"/>","link":"<path d=\"M10 14a4 4 0 0 0 5.7 0l2.8-2.8a4 4 0 0 0-5.7-5.7L11.5 7\"/><path d=\"M14 10a4 4 0 0 0-5.7 0l-2.8 2.8a4 4 0 0 0 5.7 5.7l1.3-1.3\"/>","alert":"<path d=\"M12 4 21 20H3z\"/><path d=\"M12 10v4\"/>","plus":"<path d=\"M12 5v14M5 12h14\"/>","external":"<path d=\"M14 4h6v6\"/><path d=\"M20 4 11 13\"/><path d=\"M18 14v5.5H4.5V6H10\"/>","copy":"<rect x=\"8.5\" y=\"8.5\" width=\"11\" height=\"11\" rx=\"1.5\"/><path d=\"M15.5 8.5v-4h-11v11h4\"/>","branch":"<circle cx=\"6.5\" cy=\"6\" r=\"2\"/><circle cx=\"17.5\" cy=\"6\" r=\"2\"/><circle cx=\"6.5\" cy=\"18\" r=\"2\"/><path d=\"M6.5 8v8M17.5 8v3.5a3 3 0 0 1-3 3H8.5\"/>","shield":"<path d=\"M12 3.5 19 6v5.5c0 4.4-3 7.6-7 9-4-1.4-7-4.6-7-9V6z\"/>","grid":"<rect x=\"4\" y=\"4\" width=\"7\" height=\"7\" rx=\"1\"/><rect x=\"13\" y=\"4\" width=\"7\" height=\"7\" rx=\"1\"/><rect x=\"4\" y=\"13\" width=\"7\" height=\"7\" rx=\"1\"/><rect x=\"13\" y=\"13\" width=\"7\" height=\"7\" rx=\"1\"/>"};
+const ICON_RAW = {"overview":"<path d=\"M3 12h4l2.5-6 4 12 2.5-6H21\"/>","library":"<rect x=\"3.5\" y=\"4\" width=\"4\" height=\"16\" rx=\"1\"/><rect x=\"9.5\" y=\"4\" width=\"4\" height=\"16\" rx=\"1\"/><path d=\"M15.5 5.2l3.6 14.6\"/>","discover":"<circle cx=\"11\" cy=\"11\" r=\"6.5\"/><path d=\"M16 16l4.5 4.5\"/>","sources":"<path d=\"M4 7h16M4 12h10M4 17h13\"/><circle cx=\"18.5\" cy=\"16.5\" r=\"2.5\"/>","projects":"<path d=\"M3.5 7.5A1.5 1.5 0 0 1 5 6h4l2 2h8a1.5 1.5 0 0 1 1.5 1.5V18A1.5 1.5 0 0 1 19 19.5H5A1.5 1.5 0 0 1 3.5 18z\"/>","upgrades":"<path d=\"M12 20V4\"/><path d=\"M6.5 9.5 12 4l5.5 5.5\"/>","doctor":"<path d=\"M3.5 12h4l1.5-4 3 8 2-4h6.5\"/>","settings":"<circle cx=\"12\" cy=\"12\" r=\"3\"/><path d=\"M12 3.5v2M12 18.5v2M3.5 12h2M18.5 12h2M6 6l1.4 1.4M16.6 16.6 18 18M6 18l1.4-1.4M16.6 7.4 18 6\"/>","sun":"<circle cx=\"12\" cy=\"12\" r=\"4\"/><path d=\"M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6l1.4 1.4M17 17l1.4 1.4M5.6 18.4 7 17M17 7l1.4-1.4\"/>","moon":"<path d=\"M20 14.2A8 8 0 1 1 9.8 4a6.4 6.4 0 0 0 10.2 10.2z\"/>","search":"<circle cx=\"11\" cy=\"11\" r=\"6\"/><path d=\"M15.5 15.5 20 20\"/>","refresh":"<path d=\"M19.5 12a7.5 7.5 0 1 1-2.2-5.3\"/><path d=\"M19.5 4v4h-4\"/>","check":"<path d=\"M5 12.5l4.5 4.5L19 7\"/>","x":"<path d=\"M6 6l12 12M18 6 6 18\"/>","chevron":"<path d=\"M9 6l6 6-6 6\"/>","link":"<path d=\"M10 14a4 4 0 0 0 5.7 0l2.8-2.8a4 4 0 0 0-5.7-5.7L11.5 7\"/><path d=\"M14 10a4 4 0 0 0-5.7 0l-2.8 2.8a4 4 0 0 0 5.7 5.7l1.3-1.3\"/>","alert":"<path d=\"M12 4 21 20H3z\"/><path d=\"M12 10v4\"/>","plus":"<path d=\"M12 5v14M5 12h14\"/>","external":"<path d=\"M14 4h6v6\"/><path d=\"M20 4 11 13\"/><path d=\"M18 14v5.5H4.5V6H10\"/>","copy":"<rect x=\"8.5\" y=\"8.5\" width=\"11\" height=\"11\" rx=\"1.5\"/><path d=\"M15.5 8.5v-4h-11v11h4\"/>","branch":"<circle cx=\"6.5\" cy=\"6\" r=\"2\"/><circle cx=\"17.5\" cy=\"6\" r=\"2\"/><circle cx=\"6.5\" cy=\"18\" r=\"2\"/><path d=\"M6.5 8v8M17.5 8v3.5a3 3 0 0 1-3 3H8.5\"/>","shield":"<path d=\"M12 3.5 19 6v5.5c0 4.4-3 7.6-7 9-4-1.4-7-4.6-7-9V6z\"/>","grid":"<rect x=\"4\" y=\"4\" width=\"7\" height=\"7\" rx=\"1\"/><rect x=\"13\" y=\"4\" width=\"7\" height=\"7\" rx=\"1\"/><rect x=\"4\" y=\"13\" width=\"7\" height=\"7\" rx=\"1\"/><rect x=\"13\" y=\"13\" width=\"7\" height=\"7\" rx=\"1\"/>"};
 const VIEWS = {"overview":"概览","library":"我的 Skill","discover":"发现","sources":"来源与市场","projects":"项目与落点","upgrades":"更新","doctor":"体检","settings":"设置"};
 </script>
 <style>
@@ -169,66 +171,7 @@ const VIEWS = {"overview":"概览","library":"我的 Skill","discover":"发现",
 </style>
 <script>document.documentElement.setAttribute('data-theme', localStorage.getItem('heron.theme') || 'dark');</script>
 </head><body><div id="app"></div>
-<script>const SKILLS = [{"slug":"pdf","name":"PDF Toolkit","desc":"抽取、合并、填写 PDF 表单，处理扫描件与 OCR 的常用流程","origin":"skills.sh","ver":"1.4.2","vis":{"claude":"visible","codex":"visible","cursor":"shadowed","opencode":"not_scanned"}},{"slug":"docx","name":"Word 文档","desc":"读写 .docx，保留批注与修订记录，生成规范报告","origin":"anthropic/skills","ver":"0.9.0","vis":{"claude":"visible","codex":"visible","cursor":"visible","opencode":"visible"}},{"slug":"slides","name":"幻灯片工坊","desc":"从大纲生成 16:9 演示稿，含图表与讲者备注","origin":"本地编辑","ver":"0.4.1","vis":{"claude":"visible","codex":"shadowed","cursor":"broken","opencode":"not_scanned"}},{"slug":"xlsx","name":"表格计算","desc":"公式重算、透视表、图表导出 CSV 与 PDF","origin":"github.com/acme/skills","ver":"2.0.0","vis":{"claude":"visible","codex":"visible","cursor":"visible","opencode":"visible"}},{"slug":"web-clip","name":"网页剪藏","desc":"把页面正文与配图整理成可检索的 Markdown","origin":"ClawHub","ver":"1.1.0","vis":{"claude":"visible","codex":"not_scanned","cursor":"not_scanned","opencode":"not_scanned"}},{"slug":"code-review","name":"代码评审","desc":"按仓库规范逐文件审阅，输出分级的意见清单","origin":"anthropic/skills","ver":"0.7.3","vis":{"claude":"visible","codex":"visible","cursor":"visible","opencode":"visible"}}];
-const DETECTED = [{"path":"~/.claude/skills/pdf","client":"Claude Code","kind":"skill","fm":true,"scope":"全局"},{"path":"~/.codex/skills/notion-sync","client":"Codex","kind":"skill","fm":true,"scope":"全局"},{"path":"~/.agents/skills/legacy/translate","client":"Agents","kind":"legacy-command","fm":true,"scope":"全局"},{"path":"~/.cursor/skills/web-clip","client":"Cursor","kind":"skill","fm":false,"scope":"全局"},{"path":"~/work/notes-app/.claude/skills/local-note","client":"Claude Code","kind":"skill","fm":true,"scope":"项目"},{"path":"~/.codex/skills","client":"Codex","kind":"nested-suspect","fm":null,"scope":"全局"}];
-const TARGETS = [{"id":"claude","kind":"Claude Code","scope":"全局","path":"~/.claude/skills","enabled":true,"def":true},{"id":"codex","kind":"Codex","scope":"全局","path":"~/.codex/skills","enabled":true,"def":false},{"id":"agents","kind":"Agents","scope":"全局","path":"~/.agents/skills","enabled":true,"def":false},{"id":"cursor","kind":"Cursor","scope":"全局","path":"~/.cursor/skills","enabled":true,"def":false},{"id":"opencode","kind":"opencode","scope":"全局","path":"~/.config/opencode/skills","enabled":false,"def":false},{"id":"notes","kind":"Claude Code · 项目","scope":"notes-app","path":"~/work/notes-app/.claude/skills","enabled":true,"def":false}];
-const UPGRADES = [{"slug":"docx","state":"has_update","installed":"0.9.0","baseline":"0.9.0","latest":"1.0.0","source":"github.com/anthropics/skills"},{"slug":"slides","state":"has_update","installed":"0.4.1","baseline":"0.4.1","latest":"0.5.0","source":"github.com/acme/slides"},{"slug":"pdf","state":"diverged","installed":"1.4.2","baseline":"1.3.0","latest":"1.5.0","source":"skills.sh/pdf"},{"slug":"xlsx","state":"local_modified","installed":"2.0.0","baseline":"2.0.0","latest":"2.0.0","source":"github.com/acme/skills"},{"slug":"code-review","state":"up_to_date","installed":"0.7.3","baseline":"0.7.3","latest":"0.7.3","source":"github.com/anthropics/skills"},{"slug":"web-clip","state":"not_tracked","installed":"1.1.0","baseline":"—","latest":null,"source":null}];
-const ISSUES = [{"id":"broken-link","sev":"error","subject":"~/.cursor/skills/slides","actions":["reproject","unproject"],"label":"坏链"},{"id":"nested-suspect","sev":"warn","subject":"~/.codex/skills","actions":["ignore"],"label":"病态嵌套"},{"id":"frontmatter-invalid","sev":"warn","subject":"~/.cursor/skills/web-clip","actions":["fix-frontmatter"],"label":"frontmatter 无效"}];
-const PROJECTS = [{"root":"~/work/notes-app","clients":["claude-code"],"skills":["local-note","docx"]},{"root":"~/work/heron","clients":["claude-code","cursor"],"skills":["code-review"]}];
-const MARKETS = [{"id":"skills_sh","name":"skills.sh","cap":"indexed","on":true},{"id":"clawhub","name":"ClawHub","cap":"indexed","on":true},{"id":"qoder","name":"Qoder","cap":"guided","on":true},{"id":"skillhub_cn","name":"SkillHub","cap":"guided","on":true},{"id":"skillsmp","name":"SkillsMP","cap":"guided","on":false}];
-</script>
-<script>
-const NAV = [
-  { group:'工作台', items:[{id:'overview',label:'概览',icon:'overview'}] },
-  { group:'收集 · 分发', items:[{id:'library',label:'我的 Skill',icon:'library',count:SKILLS.length},{id:'discover',label:'发现',icon:'discover',count:4,tone:'warn'},{id:'sources',label:'来源与市场',icon:'sources'}] },
-  { group:'维护', items:[{id:'upgrades',label:'更新',icon:'upgrades',count:3,tone:'warn'},{id:'doctor',label:'体检',icon:'doctor',count:1,tone:'bad'},{id:'projects',label:'项目与落点',icon:'projects'},{id:'settings',label:'设置',icon:'settings'}] },
-];
-
-const D1 = {
-  setup(){
-    const theme = ref(localStorage.getItem('heron.theme') || 'dark');
-    const view = ref((location.hash||'#overview').slice(1));
-    const libView = ref('table'); const query = ref(''); const filter = ref('all');
-    const selected = ref([]); const drawer = ref(null); const toast = ref(null);
-    const activeMarket = ref('skills_sh'); const marketQuery = ref('pdf');
-    const detecting = reactive({ worktree:true, exportLockfile:false, gitignore:true });
-    const dialog = ref(null); const adoptKeep = ref(true); const dryRun = ref(true);
-    const diffFile = ref(0); const visFilter = ref('all');
-    const sel = computed(()=>SKILLS.find(s=>s.slug===drawer.value));
-    const visibleSkills = computed(()=>SKILLS.filter(s=>{
-      if (query.value && !(s.slug+' '+s.name+' '+s.desc).toLowerCase().includes(query.value.toLowerCase())) return false;
-      if (filter.value==='issues') return ['cursor','codex'].some(c=>['shadowed','broken','not_scanned'].includes(s.vis[c]));
-      return true;
-    }));
-    const MARKET_ITEMS = [
-      { key:'skills.sh/anthropics/pdf', summary:'PDF 抽取、合并与表单填写，附带 OCR 流程', installable:true, ver:'1.5.0' },
-      { key:'skills.sh/anthropics/docx', summary:'读写 .docx，保留批注与修订', installable:true, ver:'1.0.0' },
-      { key:'clawhub/pdf-tools', summary:'轻量 PDF 工具集，仅合并与拆分', installable:true, ver:'0.3.2' },
-    ];
-    function go(v){ view.value=v; location.hash='#'+v; window.scrollTo(0,0); }
-    function toggleTheme(){ theme.value = theme.value==='dark'?'light':'dark'; }
-    function say(text, level){ toast.value={text,level:level||'ok'}; setTimeout(()=>{toast.value=null}, 2600); }
-    function toggleSel(slug){ selected.value = selected.value.includes(slug)? selected.value.filter(s=>s!==slug) : [...selected.value, slug]; }
-    function setVis(targetId, state){ if(!sel.value) return; sel.value.vis[targetId]=state; say(sel.value.slug+' · '+TARGETS.find(t=>t.id===targetId).kind+' → '+VIS_LABEL[state]); }
-    function projectSelected(){ say(selected.value.length+' 个 Skill 已投影到 Claude Code'); dialog.value=null; }
-    function onHash(){ const v=(location.hash||'#overview').slice(1); if(VIEWS[v]) view.value=v; }
-    onMounted(()=>{ window.addEventListener('hashchange', onHash); onHash(); });
-    return { theme, view, go, toggleTheme, NAV, SKILLS, DETECTED, TARGETS, UPGRADES, ISSUES, PROJECTS, MARKETS, MARKET_ITEMS,
-      libView, query, filter, visibleSkills, selected, toggleSel, drawer, sel, say, toast, setVis, projectSelected,
-      activeMarket, marketQuery, detecting, dialog, adoptKeep, dryRun, diffFile, visFilter,
-      TABS:['概览','我的 Skill','发现','来源','项目','更新','体检','设置'] };
-  },
-  template: document.getElementById('tpl').innerHTML,
-};
-const VIS_LABEL = { visible:'生效中', shadowed:'被压制', not_scanned:'未被扫描', broken:'坏链', restart_required:'需重启' };
-const VIS_TONE = { visible:'good', shadowed:'warn', not_scanned:'neutral', broken:'bad', restart_required:'warn' };
-const UP_LABEL = { has_update:'有更新', diverged:'双向改动', local_modified:'本地已改', up_to_date:'已是最新', not_tracked:'未追踪', pinned:'已锁定' };
-const UP_TONE = { has_update:'warn', diverged:'bad', local_modified:'neutral', up_to_date:'good', not_tracked:'neutral', pinned:'neutral' };
-const KIND_LABEL = { skill:'Skill', 'legacy-command':'旧命令', 'nested-suspect':'病态嵌套' };
-const root = createApp(D1);
-root.mount('#app');
-</script>
-<template id="tpl">
+<script type="text/plain" id="d1-tpl">
 <div class="h-body">
 <div class="h-shell">
   <aside class="h-rail" data-rail>
@@ -610,13 +553,69 @@ root.mount('#app');
       <div class="h-dialog-f"><span class="h-mono" style="margin-right:auto">1 / 3 个文件已决定</span><button class="h-btn" @click="dialog=null">稍后再说</button><button class="h-btn primary" @click="dialog=null; say('冲突已解决，已重新升级')">保存并重试</button></div>
     </div>
   </div>
-</template>
+
 </div>
-</template>
+</script>
+<script>const SKILLS = [{"slug":"pdf","name":"PDF Toolkit","desc":"抽取、合并、填写 PDF 表单，处理扫描件与 OCR 的常用流程","origin":"skills.sh","ver":"1.4.2","vis":{"claude":"visible","codex":"visible","cursor":"shadowed","opencode":"not_scanned"}},{"slug":"docx","name":"Word 文档","desc":"读写 .docx，保留批注与修订记录，生成规范报告","origin":"anthropic/skills","ver":"0.9.0","vis":{"claude":"visible","codex":"visible","cursor":"visible","opencode":"visible"}},{"slug":"slides","name":"幻灯片工坊","desc":"从大纲生成 16:9 演示稿，含图表与讲者备注","origin":"本地编辑","ver":"0.4.1","vis":{"claude":"visible","codex":"shadowed","cursor":"broken","opencode":"not_scanned"}},{"slug":"xlsx","name":"表格计算","desc":"公式重算、透视表、图表导出 CSV 与 PDF","origin":"github.com/acme/skills","ver":"2.0.0","vis":{"claude":"visible","codex":"visible","cursor":"visible","opencode":"visible"}},{"slug":"web-clip","name":"网页剪藏","desc":"把页面正文与配图整理成可检索的 Markdown","origin":"ClawHub","ver":"1.1.0","vis":{"claude":"visible","codex":"not_scanned","cursor":"not_scanned","opencode":"not_scanned"}},{"slug":"code-review","name":"代码评审","desc":"按仓库规范逐文件审阅，输出分级的意见清单","origin":"anthropic/skills","ver":"0.7.3","vis":{"claude":"visible","codex":"visible","cursor":"visible","opencode":"visible"}}];
+const DETECTED = [{"path":"~/.claude/skills/pdf","client":"Claude Code","kind":"skill","fm":true,"scope":"全局"},{"path":"~/.codex/skills/notion-sync","client":"Codex","kind":"skill","fm":true,"scope":"全局"},{"path":"~/.agents/skills/legacy/translate","client":"Agents","kind":"legacy-command","fm":true,"scope":"全局"},{"path":"~/.cursor/skills/web-clip","client":"Cursor","kind":"skill","fm":false,"scope":"全局"},{"path":"~/work/notes-app/.claude/skills/local-note","client":"Claude Code","kind":"skill","fm":true,"scope":"项目"},{"path":"~/.codex/skills","client":"Codex","kind":"nested-suspect","fm":null,"scope":"全局"}];
+const TARGETS = [{"id":"claude","kind":"Claude Code","scope":"全局","path":"~/.claude/skills","enabled":true,"def":true},{"id":"codex","kind":"Codex","scope":"全局","path":"~/.codex/skills","enabled":true,"def":false},{"id":"agents","kind":"Agents","scope":"全局","path":"~/.agents/skills","enabled":true,"def":false},{"id":"cursor","kind":"Cursor","scope":"全局","path":"~/.cursor/skills","enabled":true,"def":false},{"id":"opencode","kind":"opencode","scope":"全局","path":"~/.config/opencode/skills","enabled":false,"def":false},{"id":"notes","kind":"Claude Code · 项目","scope":"notes-app","path":"~/work/notes-app/.claude/skills","enabled":true,"def":false}];
+const UPGRADES = [{"slug":"docx","state":"has_update","installed":"0.9.0","baseline":"0.9.0","latest":"1.0.0","source":"github.com/anthropics/skills"},{"slug":"slides","state":"has_update","installed":"0.4.1","baseline":"0.4.1","latest":"0.5.0","source":"github.com/acme/slides"},{"slug":"pdf","state":"diverged","installed":"1.4.2","baseline":"1.3.0","latest":"1.5.0","source":"skills.sh/pdf"},{"slug":"xlsx","state":"local_modified","installed":"2.0.0","baseline":"2.0.0","latest":"2.0.0","source":"github.com/acme/skills"},{"slug":"code-review","state":"up_to_date","installed":"0.7.3","baseline":"0.7.3","latest":"0.7.3","source":"github.com/anthropics/skills"},{"slug":"web-clip","state":"not_tracked","installed":"1.1.0","baseline":"—","latest":null,"source":null}];
+const ISSUES = [{"id":"broken-link","sev":"error","subject":"~/.cursor/skills/slides","actions":["reproject","unproject"],"label":"坏链"},{"id":"nested-suspect","sev":"warn","subject":"~/.codex/skills","actions":["ignore"],"label":"病态嵌套"},{"id":"frontmatter-invalid","sev":"warn","subject":"~/.cursor/skills/web-clip","actions":["fix-frontmatter"],"label":"frontmatter 无效"}];
+const PROJECTS = [{"root":"~/work/notes-app","clients":["claude-code"],"skills":["local-note","docx"]},{"root":"~/work/heron","clients":["claude-code","cursor"],"skills":["code-review"]}];
+const MARKETS = [{"id":"skills_sh","name":"skills.sh","cap":"indexed","on":true},{"id":"clawhub","name":"ClawHub","cap":"indexed","on":true},{"id":"qoder","name":"Qoder","cap":"guided","on":true},{"id":"skillhub_cn","name":"SkillHub","cap":"guided","on":true},{"id":"skillsmp","name":"SkillsMP","cap":"guided","on":false}];
+</script>
+<script>
+let ref, computed, reactive, onMounted;
+window.__vue = null;
+const D1_SETUP = function(){
+    const theme = ref(localStorage.getItem('heron.theme') || 'dark');
+    const view = ref(((location.hash||'#overview').slice(1).split('?')[0]) || 'overview');
+    const libView = ref('table'); const query = ref(''); const filter = ref('all');
+    const selected = ref([]); const drawer = ref(null); const toast = ref(null);
+    const activeMarket = ref('skills_sh'); const marketQuery = ref('pdf');
+    const dialog = ref(null); const adoptKeep = ref(true); const diffFile = ref(0);
+    const sel = computed(()=>SKILLS.find(s=>s.slug===drawer.value));
+    const visibleSkills = computed(()=>SKILLS.filter(s=>{
+      if (query.value && !(s.slug+' '+s.name+' '+s.desc).toLowerCase().includes(query.value.toLowerCase())) return false;
+      if (filter.value==='issues') return ['cursor','codex'].some(c=>['shadowed','broken','not_scanned'].includes(s.vis[c]));
+      return true;
+    }));
+    const MARKET_ITEMS = [
+      { key:'skills.sh/anthropics/pdf', summary:'PDF 抽取、合并与表单填写，附带 OCR 流程', ver:'1.5.0' },
+      { key:'skills.sh/anthropics/docx', summary:'读写 .docx，保留批注与修订', ver:'1.0.0' },
+      { key:'clawhub/pdf-tools', summary:'轻量 PDF 工具集，仅合并与拆分', ver:'0.3.2' },
+    ];
+    function go(v){ view.value=v; try{ history.replaceState(null,'','#'+v); }catch(e){} }
+    function toggleTheme(){ theme.value = theme.value==='dark'?'light':'dark'; localStorage.setItem('heron.theme', theme.value); }
+    function say(text, level){ toast.value={text,level:level||'ok'}; setTimeout(()=>{toast.value=null}, 2600); }
+    function toggleSel(slug){ selected.value = selected.value.includes(slug)? selected.value.filter(s=>s!==slug) : [...selected.value, slug]; }
+    function setVis(targetId, state){ if(!sel.value) return; sel.value.vis[targetId]=state; say(sel.value.slug+' → '+VIS_LABEL[state]); }
+    function projectSelected(){ say(selected.value.length+' 个 Skill 已投影到 Claude Code'); dialog.value=null; }
+    onMounted(()=>{ window.addEventListener('hashchange', ()=>{ const v=(location.hash||'#overview').slice(1); if(VIEWS[v]) view.value=v; }); });
+    return { theme, view, go, toggleTheme, NAV, SKILLS, DETECTED, TARGETS, UPGRADES, ISSUES, PROJECTS, MARKETS, MARKET_ITEMS,
+      libView, query, filter, visibleSkills, selected, toggleSel, drawer, sel, say, toast, setVis, projectSelected,
+      activeMarket, marketQuery, dialog, adoptKeep, diffFile, VIEWS, ICON, VIS_LABEL, VIS_TONE, UP_LABEL, UP_TONE, KIND_LABEL };
+};
+const VIS_LABEL = { visible:'生效中', shadowed:'被压制', not_scanned:'未被扫描', broken:'坏链', restart_required:'需重启' };
+const VIS_TONE = { visible:'good', shadowed:'warn', not_scanned:'neutral', broken:'bad', restart_required:'warn' };
+const UP_LABEL = { has_update:'有更新', diverged:'双向改动', local_modified:'本地已改', up_to_date:'已是最新', not_tracked:'未追踪', pinned:'已锁定' };
+const UP_TONE = { has_update:'warn', diverged:'bad', local_modified:'neutral', up_to_date:'good', not_tracked:'neutral', pinned:'neutral' };
+const KIND_LABEL = { skill:'Skill', 'legacy-command':'旧命令', 'nested-suspect':'病态嵌套' };
+const NAV = [
+  { group:'工作台', items:[{id:'overview',label:'概览',icon:'overview'}] },
+  { group:'收集 · 分发', items:[{id:'library',label:'我的 Skill',icon:'library',count:SKILLS.length},{id:'discover',label:'发现',icon:'discover',count:4,tone:'warn'},{id:'sources',label:'来源与市场',icon:'sources'}] },
+  { group:'维护', items:[{id:'upgrades',label:'更新',icon:'upgrades',count:3,tone:'warn'},{id:'doctor',label:'体检',icon:'doctor',count:1,tone:'bad'},{id:'projects',label:'项目与落点',icon:'projects'},{id:'settings',label:'设置',icon:'settings'}] },
+];
+
+const D1 = { setup: D1_SETUP, template: document.getElementById('d1-tpl').textContent };
+</script>
+<script>
+const ICON = Object.fromEntries(Object.entries(ICON_RAW).map(([k,v]) => [k, '<svg viewBox="0 0 24 24">' + v + '</svg>']));
+</script>
 <script type="module">
-import { createApp, ref, computed, reactive, onMounted } from "https://cdn.jsdelivr.net/npm/vue@3.5.13/dist/vue.esm-browser.prod.js";
-const app = createApp(D1);
-app.mount('#app');
+import * as Vue from "https://cdn.jsdelivr.net/npm/vue@3.5.13/dist/vue.esm-browser.prod.js";
+ref = Vue.ref; computed = Vue.computed; reactive = Vue.reactive; onMounted = Vue.onMounted;
+Vue.createApp(D1).mount('#app');
 if (window.gsap) gsap.from('.h-view-head > *', { y: 8, opacity: 0, duration: .45, ease: 'power2.out', stagger: .05 });
 </script>
 </body></html>
