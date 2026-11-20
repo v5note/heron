@@ -1428,6 +1428,7 @@ Playwright 覆盖 6 条主路径：首次引导（含 Git 缺失引导）→ 发
 |------|--------|--------------|----------|
 | 2026-11-19 | M0（部分） | `heron-core`：slug / version / policy / error / dto / hash；`heron-platform`：dirs / paths / atomic / lock / link（unix + windows）/ probe | `cargo test --workspace` 81 例通过；`cargo fmt --check`、`cargo clippy -D warnings` 干净；`--target x86_64-pc-windows-msvc` 静态编译通过 |
 | 2026-11-19 | M0（部分） | 链接层安全测试：`tests/link_safety.rs`（10 例，全平台）+ `tests/link_safety_windows.rs`（L1–L6，Windows 门控） | macOS 实跑 10/10；Windows 用例待 Windows CI 或真机执行 |
+| 2026-11-20 | 首次发布 | 推 v0.1.0 tag，Release 页产出 `Heron_0.1.0_x64-setup.exe` / `.nsis.zip` / `.sig` / `latest.json`；下载产物用公钥验签通过 | 端到端打通；发现并修复 4 处 CI 问题（tag 不触发工作流、`--no-bundle=false` 非法、macOS runner 取消阻断发布、artifact 收集过于复杂） |
 | 2026-11-20 | 发布签名 | Tauri 更新签名（minisign 密钥对）接入：`createUpdaterArtifacts`、updater 插件与权限、设置页更新入口、`scripts/make-latest-json.py`、release/publish 两个 CI 任务（缺私钥即失败、缺签名即失败） | 本地实测：构建产出 `Heron.app.tar.gz.sig`，用公钥**密码学验证通过**，篡改后正确拒绝；229 项测试、clippy、typecheck、i18n 全绿 |
 | 2026-11-19 | Windows 实测修复 | 仓库推送到 GitHub 后 CI 在真实非提权 Windows runner 上跑 L1–L6，连续暴露 4 个链接层缺陷（GENERIC_WRITE 读取、symlink PathBuffer 偏移、NT 前缀转义、悬空链接分类与删除）并全部修复；另修 2 处测试平台假设 | Windows **229 项全绿**（含此前从未真跑的 L1–L6）；Ubuntu 同样通过 |
 | 2026-11-19 | 收尾功能 | GUI 三栏冲突编辑器（Mine/Theirs + 逐文件决策 → 保存并重试升级）、`native_scan` 能力表驱动注入（默认关闭、先展示 diff、可还原）、设置页显示各客户端能力与依据 | 228 例测试全绿；`vue-tsc` 通过；中英 126 个 i18n key 一致；`pnpm build` 171 KB |
