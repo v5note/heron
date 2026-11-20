@@ -1,6 +1,7 @@
 //! Scan use case: run the scanner and persist what it found.
 
 use std::collections::HashSet;
+use std::io::Read;
 use std::path::PathBuf;
 
 use heron_scan::classify::{Classifier, HitKind};
@@ -137,4 +138,48 @@ fn file_mtime_ns(path: &std::path::Path) -> Option<i64> {
 
 fn file_size(path: &std::path::Path) -> Option<i64> {
     Some(std::fs::metadata(path).ok()?.len() as i64)
+}
+
+/// Name and description as written in each detected file's frontmatter.
+///
+/// `detected` only persists the slug, and the discover page shows a card per skill, so these two
+/// fields are read back from the file. Read-only and best-effort: an unreadable or sloppy file
+/// yields empty fields instead of failing the whole list.
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct DetectedMeta {
+    pub path: String,
+    pub name: Option<String>,
+    pub description: Option<String>,
+}
+
+pub fn describe(paths: &[String]) -> Vec<DetectedMeta> {
+    paths
+        .iter()
+        .map(|path| {
+            let fields = read_frontmatter_head(path).map(|bytes| {
+                let (frontmatter, _) = heron_scan::parse_skill_md(&bytes);
+                (frontmatter.name, frontmatter.description)
+            });
+            let (name, description) = fields.unwrap_or((None, None));
+            DetectedMeta {
+                path: path.clone(),
+                name: name.map(|v| v.trim().to_owned()).filter(|v| !v.is_empty()),
+                description: description
+                    .map(|v| v.trim().to_owned())
+                    .filter(|v| !v.is_empty()),
+            }
+        })
+        .collect()
+}
+
+/// At most one frontmatter block: the parser ignores anything past this limit anyway, and a stray
+/// large file must not be loaded whole just to show a card.
+fn read_frontmatter_head(path: &str) -> Option<Vec<u8>> {
+    let mut bytes = Vec::new();
+    std::fs::File::open(path)
+        .ok()?
+        .take(heron_scan::parse::FRONTMATTER_SCAN_LIMIT as u64)
+        .read_to_end(&mut bytes)
+        .ok()?;
+    Some(bytes)
 }

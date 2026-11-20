@@ -26,3 +26,4 @@ Thumbs.db
 
 # Local rustup home (kept out of git; see docs/adr/0001)
 /.rustup-home/
+.screenshots

@@ -38,7 +38,12 @@
     "applied": "Applied",
     "skipped": "Skipped",
     "done": "{n} adopted",
-    "error": "Something went wrong"
+    "error": "Something went wrong",
+    "count": "{n}",
+    "upgrade": {
+      "done": "{ok} upgraded, {conflicts} conflicts",
+      "alone": "{n} conflicts, nothing upgraded"
+    }
   },
   "overview": {
     "title": "Overview",
@@ -127,7 +132,19 @@
     "storeDest": "store / {slug}",
     "noSlug": "Not recognised as a skill; will be skipped",
     "backupNote": "A backup is taken before anything moves; a failure leaves the originals untouched.",
-    "confirmAdopt": "Adopt now"
+    "confirmAdopt": "Adopt now",
+    "index": "#",
+    "rows": "{n} items",
+    "rowsFiltered": "{n} of {total}",
+    "searchHint": "Search name, description, or address",
+    "noMatch": "No skill matches “{q}”",
+    "clearSearch": "Clear search",
+    "clearSelection": "Clear selection",
+    "noDescription": "This skill has no description",
+    "copyPath": "Copy address",
+    "copied": "Copied",
+    "copyFailed": "Copy failed — check clipboard permissions",
+    "ready": "Ready to adopt"
   },
   "sources": {
     "title": "Sources & markets",
@@ -210,6 +227,7 @@
     "supported": "supported (opt-in)",
     "unsupported": "not supported",
     "updates": "App updates",
+    "upToVersion": "Up to date (v{version})",
     "checkUpdate": "Check for updates",
     "updateAvailable": "New version",
     "installUpdate": "Download and restart",
@@ -266,6 +284,13 @@
   },
   "shell": {
     "scan": "Scan this machine",
-    "pending": "{n} pending"
+    "scanDone": "Scanned {n} skills · {commands} commands · {ms} ms",
+    "pending": "{n} pending",
+    "pendingNone": "Nothing to do",
+    "pendingHint": "{n} waiting: unadopted skills, upgradable skills and broken projections. Open the check-up.",
+    "gitVersion": "Git {version}",
+    "gitHint": "Git fetches and diffs skill sources (this is not the app's version). Open Sources.",
+    "gitMissingHint": "Git not found: cloning and upgrading sources need it. Open Settings.",
+    "appVersion": "App v{version}"
   }
 }

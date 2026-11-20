@@ -151,7 +151,7 @@ export const useAppStore = defineStore("app", {
       this.busy = true;
       try {
         const report = await api.scan();
-        this.toast("ok", `${report.skills} skills · ${report.legacy_commands} commands · ${report.duration_ms} ms`);
+        this.toast("ok", messageFor("shell.scanDone", { n: report.skills, commands: report.legacy_commands, ms: report.duration_ms }));
         await this.refreshAll();
       } catch (e) {
         this.fail(e);
@@ -171,7 +171,7 @@ export const useAppStore = defineStore("app", {
       let result: AdoptResult = { adopted: [], skipped: [], errors: [] };
       try {
         result = await api.adopt(paths, false, keepOriginal);
-        if (result.adopted.length) this.toast("ok", messageFor("done", { n: String(result.adopted.length) }));
+        if (result.adopted.length) this.toast("ok", messageFor("common.done", { n: result.adopted.length }));
         await this.refreshAll();
         if (result.adopted.length) await this.loadTargets();
       } catch (e) {
@@ -197,7 +197,10 @@ export const useAppStore = defineStore("app", {
       try {
         outcomes = await api.upgrade(slugs, false);
         const conflicts = outcomes.filter((o) => o.result === "conflicts").length;
-        this.toast(conflicts ? "warn" : "ok", `${outcomes.length - conflicts} upgraded, ${conflicts} conflicts`);
+        const upgraded = outcomes.length - conflicts;
+        // "0 upgraded, 3 conflicts" reads like a partial success; when nothing landed, say so.
+        if (!upgraded && conflicts) this.toast("warn", messageFor("common.upgrade.alone", { n: conflicts }));
+        else this.toast(conflicts ? "warn" : "ok", messageFor("common.upgrade.done", { ok: upgraded, conflicts }));
         await this.loadUpgrades();
         await Promise.all([this.loadSkills(), this.verify()]);
       } catch (e) {

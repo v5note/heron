@@ -4,7 +4,7 @@
 const props = withDefaults(defineProps<{ name: IconName; size?: number }>(), { size: 15 });
 export type IconName =
   | "overview" | "library" | "discover" | "sources" | "projects" | "upgrades" | "doctor" | "settings"
-  | "sun" | "moon" | "search" | "refresh" | "check" | "close" | "plus" | "external" | "alert" | "chevron";
+  | "sun" | "moon" | "search" | "refresh" | "check" | "close" | "plus" | "external" | "alert" | "chevron" | "copy";
 
 const PATHS: Record<IconName, string> = {
   overview: '<path d="M3 12h4l2.5-6 4 12 2.5-6H21"/>',
@@ -25,6 +25,7 @@ const PATHS: Record<IconName, string> = {
   external: '<path d="M14 4h6v6"/><path d="M20 4 11 13"/><path d="M18 14v5.5H4.5V6H10"/>',
   alert: '<path d="M12 4 21 20H3z"/><path d="M12 10v4"/>',
   chevron: '<path d="M9 6l6 6-6 6"/>',
+  copy: '<rect x="9" y="9" width="11.5" height="11.5" rx="2.5"/><path d="M5.5 15.5A1.5 1.5 0 0 1 4 14V5.5A1.5 1.5 0 0 1 5.5 4H14a1.5 1.5 0 0 1 1.5 1.5"/>',
 };
 </script>
 

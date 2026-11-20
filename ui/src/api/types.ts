@@ -24,6 +24,13 @@ export interface DetectedRow {
   adopt_state: string;
 }
 
+/** Frontmatter name/description read back from a detected file (card display only). */
+export interface DetectedMeta {
+  path: string;
+  name: string | null;
+  description: string | null;
+}
+
 /** One row of the dry-run adopt preview (`adopt_paths` with dryRun). */
 export interface AdoptPlan {
   detail: DetectedRow;

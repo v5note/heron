@@ -5,7 +5,7 @@
 
 import { invoke } from "@tauri-apps/api/core";
 import type {
-  AdoptPlan, ConflictPayload, DetectedRow, DiffReport, DoctorReport, Drift, InstallPlan,
+  AdoptPlan, ConflictPayload, DetectedMeta, DetectedRow, DiffReport, DoctorReport, Drift, InstallPlan,
   InstallPreview, LockFile, MarketInfo, MarketItem, NativeScanStatus, ScanReport, SkillRow,
   TargetRow, UpgradeCandidate, UpgradeOutcome, VisibilityReport,
 } from "./types";
@@ -43,6 +43,8 @@ export const api = {
   preflight: () => call<{ git: { version: string } | null; platform: string }>("preflight"),
   scan: (roots?: string[]) => call<ScanReport>("scan", { roots: roots ?? null }),
   detected: (state = "candidate") => call<DetectedRow[]>("detected_list", { state }),
+  /** Frontmatter name/description for the discovered files, for the card grid. Read-only. */
+  detectedMeta: (paths: string[]) => call<DetectedMeta[]>("detected_meta", { paths }),
   /** `dryRun` returns the plans (what would move); otherwise the report of what moved. */
   adopt: <T = AdoptResult>(paths: string[], dryRun: boolean, keepOriginal: boolean) =>
     call<T>("adopt_paths", { paths, dryRun, keepOriginal }),

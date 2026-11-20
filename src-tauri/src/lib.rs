@@ -76,6 +76,11 @@ fn detected_list(
 }
 
 #[tauri::command]
+fn detected_meta(paths: Vec<String>) -> Vec<heron_service::scan::DetectedMeta> {
+    heron_service::scan::describe(&paths)
+}
+
+#[tauri::command]
 fn adopt_paths(
     state: State<'_, AppState>,
     paths: Vec<String>,
@@ -405,6 +410,7 @@ pub fn run() {
             preflight,
             scan,
             detected_list,
+            detected_meta,
             adopt_paths,
             skills_list,
             targets_list,
