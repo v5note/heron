@@ -139,24 +139,20 @@ jobs:
         run: |
           pnpm --dir ui build
           cargo install tauri-cli --version "^2" --locked
-          cargo tauri build --no-bundle=false
+          cargo tauri build
 
-      # Collect the artifacts the updater consumes (.app.tar.gz / .nsis.zip plus their .sig),
-      # and the installers humans download (.dmg / .exe).
+      # Collect what the updater consumes (.app.tar.gz / .nsis.zip plus their .sig) and the
+      # installers humans download (.dmg / .exe). Filenames are preserved: Tauri already encodes
+      # the architecture, and latest.json keys off the suffix.
       - name: Collect artifacts
         shell: bash
         run: |
           mkdir -p dist
           B=target/release/bundle
-          if [ -d "$B/macos" ]; then
-            find "$B/macos" -name '*.app.tar.gz' -o -name '*.app.tar.gz.sig' | while read -r f; do
-              cp "$f" "dist/Heron_${{ steps.meta.outputs.version }}_aarch64.$(basename "$f" | sed 's/^[^.]*\.app\.tar\.gz//;s/^$/app.tar.gz/' | sed 's/^\.//')" 2>/dev/null || cp "$f" dist/
-            done
-          fi
-          cp "$B"/nsis/*.nsis.zip dist/ 2>/dev/null || true
-          cp "$B"/nsis/*.nsis.zip.sig dist/ 2>/dev/null || true
-          cp "$B"/dmg/*.dmg dist/ 2>/dev/null || true
-          cp "$B"/nsis/*.exe dist/ 2>/dev/null || true
+          find "$B" -maxdepth 3 -type f \( \
+              -name '*.app.tar.gz' -o -name '*.app.tar.gz.sig' \
+              -o -name '*.nsis.zip' -o -name '*.nsis.zip.sig' \
+              -o -name '*.dmg' -o -name '*.exe' \) -exec cp {} dist/ \;
           ls -la dist
 
       - name: Fail when signatures are missing
