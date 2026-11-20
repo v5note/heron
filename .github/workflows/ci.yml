@@ -3,6 +3,8 @@ name: ci
 on:
   push:
     branches: [main]
+    # Tags trigger the same workflow so `release`/`publish` can run for a version.
+    tags: ["v*"]
   pull_request:
 
 env:
