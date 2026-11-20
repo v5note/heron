@@ -152,6 +152,14 @@ jobs:
         run: |
           mkdir -p dist
           B=target/release/bundle
+          # Tauri names the macOS updater payload "Heron.app.tar.gz" with no architecture in it.
+          # Rename it so latest.json (and anyone reading the release) can tell builds apart.
+          if [ "${{ runner.os }}" = "macOS" ] && [ -f "$B/macos/Heron.app.tar.gz" ]; then
+            ARCH="${{ matrix.platform == 'darwin-x86_64' && 'x64' || 'aarch64' }}"
+            VERSION="${{ steps.meta.outputs.version }}"
+            mv "$B/macos/Heron.app.tar.gz" "$B/macos/Heron_${VERSION}_${ARCH}.app.tar.gz"
+            mv "$B/macos/Heron.app.tar.gz.sig" "$B/macos/Heron_${VERSION}_${ARCH}.app.tar.gz.sig"
+          fi
           find "$B" -maxdepth 3 -type f \( \
               -name '*.app.tar.gz' -o -name '*.app.tar.gz.sig' \
               -o -name '*.nsis.zip' -o -name '*.nsis.zip.sig' \
@@ -207,7 +215,8 @@ jobs:
             --version "${{ steps.meta.outputs.version }}" \
             --repo "${{ github.repository }}" \
             --tag "${{ github.ref_name }}" \
-            --dir dist --out dist/latest.json --notes "$NOTES"
+            --dir dist --out dist/latest.json --notes "$NOTES" \
+            --darwin-arch "${{ vars.HERON_DARWIN_ARCH || 'darwin-aarch64' }}"
           cat dist/latest.json
       - name: Require at least one platform
         run: |

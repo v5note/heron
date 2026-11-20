@@ -20,6 +20,9 @@ from typing import Optional
 from urllib.parse import quote
 
 # Updater payload suffixes, in the order Tauri publishes them.
+# Architecture used when a darwin payload carries no arch in its name.
+DEFAULT_DARWIN = "darwin-aarch64"
+
 PLATFORM_SUFFIXES = (
     (".app.tar.gz", "darwin"),
     (".nsis.zip", "windows-x86_64"),
@@ -39,9 +42,16 @@ def platform_for(name: str) -> Optional[str]:
                     return "darwin-aarch64"
                 if "x64" in lower or "x86_64" in lower:
                     return "darwin-x86_64"
-                return None
+                # Tauri names the payload after the product ("Heron.app.tar.gz") with no arch.
+                # The architecture is supplied via --darwin-arch for that case.
+                return DEFAULT_DARWIN
             return platform
     return None
+
+
+def set_darwin_arch(arch: str) -> None:
+    global DEFAULT_DARWIN
+    DEFAULT_DARWIN = arch
 
 
 def main() -> int:
@@ -51,8 +61,15 @@ def main() -> int:
     parser.add_argument("--dir", required=True, help="directory holding signed payloads")
     parser.add_argument("--out", required=True)
     parser.add_argument("--notes", default="")
+    parser.add_argument(
+        "--darwin-arch",
+        default=DEFAULT_DARWIN,
+        choices=["darwin-aarch64", "darwin-x86_64"],
+        help="platform key for a macOS payload whose filename does not state the architecture",
+    )
     parser.add_argument("--tag", default=None, help="release tag (default: v<version>)")
     args = parser.parse_args()
+    set_darwin_arch(args.darwin_arch)
 
     tag = args.tag or f"v{args.version}"
     root = Path(args.dir)
