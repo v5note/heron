@@ -73,15 +73,25 @@ jobs:
       - run: pnpm --dir ui i18n:check
       - run: pnpm --dir ui build
 
-  bundle:
-    name: bundle (${{ matrix.os }})
-    needs: [rust, ui]
+  # Release job. Signs the *updater* payloads with a Tauri minisign key pair, so releases can be
+  # distributed and self-updated without an Apple Developer ID or a Windows code-signing
+  # certificate. The trade-off is recorded in docs/SIGNING.md: binaries are not OS-notarized, so
+  # first-run Gatekeeper/SmartScreen prompts require a manual "open anyway".
+  release:
+    name: release (${{ matrix.os }})
+    needs: [rust, windows-link-gate, ui]
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ${{ matrix.os }}
+    permissions:
+      contents: write
     strategy:
       fail-fast: false
       matrix:
-        os: [macos-14, windows-2022]
+        include:
+          - os: macos-14
+            platform: darwin-aarch64
+          - os: windows-2022
+            platform: windows-x86_64
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -92,22 +102,109 @@ jobs:
         with: { node-version: 22 }
       - run: pnpm --dir ui install --frozen-lockfile
 
-      # Signing is optional: with the secrets present the bundles are signed and notarized,
-      # otherwise unsigned artifacts are produced (development builds).
-      - name: Build bundles
-        run: pnpm --dir ui build && cargo install tauri-cli --version "^2" --locked && cargo tauri build --no-bundle=false
+      - name: Read version from tauri.conf.json
+        id: meta
+        shell: bash
+        run: |
+          VERSION=$(python3 -c "import json;print(json.load(open('src-tauri/tauri.conf.json'))['version'])")
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "tag=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+
+      # Refuse to build an unsigned release: an unsigned updater payload cannot be verified by
+      # installed clients, so publishing one would brick the update path for everyone.
+      - name: Require the signing key
+        shell: bash
         env:
-          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
-          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+        run: |
+          if [ -z "${TAURI_SIGNING_PRIVATE_KEY:-}" ]; then
+            echo "::error::TAURI_SIGNING_PRIVATE_KEY is not set; see docs/SIGNING.md"
+            exit 1
+          fi
+
+      - name: Build signed bundles
+        shell: bash
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: |
+          pnpm --dir ui build
+          cargo install tauri-cli --version "^2" --locked
+          cargo tauri build --no-bundle=false
+
+      # Collect the artifacts the updater consumes (.app.tar.gz / .nsis.zip plus their .sig),
+      # and the installers humans download (.dmg / .exe).
+      - name: Collect artifacts
+        shell: bash
+        run: |
+          mkdir -p dist
+          B=target/release/bundle
+          if [ -d "$B/macos" ]; then
+            find "$B/macos" -name '*.app.tar.gz' -o -name '*.app.tar.gz.sig' | while read -r f; do
+              cp "$f" "dist/Heron_${{ steps.meta.outputs.version }}_aarch64.$(basename "$f" | sed 's/^[^.]*\.app\.tar\.gz//;s/^$/app.tar.gz/' | sed 's/^\.//')" 2>/dev/null || cp "$f" dist/
+            done
+          fi
+          cp "$B"/nsis/*.nsis.zip dist/ 2>/dev/null || true
+          cp "$B"/nsis/*.nsis.zip.sig dist/ 2>/dev/null || true
+          cp "$B"/dmg/*.dmg dist/ 2>/dev/null || true
+          cp "$B"/nsis/*.exe dist/ 2>/dev/null || true
+          ls -la dist
+
+      - name: Fail when signatures are missing
+        shell: bash
+        run: |
+          shopt -s nullglob
+          payloads=(dist/*.app.tar.gz dist/*.nsis.zip dist/*.appimage.tar.gz)
+          if [ ${#payloads[@]} -eq 0 ]; then
+            echo "::error::no updater payload was produced"
+            exit 1
+          fi
+          for p in "${payloads[@]}"; do
+            test -f "$p.sig" || { echo "::error::missing signature for $p"; exit 1; }
+          done
 
       - uses: actions/upload-artifact@v4
         with:
-          name: heron-${{ runner.os }}
-          path: |
-            target/release/bundle/dmg/*.dmg
-            target/release/bundle/nsis/*.exe
-          if-no-files-found: ignore
+          name: heron-${{ matrix.platform }}
+          path: dist/*
+          if-no-files-found: error
+
+  publish:
+    name: publish release
+    needs: release
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Read version
+        id: meta
+        run: |
+          VERSION=$(python3 -c "import json;print(json.load(open('src-tauri/tauri.conf.json'))['version'])")
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+      - name: Build latest.json
+        run: |
+          NOTES=""
+          if [ -f "releases/${{ steps.meta.outputs.version }}.md" ]; then
+            NOTES=$(cat "releases/${{ steps.meta.outputs.version }}.md")
+          fi
+          python3 scripts/make-latest-json.py \
+            --version "${{ steps.meta.outputs.version }}" \
+            --repo "${{ github.repository }}" \
+            --tag "${{ github.ref_name }}" \
+            --dir dist --out dist/latest.json --notes "$NOTES"
+          cat dist/latest.json
+      - name: Publish
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: Heron ${{ steps.meta.outputs.version }}
+          body_path: releases/${{ steps.meta.outputs.version }}.md
+          files: dist/*
+          draft: false
+          prerelease: false

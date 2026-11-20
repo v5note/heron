@@ -122,7 +122,13 @@
     "capability": "Capability",
     "evidence": "Evidence",
     "supported": "supported (opt-in)",
-    "unsupported": "not supported"
+    "unsupported": "not supported",
+    "updates": "App updates",
+    "checkUpdate": "Check for updates",
+    "updateAvailable": "New version",
+    "installUpdate": "Download and restart",
+    "upToDate": "You are up to date",
+    "updateFailed": "Update check failed (expected in local dev builds)"
   },
   "errors": {
     "E_GIT_MISSING": "git was not found; please install it",

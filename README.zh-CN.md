@@ -290,6 +290,7 @@ docs/               设计、实现、指南与决策记录（ADR）
 - [实现文档](docs/IMPLEMENTATION-heron-v1.md) —— 怎么落地、按什么顺序
 - [上手指南](docs/GUIDE.md) —— 从一个乱糟糟的机器开始
 - [命令参考](docs/REFERENCE.md) —— 每条命令、每个错误码
+- [发布与签名](docs/SIGNING.md) —— 不依赖付费证书的发布方式
 - [决策记录](docs/adr/) —— 实现中踩到的坑与取舍
 
 ## 许可

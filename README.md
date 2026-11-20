@@ -295,6 +295,7 @@ docs/               design, implementation, guides and decision records
 - [Implementation](docs/IMPLEMENTATION-heron-v1.md) — how it is built, in what order
 - [Getting started](docs/GUIDE.md) — from a messy machine to a managed set
 - [Command reference](docs/REFERENCE.md) — every command, every error code
+- [Signing & releases](docs/SIGNING.md) — how releases are signed without paid certificates
 - [Decision records](docs/adr/) — the trade-offs made along the way
 
 ## License

@@ -55,6 +55,18 @@
     },
     "resources": [],
     "shortDescription": "Local skill manager",
-    "longDescription": "Heron gathers the Agent Skills scattered across Claude Code, Codex, .agents and projects into one versioned store, projects them into the places clients actually scan, and upgrades them with a three-way merge."
+    "longDescription": "Heron gathers the Agent Skills scattered across Claude Code, Codex, .agents and projects into one versioned store, projects them into the places clients actually scan, and upgrades them with a three-way merge.",
+    "createUpdaterArtifacts": "v1Compatible"
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEI5QkQ5MTJGNkIxRTI0RkIKUldUN0pCNXJMNUc5dVk0dXVubG9OOEhlb2YyaWJvS3NTbW9HdFFxOTdDbW9iMHlybFJsemdNRTIK",
+      "endpoints": [
+        "https://github.com/v5note/heron/releases/latest/download/latest.json"
+      ],
+      "windows": {
+        "installMode": "passive"
+      }
+    }
   }
 }

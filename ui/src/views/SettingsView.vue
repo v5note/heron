@@ -3,12 +3,43 @@ import { onMounted, ref } from "vue";
 import { useI18n } from "vue-i18n";
 import { api } from "../api";
 import type { NativeScanStatus } from "../api/types";
+import { checkForUpdate, installUpdate, type UpdateInfo } from "../api/updater";
 import { setLocale, type Locale } from "../i18n";
 import { useAppStore } from "../stores/app";
 
 const store = useAppStore();
 const { t, locale } = useI18n();
 const clients = ref<NativeScanStatus[]>([]);
+const update = ref<UpdateInfo | null>(null);
+const checking = ref(false);
+const progress = ref<string | null>(null);
+
+async function checkUpdate() {
+  checking.value = true;
+  try {
+    update.value = await checkForUpdate();
+    store.toast("ok", update.value ? `${update.value.version}` : t("settings.upToDate"));
+  } catch (e) {
+    // A failed check must never look like a failed app: report and move on.
+    store.toast("warn", t("settings.updateFailed"));
+    console.error(e);
+  } finally {
+    checking.value = false;
+  }
+}
+
+async function applyUpdate() {
+  try {
+    progress.value = "…";
+    await installUpdate((done, total) => {
+      progress.value = total ? `${Math.round((done / total) * 100)}%` : "…";
+    });
+  } catch (e) {
+    progress.value = null;
+    store.toast("error", t("settings.updateFailed"));
+    console.error(e);
+  }
+}
 
 onMounted(async () => {
   await store.init();
@@ -51,6 +82,18 @@ function changeLocale(event: Event) {
       <span class="muted">—</span>
     </div>
 
+    <div class="row">
+      <label>{{ t("settings.updates") }}</label>
+      <span class="update">
+        <span v-if="update">{{ t("settings.updateAvailable") }} {{ update.version }}</span>
+        <span v-else class="muted">{{ t("settings.upToDate") }}</span>
+        <button v-if="!update" :disabled="checking" @click="checkUpdate">{{ t("settings.checkUpdate") }}</button>
+        <button v-else class="primary" :disabled="!!progress" @click="applyUpdate">
+          {{ progress ?? t("settings.installUpdate") }}
+        </button>
+      </span>
+    </div>
+
     <h2>{{ t("settings.nativeScan") }}</h2>
     <p class="muted">{{ t("settings.nativeScanOff") }}</p>
     <table>
@@ -78,4 +121,5 @@ h1 { margin: 0 0 16px; font-size: 20px; }
 label { color: var(--muted); }
 h2 { font-size: 16px; margin: 28px 0 4px; }
 .muted { color: var(--muted); font-size: 12px; }
+.update { display: flex; align-items: center; gap: 10px; }
 </style>
