@@ -134,6 +134,34 @@ fn adopt_deduplicates_identical_content() -> Result<()> {
 }
 
 #[test]
+fn adopt_retries_after_a_store_copy_was_left_behind() -> Result<()> {
+    // A previous adopt can fail after copying into the store (disk full, git error, permission on
+    // the original). The retry must repair that half-created directory, not fail on its branch.
+    let env = Env::new();
+    env.write_skill(".agents/skills/pdf", "pdf");
+    let mut ctx = env.ctx("cli");
+    env.scan(&mut ctx);
+    let row = find_row(&ctx, "pdf");
+
+    // Simulate the leftover: content already in the store, index unaware of it.
+    let dest = ctx.skill_path("pdf");
+    heron_service::adopt::copy_tree(&env.home.join(".agents/skills/pdf"), &dest)?;
+    let repo = heron_vcs::SkillRepo::open(&dest);
+    repo.init(&heron_vcs::SkillMeta::new("pdf", "local", "", "0.0.0"))?;
+
+    let plan = adopt::plan(&ctx, &row)?;
+    let report = adopt::execute(&mut ctx, &plan, AdoptPlacement::KeepOriginal)?;
+    assert_eq!(report.adopted, vec!["pdf".to_owned()]);
+    assert!(report.errors.is_empty(), "{:?}", report.errors);
+
+    // Adopting a second time from the same leftover directory is still safe.
+    adopt::execute(&mut ctx, &plan, AdoptPlacement::KeepOriginal)?;
+    let state = detected::get(ctx.db.conn(), &row.path)?.unwrap().adopt_state;
+    assert_eq!(state, "adopted");
+    Ok(())
+}
+
+#[test]
 fn adopt_keep_original_leaves_the_file_in_place() -> Result<()> {
     let env = Env::new();
     env.write_skill(".agents/skills/pdf", "pdf");

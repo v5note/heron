@@ -203,7 +203,18 @@ pub fn execute(ctx: &mut Ctx, plan: &AdoptPlan, placement: AdoptPlacement) -> Re
         } else {
             "local"
         };
-        repo.init(&heron_vcs::SkillMeta::new(&slug, origin, "", "0.0.0"))?;
+        // A store directory without a repository also means "the previous adopt got this far and
+        // then failed", so the same call repairs it instead of failing on its leftovers.
+        if let Err(e) = repo.init(&heron_vcs::SkillMeta::new(&slug, origin, "", "0.0.0")) {
+            let mut msg = e.as_msg();
+            let detail = msg
+                .params
+                .get("detail")
+                .map(|d| format!("store copy at {} ({d})", dest.display()))
+                .unwrap_or_else(|| format!("store copy at {}", dest.display()));
+            msg.params.insert("detail".to_owned(), detail);
+            return Err(heron_core::HeronError::from(msg));
+        }
     }
 
     // 3) Register in the index.

@@ -106,10 +106,24 @@ fn adopt_paths(
         errors: vec![],
     };
     for plan in &plans {
-        let outcome = adopt::execute(&mut ctx, plan, placement).map_err(err)?;
-        report.adopted.extend(outcome.adopted);
-        report.skipped.extend(outcome.skipped);
-        report.errors.extend(outcome.errors);
+        // One failing path must not swallow the rest of the selection. Swallowing the error only
+        // ever showed up as "nothing happened": an empty toast and an unchanged list.
+        match adopt::execute(&mut ctx, plan, placement) {
+            Ok(outcome) => {
+                report.adopted.extend(outcome.adopted);
+                report.skipped.extend(outcome.skipped);
+                report.errors.extend(outcome.errors);
+            }
+            Err(e) => {
+                let msg = err(e);
+                report.errors.push(format!(
+                    "{}: {} {}",
+                    plan.detail.path,
+                    msg.code,
+                    msg.params.get("detail").map(String::as_str).unwrap_or_default()
+                ));
+            }
+        }
     }
     serde_json::to_value(&report).map_err(|e| Msg::new("E_INTERNAL").with("detail", e.to_string()))
 }

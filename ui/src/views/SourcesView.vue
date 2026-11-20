@@ -28,7 +28,8 @@ async function select(market: MarketInfo) {
   results.value = [];
   plans.value = {};
   if (market.capability === "guided") {
-    // Guided markets have no API: open the site for the user and let them paste a URL back.
+    // Guided markets have no API: open the site so the user can copy a skill URL back here.
+    window.open(market.base_url, "_blank", "noreferrer");
     store.toast("ok", t("sources.browseOnly"));
   }
 }
@@ -49,6 +50,8 @@ async function search() {
   }
 }
 
+// The paste box is a second entry point to install, not a "confirm" button: the label has to say
+// what happens, because nothing is being confirmed here.
 async function installFromPaste() {
   const input = pasted.value.trim();
   if (!input) return;
@@ -65,66 +68,69 @@ async function installFromPaste() {
 
 <template>
   <section>
-    <h1>{{ t("sources.title") }}</h1>
+    <h1>{{ t("nav.sources") }}</h1>
 
     <div class="markets">
       <button
         v-for="market in markets"
         :key="market.id"
+        class="btn"
         :class="{ primary: active === market.id }"
         @click="select(market)"
       >
         {{ market.name }}
-        <small>{{ t(`sources.${market.capability}`) }}</small>
-        <small v-if="!market.enabled_by_default"> · {{ t("sources.disabled") }}</small>
+        <small class="muted">{{ t(`sources.${market.capability}`) }}</small>
+        <small v-if="!market.enabled_by_default" class="muted"> · {{ t("sources.disabled") }}</small>
       </button>
     </div>
 
     <div class="toolbar">
-      <input v-model="query" :placeholder="t('sources.searchHint')" @keyup.enter="search" />
-      <button :disabled="!active || searching" @click="search">{{ t("search") }}</button>
+      <label class="search">
+        <input v-model="query" :placeholder="t('sources.searchHint')" @keyup.enter="search" />
+      </label>
+      <button class="btn" :disabled="!active || searching" @click="search">{{ t("common.search") }}</button>
     </div>
 
-    <table v-if="results.length">
-      <thead>
-        <tr>
-          <th>{{ t("sources.capability") }}</th>
-          <th>{{ t("library.slug") }}</th>
-          <th />
-        </tr>
-      </thead>
-      <tbody>
-        <tr v-for="item in results" :key="item.key">
-          <td>
-            <span class="pill" :data-kind="plans[item.key]?.kind">
-              {{ plans[item.key]?.kind === "git" ? t("sources.installable") : t("sources.browseOnly") }}
-            </span>
-          </td>
-          <td>
-            <code>{{ item.key }}</code>
-            <div class="muted">{{ item.summary }}</div>
-          </td>
-          <td><a :href="item.url" target="_blank" rel="noreferrer">{{ t("sources.openInBrowser") }}</a></td>
-        </tr>
-      </tbody>
-    </table>
+    <div v-if="results.length" class="card" style="padding: 0 4px">
+      <table class="table">
+        <thead>
+          <tr>
+            <th>{{ t("sources.capability") }}</th>
+            <th>{{ t("library.slug") }}</th>
+            <th />
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="item in results" :key="item.key">
+            <td>
+              <span class="chip" :class="plans[item.key]?.kind === 'git' ? 'good' : 'neutral'">
+                {{ plans[item.key]?.kind === "git" ? t("sources.installable") : t("sources.browseOnly") }}
+              </span>
+            </td>
+            <td>
+              <b>{{ item.key }}</b>
+              <div class="muted desc">{{ item.summary }}</div>
+            </td>
+            <td><a :href="item.url" target="_blank" rel="noreferrer">{{ t("sources.openInBrowser") }}</a></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
 
     <div class="paste">
       <input v-model="pasted" :placeholder="t('sources.pasteUrl')" @keyup.enter="installFromPaste" />
-      <button :disabled="!pasted.trim()" @click="installFromPaste">{{ t("common.confirm") }}</button>
+      <button class="btn primary" :disabled="!pasted.trim()" @click="installFromPaste">{{ t("sources.install") }}</button>
     </div>
   </section>
 </template>
 
 <style scoped>
-h1 { margin: 0 0 16px; font-size: 20px; }
+h1 { margin: 0 0 16px; font-size: 22px; font-weight: 700; letter-spacing: -0.01em; }
 .markets { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
-.markets small { color: var(--muted); margin-left: 6px; }
-.toolbar { display: flex; gap: 8px; margin-bottom: 16px; }
-.toolbar input { flex: 1; max-width: 420px; }
-.pill { font-size: 12px; padding: 2px 8px; border-radius: 999px; background: var(--surface-2); }
-.pill[data-kind="git"] { background: var(--accent-weak); color: var(--ok); }
-.muted { color: var(--muted); font-size: 12px; }
+.markets .btn small { font-weight: 400; }
+.toolbar { display: flex; gap: 8px; margin-bottom: 14px; }
+.search input { width: 320px; }
+.desc { font-size: 11.5px; margin-top: 2px; max-width: 460px; }
 .paste { margin-top: 24px; display: flex; gap: 8px; }
 .paste input { flex: 1; max-width: 520px; }
 </style>

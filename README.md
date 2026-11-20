@@ -65,6 +65,22 @@ before                          after
 
 > Always run `heron adopt --all --dry-run` first: it prints every step without touching the disk.
 
+### 4. Using the desktop app
+
+The app is organised as **collect → distribute → maintain**. It opens in **dark**; switch to light from the
+button at the bottom of the rail, or from Settings.
+
+| Where | What it is for |
+|---|---|
+| **Overview** | Only what needs deciding *now*: broken links, files to merge, upgrades, unmanaged skills. Otherwise a single "Nothing needs you right now" |
+| **My skills** | One row per skill, one column per client: filled dot = live, amber = shadowed, red = broken link, hollow = not scanned. Open a row for the detail drawer and project/unproject each target |
+| **Discover** | Skills on disk that Heron does not manage yet; selection shows a read-only dry run before anything moves |
+| **Sources & markets** | Five markets: two are searchable and installable, three are browse-only (paste the git URL back) |
+| **Updates** | Local changes, upstream updates and diverged skills are listed apart; conflicts open a file-by-file merge and retry automatically |
+| **Health** | Read-only checks, grouped by error/warning; nothing on disk is touched |
+| **Projects** | The directories clients actually read (targets) plus project targets, each switchable |
+| **Settings** | Theme (dark/light), language, app updates, client native-scan capability |
+
 ---
 
 ## Commands

@@ -1,7 +1,7 @@
 // Shared application state. Views read from here; every mutation goes through the Rust API.
 
 import { defineStore } from "pinia";
-import { api, type AppError } from "../api";
+import { api, type AdoptResult, type AppError } from "../api";
 import type {
   DetectedRow, DoctorReport, SkillRow, TargetRow, UpgradeCandidate, UpgradeOutcome,
   VisibilityReport,
@@ -14,10 +14,29 @@ export interface Toast {
   text: string;
 }
 
+export type Theme = "dark" | "light";
+export type VisibilityState = "visible" | "shadowed" | "not_scanned" | "broken" | "restart_required" | "unknown";
+
+const THEME_KEY = "heron.theme";
 let toastId = 0;
+
+function initialTheme(): Theme {
+  const saved = localStorage.getItem(THEME_KEY);
+  return saved === "light" || saved === "dark" ? saved : "dark";
+}
+
+/** Only counts rows the backend actually scanned; anything else stays "unknown". */
+function stateOf(row: VisibilityReport | undefined): VisibilityState {
+  const state = row?.visibility?.state;
+  if (state === "visible" || state === "shadowed" || state === "not_scanned" || state === "broken" || state === "restart_required") {
+    return state;
+  }
+  return "unknown";
+}
 
 export const useAppStore = defineStore("app", {
   state: () => ({
+    theme: initialTheme() as Theme,
     busy: false,
     ready: false,
     git: null as { version: string } | null,
@@ -34,18 +53,59 @@ export const useAppStore = defineStore("app", {
     unmanaged: (s) => s.detected.filter((d) => d.adopt_state === "candidate" && d.kind !== "nested-suspect"),
     nested: (s) => s.detected.filter((d) => d.kind === "nested-suspect"),
     upgradable: (s) => s.upgrades.filter((u) => u.state === "has_update" || u.state === "diverged"),
+    /** Projection state per skill slug, in target order: what the row-level matrix renders. */
+    visibilityBySlug(s): (slug: string) => { target: TargetRow; state: VisibilityState }[] {
+      return (slug: string) => {
+        const rows = s.visibility.filter((v) => v.slug === slug);
+        return s.targets
+          .filter((t) => t.enabled)
+          .map((t) => ({ target: t, state: stateOf(rows.find((r) => r.target_id === t.id)) }));
+      };
+    },
+    issueCount: (s) => (s.doctor ? s.doctor.issues.length : null),
+    brokenLinks(): number {
+      return this.visibility.filter((v) => v.visibility.state === "broken").length;
+    },
+    hiddenCount(): number {
+      return this.visibility.filter((v) => v.visibility.state === "shadowed").length;
+    },
   },
   actions: {
+    setTheme(theme: Theme) {
+      this.theme = theme;
+      document.documentElement.setAttribute("data-theme", theme);
+      localStorage.setItem(THEME_KEY, theme);
+    },
+    toggleTheme() {
+      this.setTheme(this.theme === "dark" ? "light" : "dark");
+    },
     toast(level: Toast["level"], text: string) {
       const toast = { id: ++toastId, level, text };
       this.toasts.push(toast);
-      setTimeout(() => (this.toasts = this.toasts.filter((t) => t.id !== toast.id)), 6000);
+      setTimeout(() => this.dismissToast(toast.id), 6000);
+    },
+    dismissToast(id: number) {
+      this.toasts = this.toasts.filter((t) => t.id !== id);
     },
     fail(error: unknown) {
-      const err = error as AppError;
-      this.toast("error", messageFor(err.code ?? "E_INTERNAL", err.params ?? {}));
+      // Anything that is not an AppError (a thrown JS exception, a rejected transport) still
+      // has to say *something* actionable: keep its text as the detail instead of dropping it.
+      const err = (error ?? {}) as Partial<AppError>;
+      const hasCode = typeof err.code === "string" && err.code.length > 0;
+      // Read `params` before adding the fallback: going through `err.params` would make Vue's
+      // reactive proxies track this property, and setting a missing one would create it on the
+      // source object. A fresh plain object also keeps identical failures collapsing below.
+      const params = err.params ?? {};
+      const detail = params.detail?.trim();
+      const fallbackDetail = error instanceof Error ? error.message : typeof error === "string" ? error : "";
+      const text = messageFor(hasCode ? err.code! : "E_INTERNAL", detail ? params : { ...params, detail: fallbackDetail });
+      // Identical failures inside one render pass (e.g. every list command when the Rust host is
+      // absent) collapse into one toast instead of stacking.
+      if (this.toasts.some((toast) => toast.text === text)) return;
+      this.toast("error", text);
     },
     async init() {
+      this.setTheme(this.theme);
       try {
         const pre = await api.preflight();
         this.git = pre.git;
@@ -57,7 +117,7 @@ export const useAppStore = defineStore("app", {
       await this.refreshAll();
     },
     async refreshAll() {
-      await Promise.all([this.loadSkills(), this.loadDetected(), this.loadTargets()]);
+      await Promise.all([this.loadSkills(), this.loadDetected(), this.loadTargets(), this.verify()]);
     },
     async loadSkills() {
       try {
@@ -80,6 +140,13 @@ export const useAppStore = defineStore("app", {
         this.fail(e);
       }
     },
+    async verify() {
+      try {
+        this.visibility = await api.verify();
+      } catch (e) {
+        this.fail(e);
+      }
+    },
     async scan() {
       this.busy = true;
       try {
@@ -92,24 +159,27 @@ export const useAppStore = defineStore("app", {
         this.busy = false;
       }
     },
+    /**
+     * Adopt the given paths and refresh everything adopt can change.
+     *
+     * The result is returned, not only toasted: a call that adopted nothing (every path failed,
+     * e.g. E_PERMISSION on the original, or no path matched a candidate row) must not look like a
+     * success. Callers decide how loudly to say so.
+     */
     async adopt(paths: string[], keepOriginal: boolean) {
       this.busy = true;
+      let result: AdoptResult = { adopted: [], skipped: [], errors: [] };
       try {
-        const result = await api.adopt(paths, false, keepOriginal);
-        this.toast("ok", `${result.adopted.length} adopted`);
+        result = await api.adopt(paths, false, keepOriginal);
+        if (result.adopted.length) this.toast("ok", messageFor("done", { n: String(result.adopted.length) }));
         await this.refreshAll();
+        if (result.adopted.length) await this.loadTargets();
       } catch (e) {
         this.fail(e);
       } finally {
         this.busy = false;
       }
-    },
-    async verify() {
-      try {
-        this.visibility = await api.verify();
-      } catch (e) {
-        this.fail(e);
-      }
+      return result;
     },
     async loadUpgrades() {
       this.busy = true;
@@ -129,7 +199,7 @@ export const useAppStore = defineStore("app", {
         const conflicts = outcomes.filter((o) => o.result === "conflicts").length;
         this.toast(conflicts ? "warn" : "ok", `${outcomes.length - conflicts} upgraded, ${conflicts} conflicts`);
         await this.loadUpgrades();
-        await this.loadSkills();
+        await Promise.all([this.loadSkills(), this.verify()]);
       } catch (e) {
         this.fail(e);
       } finally {

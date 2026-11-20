@@ -153,33 +153,36 @@ input[type=checkbox]{-webkit-appearance:none;appearance:none}
 </style>
 <style>
 /* ---- DIRECTION 3 · Swiss dense ---- */
-.s3{--bg:#F7F7F5;--fg:#111110;--bg2:#E6E6E2;--line:#D3D3CE;--line2:#BDBDB7;--dim:#6B6B66;--faint:#9A9A94;--lt:#FDFDFC;--mark:#E8482B;
- font-family:Inter,-apple-system,"PingFang SC","Hiragino Sans GB",sans-serif;color:var(--fg);font-size:13.5px;letter-spacing:-.005em}
-.s3[data-theme="dark"]{--bg:#0B0B0C;--fg:#F0F0ED;--bg2:#17171A;--line:#26262B;--line2:#3A3A40;--dim:#9A9AA2;--faint:#6A6A72;--lt:#121215;--mark:#FF6A4D;color-scheme:dark}
+.s3{--bg:#F7F7F5;--fg:#111110;--bg2:#E6E6E2;--line:#D3D3CE;--line2:#BDBDB7;--dim:#5C5C57;--faint:#5C5C57;--lt:#FDFDFC;--mark:#CC3A20;
+ font-family:Inter,-apple-system,"PingFang SC","Hiragino Sans GB",sans-serif;color:var(--fg);font-size:14px;letter-spacing:-.005em}
+.s3[data-theme="dark"]{--bg:#0B0B0C;--fg:#F0F0ED;--bg2:#17171A;--line:#26262B;--line2:#3A3A40;--dim:#B4B4BC;--faint:#A8A8B0;--lt:#121215;--mark:#FF7A5E;color-scheme:dark}
 .s3 *{box-sizing:border-box}
 .s3 :where(button){font:inherit;border:0;background:none;padding:0;color:inherit;cursor:pointer;line-height:normal}
-.s3 .mono{font-family:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,monospace;font-size:10.5px;letter-spacing:.02em}
-.s3 .lbl{font-family:"JetBrains Mono",monospace;font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--faint)}
+.s3 .mono{font-family:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;letter-spacing:.02em}
+.s3 .lbl{font-size:12px;font-weight:500;letter-spacing:.02em;color:var(--dim)}
 .s3 .num{font-family:Inter;font-variant-numeric:tabular-nums;letter-spacing:-.045em;font-weight:600}
-.s3 .info{display:grid;grid-template-columns:52px minmax(0,1fr);min-height:100vh;background:var(--bg)}
+.s3 .info{display:grid;grid-template-columns:104px minmax(0,1fr);min-height:100vh;background:var(--bg)}
 .s3 .iband{background:var(--bg2);border-right:1px solid var(--line);position:sticky;top:0;height:100vh;display:flex;flex-direction:column;align-items:center;padding:14px 0;gap:4px}
 .s3 .ilogo{width:32px;height:32px;display:grid;place-items:center;background:var(--fg);color:var(--bg);margin-bottom:10px}
 .s3 .ilogo svg{width:18px;height:18px}
 .s3 .inav{display:flex;flex-direction:column;align-items:center;width:100%;gap:2px}
-.s3 .inav button{width:100%;padding:7px 0 6px;display:flex;flex-direction:column;align-items:center;gap:4px;color:var(--dim);border-left:2px solid transparent}
+.s3 .inav button{width:100%;padding:7px 2px 6px;display:grid;grid-template-columns:18px 1fr;align-items:center;gap:5px;color:var(--dim);border-left:2px solid transparent;text-align:left}
 .s3 .inav button svg{width:15px;height:15px;stroke:currentColor;fill:none;stroke-width:1.6}
-.s3 .inav button span{font-family:"JetBrains Mono",monospace;font-size:8px;letter-spacing:.06em}
+.s3 .inav .navno{font-size:12px;color:var(--faint);text-align:center;font-variant-numeric:tabular-nums}
+.s3 .inav .navlb{font-size:12px;line-height:1.15;white-space:nowrap;letter-spacing:0}
 .s3 .inav button:hover{color:var(--fg)}
 .s3 .inav button.on{color:var(--fg);border-left-color:var(--mark);background:var(--bg)}
+.s3 .inav button svg{width:15px;height:15px;stroke:currentColor;fill:none;stroke-width:1.6;flex:none}
+.s3 .figure{opacity:1}
 .s3 .iband .sp{flex:1}
 .s3 .itg{width:30px;height:30px;border:1px solid var(--line2);display:grid;place-items:center;color:var(--dim)}
 .s3 .itg svg{width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:1.6}
 .s3 .main{display:flex;flex-direction:column;min-width:0}
 .s3 .mast{display:flex;align-items:flex-end;gap:15px;padding:14px 26px 12px;border-bottom:1px solid var(--line)}
 .s3 .mast .ht{font-weight:600;font-size:20px;letter-spacing:-.02em;margin:0;white-space:nowrap}
-.s3 .mast .sub{color:var(--dim);font-size:12px;padding-bottom:1px;line-height:1.4}
+.s3 .mast .sub{color:var(--dim);font-size:14px;padding-bottom:1px;line-height:1.4}
 .s3 .mast .sp{flex:1}
-.s3 .ticker{display:flex;align-items:center;gap:14px;padding:7px 26px;border-bottom:1px solid var(--line);font-family:"JetBrains Mono",monospace;font-size:10.5px;color:var(--dim);flex-wrap:wrap;background:var(--lt)}
+.s3 .ticker{display:flex;align-items:center;gap:14px;padding:7px 26px;border-bottom:1px solid var(--line);font-size:12px;color:var(--dim);flex-wrap:wrap;background:var(--lt)}
 .s3 .ticker b{color:var(--fg);font-weight:500}
 .s3 .ticker .sep{width:1px;height:10px;background:var(--line2)}
 .s3 .ticker .sp{flex:1}
@@ -190,24 +193,24 @@ input[type=checkbox]{-webkit-appearance:none;appearance:none}
 .s3 .s4{grid-column:span 4}.s3 .s3{grid-column:span 3}.s3 .s6{grid-column:span 6}.s3 .s9{grid-column:span 9}.s3 .s12{grid-column:span 12}.s3 .s8{grid-column:span 8}
 .s3 .c+.c{border-left:1px solid var(--line)}
 .s3 .c .cap{display:flex;align-items:baseline;gap:8px;margin-bottom:10px}
-.s3 .c .cap .n{margin-left:auto;font-family:"JetBrains Mono",monospace;font-size:10px;color:var(--faint)}
+.s3 .c .cap .n{margin-left:auto;font-size:12px;color:var(--faint);font-variant-numeric:tabular-nums}
 .s3 .figure{font-size:44px;line-height:1;letter-spacing:-.05em;font-weight:600;font-variant-numeric:tabular-nums}
 .s3 .figure.small{font-size:26px}
 .s3 .unit{font-size:12px;color:var(--dim);margin-left:6px;font-weight:400;letter-spacing:0;font-style:normal}
-.s3 .desc{color:var(--dim);font-size:12px;line-height:1.55;margin-top:10px}
+.s3 .desc{color:var(--dim);font-size:14px;line-height:1.55;margin-top:10px}
 .s3 .stage{list-style:none;margin:0;padding:0}
-.s3 .stage li{display:grid;grid-template-columns:20px 56px 1fr auto;gap:10px;align-items:baseline;padding:7px 0;border-bottom:1px dotted var(--line2);font-size:12.5px}
+.s3 .stage li{display:grid;grid-template-columns:22px 60px 1fr auto;gap:10px;align-items:baseline;padding:8px 0;border-bottom:1px dotted var(--line2);font-size:14px}
 .s3 .stage li:last-child{border-bottom:0}
-.s3 .stage .i{font-family:"JetBrains Mono",monospace;font-size:10px;color:var(--faint)}
-.s3 .stage .k{color:var(--dim);font-size:11.5px}
+.s3 .stage .i{font-size:12px;color:var(--faint);font-variant-numeric:tabular-nums}
+.s3 .stage .k{color:var(--dim);font-size:13px}
 .s3 .stage .v{text-align:right;font-variant-numeric:tabular-nums}
 .s3 .stage li.warn .v{color:var(--mark)}
 .s3 .bar{height:6px;background:var(--bg2);border:1px solid var(--line2);margin-top:8px;position:relative}
 .s3 .bar i{position:absolute;left:0;top:0;bottom:0;background:var(--fg)}
 .s3 .bar.warn i{background:var(--mark)}
 .s3 table.dt{width:100%;border-collapse:collapse}
-.s3 table.dt th{font-family:"JetBrains Mono",monospace;font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:var(--faint);font-weight:400;text-align:left;padding:0 8px 7px;border-bottom:1px solid var(--line2);white-space:nowrap}
-.s3 table.dt td{padding:8px;border-bottom:1px solid var(--line);font-size:12.5px;vertical-align:middle}
+.s3 table.dt th{font-size:12px;font-weight:500;color:var(--dim);font-weight:400;text-align:left;padding:0 8px 7px;border-bottom:1px solid var(--line2);white-space:nowrap}
+.s3 table.dt td{padding:9px 8px;border-bottom:1px solid var(--line);font-size:14px;vertical-align:middle}
 .s3 table.dt tbody tr:hover td{background:var(--lt)}
 .s3 table.dt tr.sel td{background:color-mix(in srgb,var(--mark) 7%,transparent)}
 .s3 .mini{display:flex;gap:3px;align-items:center}
@@ -225,7 +228,7 @@ input[type=checkbox]{-webkit-appearance:none;appearance:none}
 .s3 .btn.mark{background:var(--mark);border-color:var(--mark);color:#fff}
 .s3 .btn:disabled{opacity:.4}
 .s3 .btn.gh{color:var(--dim)}
-.s3 .tag{display:inline-flex;align-items:baseline;gap:5px;font-family:"JetBrains Mono",monospace;font-size:10px;padding:1px 5px;border:1px solid var(--line2);color:var(--dim);white-space:nowrap}
+.s3 .tag{display:inline-flex;align-items:baseline;gap:5px;font-size:12px;padding:1px 5px;border:1px solid var(--line2);color:var(--dim);white-space:nowrap}
 .s3 .tag::before{content:"";width:4px;height:4px;background:currentColor;transform:translateY(-1px)}
 .s3 .tag.ok{color:var(--fg);border-color:var(--line2)}
 .s3 .tag.warn{color:var(--mark);border-color:color-mix(in srgb,var(--mark) 50%,transparent)}
@@ -242,12 +245,12 @@ input[type=checkbox]{-webkit-appearance:none;appearance:none}
 .s3 .seg{display:inline-flex;border:1px solid var(--line2)}
 .s3 .seg button{height:25px;padding:0 9px;font-size:11.5px;color:var(--dim)}
 .s3 .seg button.on{background:var(--fg);color:var(--bg)}
-.s3 .fld{height:29px;border:1px solid var(--line2);padding:0 9px;background:var(--bg);color:var(--fg);font-size:12.5px;outline:none;min-width:0}
+.s3 .fld{height:29px;border:1px solid var(--line2);padding:0 9px;background:var(--bg);color:var(--fg);font-size:14px;outline:none;min-width:0}
 .s3 .fld:focus{border-color:var(--fg)}
 .s3 .sw{width:28px;height:15px;border:1px solid var(--line2);position:relative;cursor:pointer;flex:none}
 .s3 .sw::after{content:"";position:absolute;top:2px;left:2px;width:9px;height:9px;background:var(--dim);transition:transform .12s}
 .s3 .sw.on{border-color:var(--mark)} .s3 .sw.on::after{transform:translateX(13px);background:var(--mark)}
-.s3 .logs{font-family:"JetBrains Mono",monospace;font-size:11px;line-height:1.9;color:var(--dim)}
+.s3 .logs{font-size:14px;line-height:1.9;color:var(--dim)}
 .s3 .logs b{color:var(--fg);font-weight:500}
 .s3 .mnav{display:none}
 @media (max-width:1000px){
@@ -259,7 +262,7 @@ input[type=checkbox]{-webkit-appearance:none;appearance:none}
  .s3 .s4,.s3 .s3,.s3 .s6,.s3 .s9,.s3 .s8{grid-column:span 12}
  .s3 .c+.c{border-left:0}
  .s3 .mnav{display:flex;position:fixed;left:0;right:0;bottom:0;background:var(--bg2);border-top:1px solid var(--line2);z-index:20;justify-content:space-around;padding:6px 0 8px}
- .s3 .mnav button{display:flex;flex-direction:column;align-items:center;gap:3px;font-family:"JetBrains Mono",monospace;font-size:8.5px;color:var(--dim)}
+ .s3 .mnav button{display:flex;flex-direction:column;align-items:center;gap:3px;font-size:11px;color:var(--dim)}
  .s3 .mnav button.on{color:var(--fg)} .s3 .mnav svg{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:1.6}
 }
 </style>
@@ -271,15 +274,15 @@ input[type=checkbox]{-webkit-appearance:none;appearance:none}
   <aside class="iband">
     <div class="ilogo"><span v-html="ICON.overview"></span></div>
     <nav class="inav">
-      <button v-for="it in NAV" :key="it.id" :class="{on:view===it.id}" @click="go(it.id)" :title="it.label"><span v-html="ICON[it.icon]"></span><span v-text="it.code"></span></button>
+      <button v-for="it in NAV" :key="it.id" :class="{on:view===it.id}" @click="go(it.id)" :title="it.label"><span class="navlb" v-text="it.label"></span></button>
     </nav>
     <div class="sp"></div>
-    <button class="itg" @click="toggleTheme" :title="theme==='dark'?'浅色':'深色'"><span v-html="ICON[theme==='dark'?'sun':'moon']"></span></button>
+    <button class="itg" @click="toggleTheme" :title="theme==='dark'?'切到浅色':'切到深色'"><span v-html="ICON[theme==='dark'?'sun':'moon']"></span></button>
   </aside>
 
   <div class="main">
     <header class="mast">
-      <h1 class="ht"><span class="mono" style="color:var(--faint);font-weight:400;margin-right:10px" v-text="code"></span><span v-text="heading"></span></h1>
+      <h1 class="ht"><span class="mono" style="color:var(--dim);font-weight:400;margin-right:10px;font-size:14px" v-text="code"></span><span v-text="heading"></span></h1>
       <div class="sub" v-text="lead"></div>
       <span class="sp"></span>
       <div style="display:flex;gap:6px">
@@ -350,7 +353,7 @@ input[type=checkbox]{-webkit-appearance:none;appearance:none}
               <tr v-for="s in visibleSkills" :key="s.slug" :class="{sel:selected.includes(s.slug)}" @click="drawer=s.slug" style="cursor:pointer">
                 <td @click.stop><input type="checkbox" class="cb" :checked="selected.includes(s.slug)" @change="toggleSel(s.slug)"></td>
                 <td><b style="font-weight:600" v-text="s.slug"></b></td>
-                <td style="color:var(--dim);max-width:320px" v-text="s.desc"></td>
+                <td style="color:var(--dim);max-width:320px;font-size:14px" v-text="s.desc"></td>
                 <td class="mono" v-text="s.ver"></td>
                 <td class="mono" v-text="s.origin"></td>
                 <td><div class="mini" :title="'claude ' + s.vis.claude + ' / codex ' + s.vis.codex + ' / cursor ' + s.vis.cursor + ' / opencode ' + s.vis.opencode"><i :class="cls(s.vis.claude)"></i><i :class="cls(s.vis.codex)"></i><i :class="cls(s.vis.cursor)"></i><i :class="cls(s.vis.opencode)"></i></div></td>
@@ -380,7 +383,7 @@ input[type=checkbox]{-webkit-appearance:none;appearance:none}
         </div>
         <div class="c s4">
           <div class="cap"><span class="lbl">收拢预览</span><span class="n">dry-run</span></div>
-          <pre class="pre">$ heron adopt --dry-run
+          <pre class="pre" style="font-size:12px">$ heron adopt --dry-run
 → store   副本 × 4（去重 1）
 → link    原位置 → store
 → backup  backup/2026-11-20
@@ -402,7 +405,7 @@ input[type=checkbox]{-webkit-appearance:none;appearance:none}
                 <td><b style="font-weight:600" v-text="m.name"></b></td>
                 <td><span class="tag" :class="m.cap==='indexed'?'ok':'no'" v-text="m.cap==='indexed'?'可搜索 · 可安装':'仅浏览 · 粘贴地址'"></span></td>
                 <td class="mono" v-text="m.on?'开启':'关闭'"></td>
-                <td class="mono" style="color:var(--dim)" v-text="m.cap==='indexed'?'api':'browser'"></td>
+                <td class="mono" style="color:var(--dim);font-size:14px" v-text="m.cap==='indexed'?'api':'browser'"></td>
               </tr>
             </tbody>
           </table>
@@ -453,7 +456,7 @@ input[type=checkbox]{-webkit-appearance:none;appearance:none}
                 <td><b style="font-weight:600" v-text="u.slug"></b></td>
                 <td><span class="tag" :class="['diverged','local_modified'].includes(u.state)?'warn':'ok'" v-text="UP_LABEL[u.state]"></span></td>
                 <td class="mono" v-text="u.installed"></td><td class="mono" v-text="u.baseline"></td><td class="mono" v-text="u.latest||'—'"></td>
-                <td class="mono" style="color:var(--dim)" v-text="u.source||'—'"></td>
+                <td class="mono" style="color:var(--dim);font-size:14px" v-text="u.source||'—'"></td>
                 <td style="text-align:right"><button class="btn" style="height:23px" v-if="u.state==='diverged'" @click="dialog='conflict'">合并</button><button class="btn dark" style="height:23px" v-else-if="u.state==='has_update'">升级</button><button class="btn gh" style="height:23px" v-else-if="u.state==='local_modified'">比较</button></td>
               </tr>
             </tbody>
@@ -471,7 +474,7 @@ input[type=checkbox]{-webkit-appearance:none;appearance:none}
           <div class="cap"><span class="lbl">问题清单</span><span class="n">只读</span></div>
           <table class="dt">
             <thead><tr><th>级别</th><th>检查项</th><th>对象</th><th>建议</th><th></th></tr></thead>
-            <tbody><tr v-for="i in ISSUES" :key="i.id+i.subject"><td><span class="tag" :class="i.sev==='error'?'warn':'ok'" v-text="i.label"></span></td><td class="mono" v-text="i.id"></td><td class="mono" v-text="i.subject"></td><td style="color:var(--dim)" v-text="i.actions.join(' / ')"></td><td style="text-align:right"><button class="btn" style="height:23px" @click="say('已按建议修复')">修复</button></td></tr></tbody>
+            <tbody><tr v-for="i in ISSUES" :key="i.id+i.subject"><td><span class="tag" :class="i.sev==='error'?'warn':'ok'" v-text="i.label"></span></td><td class="mono" v-text="i.id"></td><td class="mono" v-text="i.subject"></td><td style="color:var(--dim);font-size:14px" v-text="i.actions.join(' / ')"></td><td style="text-align:right"><button class="btn" style="height:23px" @click="say('已按建议修复')">修复</button></td></tr></tbody>
           </table>
         </div>
       </div>

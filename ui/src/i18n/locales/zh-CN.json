@@ -1,7 +1,8 @@
 {
   "app": {
     "title": "Heron 苍鹭",
-    "subtitle": "本地 Skill 管理器"
+    "subtitle": "本地 Skill 管理器",
+    "short": "苍鹭"
   },
   "nav": {
     "overview": "概览",
@@ -11,7 +12,12 @@
     "projects": "项目",
     "upgrades": "更新",
     "doctor": "体检",
-    "settings": "设置"
+    "settings": "设置",
+    "group": {
+      "workbench": "工作台",
+      "pipeline": "收集 · 分发",
+      "maintain": "维护"
+    }
   },
   "common": {
     "refresh": "刷新",
@@ -31,6 +37,7 @@
     "close": "关闭",
     "applied": "已生效",
     "skipped": "已跳过",
+    "done": "{n} 处已收拢",
     "error": "出错了"
   },
   "overview": {
@@ -43,7 +50,34 @@
     "never": "从未",
     "quickScan": "扫描本机",
     "quickDoctor": "运行体检",
-    "hint": "先扫描，再挑出要收拢的 Skill。"
+    "hint": "先扫描，再挑出要收拢的 Skill。",
+    "lead": "收拢 → 分发 → 升级：下面只列现在真正需要你决定的事。",
+    "next": {
+      "title": "接下来",
+      "count": "{n} 项",
+      "clear": "没有待处理事项",
+      "broken": "{n} 处投影是坏链，客户端不会加载",
+      "conflict": "{n} 个 Skill 本地与上游都改过，需要逐文件合并",
+      "upgrade": "{n} 个 Skill 上游有新版本",
+      "unmanaged": "{n} 处 Skill 尚未纳管",
+      "frontmatter": "{n} 处 frontmatter 有问题",
+      "tone": {
+        "broken": "需修复",
+        "shadowed": "待处理"
+      }
+    },
+    "pipeline": {
+      "title": "流水线",
+      "targets": "启用落点",
+      "live": "生效中的投影",
+      "hidden": "被压制 / 坏链",
+      "outOf": "共 {n} 处投影"
+    },
+    "targets": {
+      "title": "落点状态",
+      "hint": "每个客户端真正读取的目录",
+      "state": "状态"
+    }
   },
   "library": {
     "title": "我的 Skill",
@@ -53,7 +87,13 @@
     "targets": "启用位置",
     "none": "还没有纳管的 Skill。去“发现”页收拢一些吧。",
     "enabled": "已启用",
-    "notEnabled": "未启用"
+    "notEnabled": "未启用",
+    "lead": "一份实体，多个落点：每个客户端看到的是它的链接。",
+    "searchHint": "搜索名称或描述",
+    "filterAll": "全部 {n}",
+    "filterIssues": "有问题",
+    "projectTo": "投影到 {target}",
+    "legend": "圆点：实心=生效中，橙色=被压制，红色=坏链，空心=未被扫描。"
   },
   "discover": {
     "title": "发现",
@@ -66,7 +106,28 @@
     "adoptSelected": "收拢所选",
     "keepOriginal": "保留原位置",
     "nestedWarning": "病态嵌套只报告，不会自动改动（见设计 D8）。",
-    "needsAttention": "frontmatter 有问题"
+    "needsAttention": "frontmatter 有问题",
+    "attention": "Frontmatter",
+    "kinds": {
+      "skill": "Skill",
+      "legacy-command": "旧命令",
+      "nested-suspect": "病态嵌套"
+    },
+    "nestedCount": "{n} 处",
+    "previewTitle": "收拢预览（dry-run）",
+    "previewHint": "先预览：这一步只读，确认后才会移动文件，并先备份。",
+    "fromStore": "来自存储",
+    "collecting": "正在检查",
+    "sameContent": "与 {slug} 内容相同",
+    "adoptFailed": "{n} 处收拢失败：{detail}",
+    "adoptedNothing": "选中的 {n} 处都没有被收拢（文件可能已被移动或改写），请重新扫描后再试。",
+    "selected": "已选路径",
+    "willMove": "本次会移动",
+    "keepOriginalNote": "保留原位置：{on}",
+    "storeDest": "存储区 / {slug}",
+    "noSlug": "无法识别为 Skill，将跳过",
+    "backupNote": "执行前先备份到 backups/，失败不会改动原文件。",
+    "confirmAdopt": "确认收拢"
   },
   "sources": {
     "title": "来源与市场",
@@ -78,13 +139,18 @@
     "installable": "可安装",
     "browseOnly": "需在浏览器中查看",
     "openInBrowser": "在浏览器打开",
-    "pasteUrl": "粘贴 Git 地址后回车安装"
+    "pasteUrl": "粘贴 Git 地址后回车安装",
+    "install": "安装"
   },
   "projects": {
     "title": "项目",
     "root": "项目根",
     "clients": "客户端",
-    "register": "登记所选"
+    "register": "登记所选",
+    "default": "默认",
+    "lead": "落点就是客户端真正读取的目录；项目落点只对该项目生效。",
+    "targets": "落点",
+    "projects": "项目"
   },
   "upgrades": {
     "title": "更新",
@@ -99,16 +165,36 @@
       "has_update": "有更新",
       "pinned": "已锁定",
       "local_modified": "有本地改动",
-      "diverged": "本地与上游都有改动",
+      "diverged": "本地与上游都改过",
       "upstream_gone": "上游已消失",
       "not_tracked": "未追踪来源"
-    }
+    },
+    "lead": "三方合并：你的改动和上游的改动都保留；合不上的地方由你逐文件决定。",
+    "baseline": "安装时",
+    "latest": "上游",
+    "source": "来源",
+    "merge": "逐文件合并"
   },
   "doctor": {
     "title": "体检",
     "noIssues": "没有发现问题",
     "run": "运行体检",
-    "actions": "建议操作"
+    "actions": "建议操作",
+    "lead": "只读检查：重复、坏链、病态嵌套、来源丢失。体检不会改动任何文件。",
+    "severityLabel": "级别",
+    "issue": "检查项",
+    "severity": {
+      "error": "错误",
+      "warn": "警告",
+      "info": "提示"
+    },
+    "issues": {
+      "broken-link": "坏链",
+      "nested-suspect": "病态嵌套",
+      "frontmatter-invalid": "frontmatter 无效",
+      "store-missing": "存储缺失",
+      "duplicate-content": "内容重复"
+    }
   },
   "settings": {
     "title": "设置",
@@ -128,7 +214,22 @@
     "updateAvailable": "发现新版本",
     "installUpdate": "下载并重启",
     "upToDate": "已是最新版本",
-    "updateFailed": "检查更新失败（本地开发环境无更新源属正常）"
+    "updateFailed": "检查更新失败（本地开发环境无更新源属正常）",
+    "lead": "主题、语言、应用更新与客户端能力，改动立即生效。",
+    "themeDark": "深色",
+    "themeLight": "浅色",
+    "platform": "平台",
+    "system": "系统",
+    "appearance": "外观与语言",
+    "capabilityState": {
+      "supported": "支持（需显式开启）",
+      "unsupported": "不支持"
+    },
+    "themeNote": "主题立即生效，下次启动沿用上次选择。",
+    "themeStatus": {
+      "dark": "深色",
+      "light": "浅色"
+    }
   },
   "errors": {
     "E_GIT_MISSING": "未检测到 git，请先安装",
@@ -141,7 +242,8 @@
     "E_MARKET_UNAVAILABLE": "市场暂时不可达",
     "E_SAFETY_REFUSED": "为安全起见拒绝了该操作",
     "E_PERMISSION": "没有权限访问该路径",
-    "E_INTERNAL": "内部错误"
+    "E_INTERNAL": "内部错误",
+    "E_INTERNAL_DETAIL": "内部错误：{detail}"
   },
   "visibility": {
     "visible": "生效中",
@@ -159,6 +261,11 @@
     "takeOurs": "采用本地",
     "takeTheirs": "采用上游",
     "saveAndRetry": "保存并重试升级",
-    "resolved": "冲突已解决，已重新升级"
+    "resolved": "冲突已解决，已重新升级",
+    "hint": "{n} 个文件：每个文件都要你决定，「保存并重试」会提交选择并重新跑一次升级。"
+  },
+  "shell": {
+    "scan": "扫描本机",
+    "pending": "{n} 待处理"
   }
 }

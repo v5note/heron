@@ -1,7 +1,8 @@
 {
   "app": {
     "title": "Heron",
-    "subtitle": "Local skill manager"
+    "subtitle": "Local skill manager",
+    "short": "Heron"
   },
   "nav": {
     "overview": "Overview",
@@ -11,7 +12,12 @@
     "projects": "Projects",
     "upgrades": "Updates",
     "doctor": "Health",
-    "settings": "Settings"
+    "settings": "Settings",
+    "group": {
+      "workbench": "Workbench",
+      "pipeline": "Collect · Distribute",
+      "maintain": "Maintain"
+    }
   },
   "common": {
     "refresh": "Refresh",
@@ -31,6 +37,7 @@
     "close": "Close",
     "applied": "Applied",
     "skipped": "Skipped",
+    "done": "{n} adopted",
     "error": "Something went wrong"
   },
   "overview": {
@@ -43,17 +50,50 @@
     "never": "never",
     "quickScan": "Scan this machine",
     "quickDoctor": "Run health check",
-    "hint": "Scan first, then pick the skills you want to own."
+    "hint": "Scan first, then pick the skills you want to own.",
+    "lead": "Adopt → project → upgrade. This page only lists what needs deciding now.",
+    "next": {
+      "title": "Next up",
+      "count": "{n}",
+      "clear": "Nothing needs you right now",
+      "broken": "{n} projections are broken links — clients will not load them",
+      "conflict": "{n} skills changed both locally and upstream — file-by-file merge needed",
+      "upgrade": "{n} skills have a newer upstream",
+      "unmanaged": "{n} skills on disk are not managed yet",
+      "frontmatter": "{n} skills have an invalid frontmatter",
+      "tone": {
+        "broken": "Blocked",
+        "shadowed": "Pending"
+      }
+    },
+    "pipeline": {
+      "title": "Pipeline",
+      "targets": "Enabled targets",
+      "live": "Live projections",
+      "hidden": "Shadowed / broken",
+      "outOf": "of {n} projections"
+    },
+    "targets": {
+      "title": "Target state",
+      "hint": "The directories clients actually read",
+      "state": "State"
+    }
   },
   "library": {
     "title": "My skills",
     "slug": "Name",
-    "origin": "Origin",
+    "origin": "Source",
     "status": "Status",
     "targets": "Enabled in",
     "none": "No managed skills yet. Adopt some from Discover.",
     "enabled": "enabled",
-    "notEnabled": "not enabled"
+    "notEnabled": "not enabled",
+    "lead": "One entity, many places: every client sees a link to it.",
+    "searchHint": "Search name or description",
+    "filterAll": "All {n}",
+    "filterIssues": "With issues",
+    "projectTo": "Project to {target}",
+    "legend": "Dots: filled = live, amber = shadowed, red = broken link, hollow = not scanned."
   },
   "discover": {
     "title": "Discover",
@@ -65,8 +105,29 @@
     "selectAll": "Select all",
     "adoptSelected": "Adopt selected",
     "keepOriginal": "Keep original in place",
-    "nestedWarning": "Nested skills are reported only, never modified (design D8).",
-    "needsAttention": "frontmatter problem"
+    "nestedWarning": "Nested suspects are reported only, never edited automatically (design D8).",
+    "needsAttention": "frontmatter problem",
+    "attention": "Frontmatter",
+    "kinds": {
+      "skill": "Skill",
+      "legacy-command": "Legacy command",
+      "nested-suspect": "Nested suspect"
+    },
+    "nestedCount": "{n}",
+    "previewTitle": "Adoption preview (dry run)",
+    "previewHint": "Preview first: this step only reads. Files move after you confirm, and only after a backup.",
+    "fromStore": "from the store",
+    "collecting": "Checking",
+    "sameContent": "same content as {slug}",
+    "adoptFailed": "{n} failed to adopt: {detail}",
+    "adoptedNothing": "None of the {n} selected paths were adopted (they may have moved or changed). Scan again and retry.",
+    "selected": "Selected paths",
+    "willMove": "Will move",
+    "keepOriginalNote": "Keep original in place: {on}",
+    "storeDest": "store / {slug}",
+    "noSlug": "Not recognised as a skill; will be skipped",
+    "backupNote": "A backup is taken before anything moves; a failure leaves the originals untouched.",
+    "confirmAdopt": "Adopt now"
   },
   "sources": {
     "title": "Sources & markets",
@@ -78,13 +139,18 @@
     "installable": "installable",
     "browseOnly": "open in browser",
     "openInBrowser": "Open in browser",
-    "pasteUrl": "Paste a git URL and press Enter"
+    "pasteUrl": "Paste a git URL and press Enter",
+    "install": "Install"
   },
   "projects": {
     "title": "Projects",
     "root": "Project root",
     "clients": "Clients",
-    "register": "Register selected"
+    "register": "Register selected",
+    "default": "default",
+    "lead": "A target is the directory a client actually reads; project targets only apply to that project.",
+    "targets": "Targets",
+    "projects": "Projects"
   },
   "upgrades": {
     "title": "Updates",
@@ -99,16 +165,36 @@
       "has_update": "update available",
       "pinned": "pinned",
       "local_modified": "local changes",
-      "diverged": "local + upstream changes",
+      "diverged": "Changed locally and upstream",
       "upstream_gone": "upstream gone",
       "not_tracked": "not tracked"
-    }
+    },
+    "lead": "Three-way merge: local and upstream changes are both kept; whatever cannot merge waits for your decision, file by file.",
+    "baseline": "Installed",
+    "latest": "Upstream",
+    "source": "Source",
+    "merge": "Merge files"
   },
   "doctor": {
     "title": "Health",
     "noIssues": "No issues found",
     "run": "Run health check",
-    "actions": "Suggested actions"
+    "actions": "Suggested actions",
+    "lead": "Read-only checks: duplicates, broken links, nested suspects, lost sources. Nothing on disk is changed.",
+    "severityLabel": "Level",
+    "issue": "Check",
+    "severity": {
+      "error": "Error",
+      "warn": "Warning",
+      "info": "Info"
+    },
+    "issues": {
+      "broken-link": "Broken link",
+      "nested-suspect": "Nested suspect",
+      "frontmatter-invalid": "Invalid frontmatter",
+      "store-missing": "Store missing",
+      "duplicate-content": "Duplicate content"
+    }
   },
   "settings": {
     "title": "Settings",
@@ -128,7 +214,22 @@
     "updateAvailable": "New version",
     "installUpdate": "Download and restart",
     "upToDate": "You are up to date",
-    "updateFailed": "Update check failed (expected in local dev builds)"
+    "updateFailed": "Update check failed (expected in local dev builds)",
+    "lead": "Theme, language, app updates and client capabilities — changes apply immediately.",
+    "themeDark": "Dark",
+    "themeLight": "Light",
+    "platform": "Platform",
+    "system": "System",
+    "appearance": "Appearance & language",
+    "capabilityState": {
+      "supported": "supported (opt-in)",
+      "unsupported": "not supported"
+    },
+    "themeNote": "The theme applies immediately and is remembered for next launch.",
+    "themeStatus": {
+      "dark": "Dark",
+      "light": "Light"
+    }
   },
   "errors": {
     "E_GIT_MISSING": "git was not found; please install it",
@@ -141,7 +242,8 @@
     "E_MARKET_UNAVAILABLE": "The market is unreachable right now",
     "E_SAFETY_REFUSED": "Refused for safety",
     "E_PERMISSION": "No permission for that path",
-    "E_INTERNAL": "Internal error"
+    "E_INTERNAL": "Internal error",
+    "E_INTERNAL_DETAIL": "Internal error: {detail}"
   },
   "visibility": {
     "visible": "live",
@@ -159,6 +261,11 @@
     "takeOurs": "Take local",
     "takeTheirs": "Take upstream",
     "saveAndRetry": "Save & retry upgrade",
-    "resolved": "Conflicts resolved and upgrade retried"
+    "resolved": "Conflicts resolved and upgrade retried",
+    "hint": "{n} files: decide each one; “Save and retry” commits your choices and re-runs the upgrade."
+  },
+  "shell": {
+    "scan": "Scan this machine",
+    "pending": "{n} pending"
   }
 }

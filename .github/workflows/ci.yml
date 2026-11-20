@@ -77,6 +77,7 @@ jobs:
       - run: pnpm --dir ui install --frozen-lockfile
       - run: pnpm --dir ui typecheck
       - run: pnpm --dir ui i18n:check
+      - run: pnpm --dir ui ipc:check
       - run: pnpm --dir ui build
 
   # Release job. Signs the *updater* payloads with a Tauri minisign key pair, so releases can be

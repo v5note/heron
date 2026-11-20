@@ -7,6 +7,8 @@ import { useI18n } from "vue-i18n";
 import { api } from "../api";
 import type { ConflictPayload } from "../api/types";
 import { useAppStore } from "../stores/app";
+import AppIcon from "./AppIcon.vue";
+import AppOverlay from "./AppOverlay.vue";
 
 const props = defineProps<{ slug: string }>();
 const emit = defineEmits<{ (e: "done"): void; (e: "cancel"): void }>();
@@ -51,68 +53,55 @@ async function save() {
 </script>
 
 <template>
-  <div v-if="payload" class="editor">
-    <header>
-      <strong>{{ t("conflict.title") }} · {{ slug }}</strong>
-      <span class="muted">{{ payload.files.length }} {{ t("conflict.files") }}</span>
-    </header>
-
-    <div class="tabs">
-      <button
-        v-for="(file, i) in payload.files"
-        :key="file.path"
-        :class="{ primary: i === index }"
-        @click="index = i"
-      >
-        {{ file.path }}
-      </button>
+  <AppOverlay :open="true" variant="dialog" wide @close="emit('cancel')">
+    <div class="overlay-head">
+      <div>
+        <h3>{{ t("conflict.title") }} · {{ slug }}</h3>
+        <p>{{ t("conflict.hint", { n: payload?.files.length ?? 0 }) }}</p>
+      </div>
+      <button class="icon-btn" @click="emit('cancel')"><AppIcon name="close" :size="15" /></button>
     </div>
-
-    <div v-if="current" class="panes">
-      <section>
-        <div class="pane-head">
-          <span>{{ t("conflict.ours") }}</span>
-          <button :class="{ primary: choices[current.path] === 'ours' }" @click="choices[current.path] = 'ours'">
-            {{ t("conflict.takeOurs") }}
-          </button>
+    <div class="overlay-body">
+      <div class="tabs">
+        <button v-for="(file, i) in payload?.files ?? []" :key="file.path" class="tab" :class="{ on: i === index }" @click="index = i">
+          {{ file.path }}
+        </button>
+      </div>
+      <div v-if="current" class="split">
+        <div>
+          <div class="pane-head">
+            <span>{{ t("conflict.ours") }}</span>
+            <button class="btn sm" :class="{ primary: choices[current.path] === 'ours' }" @click="choices[current.path] = 'ours'">
+              {{ t("conflict.takeOurs") }}
+            </button>
+          </div>
+          <pre class="pre pane">{{ current.before }}</pre>
         </div>
-        <pre>{{ current.before }}</pre>
-      </section>
-      <section>
-        <div class="pane-head">
-          <span>{{ t("conflict.theirs") }}</span>
-          <button :class="{ primary: choices[current.path] === 'theirs' }" @click="choices[current.path] = 'theirs'">
-            {{ t("conflict.takeTheirs") }}
-          </button>
+        <div>
+          <div class="pane-head">
+            <span>{{ t("conflict.theirs") }}</span>
+            <button class="btn sm" :class="{ primary: choices[current.path] === 'theirs' }" @click="choices[current.path] = 'theirs'">
+              {{ t("conflict.takeTheirs") }}
+            </button>
+          </div>
+          <pre class="pre pane">{{ current.after }}</pre>
         </div>
-        <pre>{{ current.after }}</pre>
-      </section>
+      </div>
     </div>
-
-    <footer>
-      <button @click="emit('cancel')">{{ t("common.cancel") }}</button>
-      <span class="spacer" />
-      <span class="muted">{{ decided }}/{{ payload.files.length }}</span>
-      <button class="primary" :disabled="busy" @click="save">{{ t("conflict.saveAndRetry") }}</button>
-    </footer>
-  </div>
+    <div class="overlay-foot">
+      <span class="mono muted">{{ decided }}/{{ payload?.files.length ?? 0 }}</span>
+      <span class="right">
+        <button class="btn" @click="emit('cancel')">{{ t("common.cancel") }}</button>
+        <button class="btn primary" :disabled="busy" @click="save">{{ t("conflict.saveAndRetry") }}</button>
+      </span>
+    </div>
+  </AppOverlay>
 </template>
 
 <style scoped>
-.editor {
-  position: fixed; inset: 0; background: color-mix(in srgb, var(--bg) 92%, transparent);
-  display: flex; flex-direction: column; padding: 24px; gap: 12px; z-index: 20;
-}
-header { display: flex; gap: 12px; align-items: baseline; }
 .tabs { display: flex; gap: 6px; flex-wrap: wrap; }
-.panes { flex: 1; display: grid; grid-template-columns: 1fr 1fr; gap: 12px; min-height: 0; }
-section { display: flex; flex-direction: column; gap: 6px; min-height: 0; }
-.pane-head { display: flex; justify-content: space-between; align-items: center; color: var(--muted); }
-pre {
-  flex: 1; overflow: auto; margin: 0; padding: 12px; border-radius: var(--radius);
-  background: var(--surface); border: 1px solid var(--border); font-size: 12px;
-}
-footer { display: flex; gap: 8px; align-items: center; }
-.spacer { flex: 1; }
-.muted { color: var(--muted); font-size: 12px; }
+.tab { height: 28px; padding: 0 10px; border: 1px solid var(--line-strong); border-radius: var(--radius-sm); font-size: 12px; color: var(--dim); }
+.tab.on { background: var(--text); border-color: var(--text); color: var(--bg); font-weight: 600; }
+.pane-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; color: var(--dim); font-size: 12px; }
+.pane { min-height: 220px; }
 </style>

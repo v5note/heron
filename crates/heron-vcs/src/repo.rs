@@ -125,11 +125,10 @@ impl SkillRepo {
         self.write_metadata(meta)?;
         self.write_gitignore()?;
         let sha = self.commit_all(&format!("heron: adopt {}", meta.slug))?;
-        self.git.run_checked(
-            root,
-            &["branch", BRANCH_UPSTREAM, &sha],
-            ErrorCode::Internal,
-        )?;
+        // init() is also the repair path for a half-created store directory (a previous adopt that
+        // failed after the copy and before the index write). Re-running must not fail on the branch
+        // a previous attempt already made, so the upstream pointer is moved rather than created.
+        self.set_upstream_point(&sha)?;
         Ok(())
     }
 

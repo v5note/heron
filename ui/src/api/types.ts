@@ -24,6 +24,16 @@ export interface DetectedRow {
   adopt_state: string;
 }
 
+/** One row of the dry-run adopt preview (`adopt_paths` with dryRun). */
+export interface AdoptPlan {
+  detail: DetectedRow;
+  slug: string | null;
+  steps: { action: string; [key: string]: unknown }[];
+  issues: string[];
+  /** Set when identical content is already in the store: no second copy is made. */
+  duplicate_of: string | null;
+}
+
 export interface SkillRow {
   slug: string;
   display_name: string;
