@@ -85,6 +85,7 @@ jobs:
   # first-run Gatekeeper/SmartScreen prompts require a manual "open anyway".
   release:
     name: release (${{ matrix.os }})
+    continue-on-error: ${{ matrix.experimental == true }}
     # Deliberately not `needs: rust`: the macOS runner is occasionally unavailable
     # (cancelled after 1s, zero steps) and that must not block a release. The gate is the
     # link-safety matrix plus the UI build, which always run.
@@ -99,8 +100,10 @@ jobs:
         include:
           - os: macos-14
             platform: darwin-aarch64
+            experimental: true
           - os: windows-2022
             platform: windows-x86_64
+            experimental: false
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -177,7 +180,9 @@ jobs:
   publish:
     name: publish release
     needs: release
-    if: startsWith(github.ref, 'refs/tags/v')
+    # `always()` lets this run even when one matrix leg was cancelled; the job itself then fails
+    # loudly if no artifacts arrived, so a broken release is never silent.
+    if: always() && startsWith(github.ref, 'refs/tags/v') && needs.release.result != 'skipped'
     runs-on: ubuntu-22.04
     permissions:
       contents: write
@@ -204,6 +209,17 @@ jobs:
             --tag "${{ github.ref_name }}" \
             --dir dist --out dist/latest.json --notes "$NOTES"
           cat dist/latest.json
+      - name: Require at least one platform
+        run: |
+          python3 - <<'PY'
+          import json
+          m = json.load(open("dist/latest.json"))
+          platforms = m.get("platforms", {})
+          if not platforms:
+              raise SystemExit("latest.json has no platforms; refusing to publish")
+          print("platforms:", ", ".join(sorted(platforms)))
+          PY
+
       - name: Publish
         uses: softprops/action-gh-release@v2
         with:
