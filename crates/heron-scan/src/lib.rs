@@ -13,6 +13,9 @@ pub use classify::{Classifier, ClientSpec, HitKind, Scope};
 pub use fingerprint::{fingerprint_dir, Fingerprint, FingerprintOptions};
 pub use parse::{parse_skill_md, Confidence, Frontmatter, ParseIssue};
 pub use rules::IgnoreRules;
-pub use walker::{scan, Hit, ScanOptions, ScanResult, ScanStats};
+pub use walker::{
+    collect_roots, scan, scan_monitored, Hit, ScanMonitor, ScanOptions, ScanResult, ScanStats,
+    PROGRESS_DIRS, PROGRESS_INTERVAL,
+};
 
 pub use heron_core::{HeronError, Msg, Result};

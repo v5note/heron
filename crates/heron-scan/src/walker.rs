@@ -4,6 +4,7 @@
 //! already contains `SKILL.md` (that directory *is* the skill).
 
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 
 use heron_core::Result;
@@ -73,6 +74,49 @@ pub struct ScanStats {
     pub duration_ms: u64,
     pub truncated: bool,
     pub roots_missing: Vec<PathBuf>,
+    /// 1-based index of the root being walked; `0` before the first root starts.
+    pub root_index: usize,
+    /// Every root the walk intends to descend into, including the ones that turn out to be missing.
+    pub root_total: usize,
+    /// The root currently being walked, `None` once the traversal is over.
+    pub current_root: Option<PathBuf>,
+    /// The walk stopped because [`ScanMonitor::cancel`] was raised.
+    pub canceled: bool,
+}
+
+/// Live progress is handed to the observer at most this often...
+pub const PROGRESS_INTERVAL: Duration = Duration::from_millis(120);
+/// ... and at least this often: whichever of the two limits is reached first decides.
+pub const PROGRESS_DIRS: usize = 200;
+
+/// What a monitored walk calls back into: the counters so far and **every** hit found so far.
+pub type ProgressObserver<'a> = &'a mut dyn FnMut(&ScanStats, &[Hit]);
+
+/// Cancellation + live progress plumbing for a monitored walk.
+///
+/// A walk never blocks on its observer: the observer runs on the walking thread, so whatever it
+/// does (emitting an event) is part of the scan's cost.
+#[derive(Default)]
+pub struct ScanMonitor<'a> {
+    /// Raised from elsewhere — a cancel button — to stop the walk as soon as possible.
+    pub cancel: Option<&'a AtomicBool>,
+    /// Called on the walker's throttle, and once at every root boundary. Gets the counters so far
+    /// plus **every** hit found so far, so a caller that only wants the new ones can slice off the
+    /// prefix it already handled.
+    pub on_progress: Option<ProgressObserver<'a>>,
+}
+
+impl<'a> ScanMonitor<'a> {
+    /// Walk to completion, report nothing: what the CLI and the tests use.
+    pub fn quiet() -> Self {
+        Self::default()
+    }
+
+    fn cancelled(&self) -> bool {
+        self.cancel
+            .map(|flag| flag.load(Ordering::Relaxed))
+            .unwrap_or(false)
+    }
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -90,12 +134,13 @@ impl ScanResult {
 
 /// Run a scan over every configured client location and project root.
 pub fn scan(classifier: &Classifier, options: &ScanOptions) -> Result<ScanResult> {
-    let started = Instant::now();
-    let rules = IgnoreRules::new(&options.extra_excludes)?;
-    let mut stats = ScanStats::default();
-    let mut hits: Vec<Hit> = Vec::new();
-    let mut nested: Vec<NestedSuspect> = Vec::new();
+    scan_monitored(classifier, options, &mut ScanMonitor::quiet())
+}
 
+/// Every distinct root the walk descends into: each client's global and legacy command paths,
+/// then the project roots. Split out so a caller can report `root_total` before the first entry
+/// is read (the prepare phase of the GUI's progress event).
+pub fn collect_roots(classifier: &Classifier, options: &ScanOptions) -> Vec<PathBuf> {
     // Roots: every distinct client global path, plus each project root.
     let mut roots: Vec<PathBuf> = Vec::new();
     for client in classifier.clients() {
@@ -123,21 +168,55 @@ pub fn scan(classifier: &Classifier, options: &ScanOptions) -> Result<ScanResult
             roots.push(project.clone());
         }
     }
+    roots
+}
 
-    for root in roots {
+/// Walk [`collect_roots`], reporting progress on a throttle and stopping as soon as
+/// `monitor.cancel` is raised. Whatever was found up to that point is returned: a cancelled walk
+/// is a partial result, not a failure.
+pub fn scan_monitored(
+    classifier: &Classifier,
+    options: &ScanOptions,
+    monitor: &mut ScanMonitor<'_>,
+) -> Result<ScanResult> {
+    let started = Instant::now();
+    let rules = IgnoreRules::new(&options.extra_excludes)?;
+    let mut stats = ScanStats::default();
+    let mut hits: Vec<Hit> = Vec::new();
+    let mut nested: Vec<NestedSuspect> = Vec::new();
+    let roots = collect_roots(classifier, options);
+    stats.root_total = roots.len();
+
+    // Throttle state for the observer: 120ms or 200 directories, whichever comes first.
+    let mut tick = Instant::now();
+    let mut dirs_at_tick = 0usize;
+
+    for (index, root) in roots.iter().enumerate() {
+        if monitor.cancelled() {
+            stats.canceled = true;
+            break;
+        }
+        stats.root_index = index + 1;
+        stats.current_root = Some(root.clone());
         if !root.exists() {
-            stats.roots_missing.push(root);
+            stats.roots_missing.push(root.clone());
+            report(monitor, &mut tick, &mut dirs_at_tick, &stats, &hits, true);
             continue;
         }
-        let walker = WalkDir::new(&root)
+        let walker = WalkDir::new(root)
             .max_depth(options.max_depth)
             .follow_links(options.follow_links)
             .sort_by_file_name();
 
         for entry in walker.into_iter() {
+            if monitor.cancelled() {
+                stats.canceled = true;
+                break;
+            }
             if stats.truncated {
                 break;
             }
+            report(monitor, &mut tick, &mut dirs_at_tick, &stats, &hits, false);
             let entry = match entry {
                 Ok(e) => e,
                 Err(_) => {
@@ -194,16 +273,50 @@ pub fn scan(classifier: &Classifier, options: &ScanOptions) -> Result<ScanResult
                 }
             }
         }
+        if stats.canceled {
+            break;
+        }
+        // Root boundary: a tail of hits must not wait for the next throttle window.
+        report(monitor, &mut tick, &mut dirs_at_tick, &stats, &hits, true);
     }
+
+    stats.current_root = None;
+    // The traversal ended early (cancelled or truncated) without reaching the boundary report.
+    report(monitor, &mut tick, &mut dirs_at_tick, &stats, &hits, true);
 
     hits.sort_by(|a, b| a.path.cmp(&b.path));
     stats.duration_ms = started.elapsed().as_millis() as u64;
-    let _ = Duration::from_millis(0);
     Ok(ScanResult {
         hits,
         nested,
         stats,
     })
+}
+
+/// Hand the current counters to the observer, at most once per [`PROGRESS_INTERVAL`] /
+/// [`PROGRESS_DIRS`] unless `force` is set (root boundaries and the end of the walk).
+fn report(
+    monitor: &mut ScanMonitor<'_>,
+    tick: &mut Instant,
+    dirs_at_tick: &mut usize,
+    stats: &ScanStats,
+    hits: &[Hit],
+    force: bool,
+) {
+    if monitor.on_progress.is_none() {
+        return;
+    }
+    if !force
+        && stats.dirs_visited - *dirs_at_tick < PROGRESS_DIRS
+        && tick.elapsed() < PROGRESS_INTERVAL
+    {
+        return;
+    }
+    *tick = Instant::now();
+    *dirs_at_tick = stats.dirs_visited;
+    if let Some(observer) = &mut monitor.on_progress {
+        observer(stats, hits);
+    }
 }
 
 fn classify_skill(dir: &Path, classifier: &Classifier) -> Option<Hit> {

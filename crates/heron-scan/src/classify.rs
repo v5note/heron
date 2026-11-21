@@ -13,6 +13,16 @@ pub enum Scope {
     Project,
 }
 
+impl Scope {
+    /// The `detected.scope` spelling: the database and the GUI events share it.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Scope::Global => "global",
+            Scope::Project => "project",
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum HitKind {
@@ -21,6 +31,17 @@ pub enum HitKind {
     LegacyCommand,
     /// A skills directory nested inside another skills directory (decision D8: report only).
     NestedSuspect,
+}
+
+impl HitKind {
+    /// The `detected.kind` spelling: the database and the GUI events share it.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            HitKind::Skill => "skill",
+            HitKind::LegacyCommand => "legacy-command",
+            HitKind::NestedSuspect => "nested-suspect",
+        }
+    }
 }
 
 /// One client's scan locations, loaded from `resources/clients/*.toml`.

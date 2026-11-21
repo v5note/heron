@@ -47,33 +47,37 @@
   },
   "overview": {
     "title": "Overview",
-    "skills": "Managed skills",
-    "unmanaged": "Unowned",
-    "upgradable": "Upgradable",
-    "issues": "Health issues",
     "lastScan": "Last scan",
-    "never": "never",
     "quickScan": "Scan this machine",
     "quickDoctor": "Run health check",
-    "hint": "Scan first, then pick the skills you want to own.",
     "lead": "Adopt → project → upgrade. This page only lists what needs deciding now.",
-    "next": {
-      "title": "Next up",
+    "queue": {
+      "title": "Decision queue",
       "count": "{n}",
-      "clear": "Nothing needs you right now",
-      "broken": "{n} projections are broken links — clients will not load them",
+      "clear": "All clear — nothing here needs you right now.",
+      "chipBroken": "Broken",
+      "chipUnmanaged": "Adopt",
+      "chipConflict": "Conflict",
+      "chipUpgrade": "Update",
+      "chipFrontmatter": "Metadata",
+      "brokenMain": "{client} · {slug} projection is a broken link",
+      "brokenMissing": "{path} → target missing",
+      "brokenMore": "{path} → target missing · {n} more",
+      "unmanaged": "{n} skills on disk are not managed yet",
       "conflict": "{n} skills changed both locally and upstream — file-by-file merge needed",
       "upgrade": "{n} skills have a newer upstream",
-      "unmanaged": "{n} skills on disk are not managed yet",
-      "frontmatter": "{n} skills have an invalid frontmatter",
-      "tone": {
-        "broken": "Blocked",
-        "shadowed": "Pending"
-      }
+      "frontmatter": "{n} skills have an invalid frontmatter"
+    },
+    "readout": {
+      "title": "System readout",
+      "pending": "To decide",
+      "targets": "Enabled targets",
+      "managed": "Managed",
+      "gaugeCap": "Scan roots",
+      "gaugeScanning": "Scanning {root}",
+      "gaugeNone": "Never scanned — roots unknown"
     },
     "pipeline": {
-      "title": "Pipeline",
-      "targets": "Enabled targets",
       "live": "Live projections",
       "hidden": "Shadowed / broken",
       "outOf": "of {n} projections"
@@ -81,7 +85,11 @@
     "targets": {
       "title": "Target state",
       "hint": "The directories clients actually read",
-      "state": "State"
+      "chipLive": "Live {n}",
+      "chipBroken": "Broken {n}",
+      "enabled": "Enabled",
+      "disabled": "Disabled",
+      "skillCount": "{n} skills live"
     }
   },
   "library": {
@@ -121,7 +129,6 @@
     "nestedCount": "{n}",
     "previewTitle": "Adoption preview (dry run)",
     "previewHint": "Preview first: this step only reads. Files move after you confirm, and only after a backup.",
-    "fromStore": "from the store",
     "collecting": "Checking",
     "sameContent": "same content as {slug}",
     "adoptFailed": "{n} failed to adopt: {detail}",
@@ -140,6 +147,28 @@
     "noMatch": "No skill matches “{q}”",
     "clearSearch": "Clear search",
     "clearSelection": "Clear selection",
+    "filterClient": "Filter by source",
+    "allClients": "All",
+    "clients": {
+      "agents": "Universal",
+      "claude": "Claude",
+      "codex": "Codex",
+      "cursor": "Cursor",
+      "opencode": "opencode",
+      "workbuddy": "Workbuddy",
+      "antigravity": "Antigravity",
+      "trae": "Trae",
+      "qoder": "Qoder",
+      "grok": "Grok",
+      "cline": "Cline",
+      "copilot": "Copilot",
+      "heron": "Heron landing"
+    },
+    "otherClient": "Other",
+    "scopes": {
+      "global": "Global",
+      "project": "Project"
+    },
     "noDescription": "This skill has no description",
     "copyPath": "Copy address",
     "copied": "Copied",
@@ -236,6 +265,21 @@
     "lead": "Theme, language, app updates and client capabilities — changes apply immediately.",
     "themeDark": "Dark",
     "themeLight": "Light",
+    "themeAuto": "Auto",
+    "colorMode": "Colour mode",
+    "colorModeHint": "Follow the system, or pin light / dark.",
+    "palette": {
+      "default": "Default",
+      "dusk": "Dusk",
+      "forest-ink": "Forest Ink",
+      "wanqing": "Evening Clear"
+    },
+    "paletteDesc": {
+      "default": "Warm paper base + ink-green accent",
+      "dusk": "Warm paper base + tan accent, deep olive at night",
+      "forest-ink": "Cool green paper + ink-green accent, forest night in dark",
+      "wanqing": "Warm paper + indigo accent, night blue in dark"
+    },
     "platform": "Platform",
     "system": "System",
     "appearance": "Appearance & language",
@@ -245,6 +289,7 @@
     },
     "themeNote": "The theme applies immediately and is remembered for next launch.",
     "themeStatus": {
+      "system": "Auto",
       "dark": "Dark",
       "light": "Light"
     }
@@ -281,6 +326,46 @@
     "saveAndRetry": "Save & retry upgrade",
     "resolved": "Conflicts resolved and upgrade retried",
     "hint": "{n} files: decide each one; “Save and retry” commits your choices and re-runs the upgrade."
+  },
+  "scan": {
+    "running": "Scanning",
+    "cancelHint": "Click to cancel",
+    "canceling": "Cancelling",
+    "cancel": "Cancel",
+    "rescanHint": "start another scan any time",
+    "canceledShort": "Cancelled",
+    "found": "{n} found",
+    "incomplete": "Partial result",
+    "incompleteHint": "The directory ceiling was reached, so this result is incomplete",
+    "newCount": "+{n} new",
+    "phasePrepare": "Preparing",
+    "phaseWalk": "Walking",
+    "phaseParse": "Parsing",
+    "phasePersist": "Saving",
+    "phaseSummary": "Summarising",
+    "phaseDone": "Done",
+    "phaseCanceled": "Cancelled",
+    "statusStage": "Stage",
+    "statusRoot": "root",
+    "statusFound": "found",
+    "statusLast": "Last scan {ago}",
+    "statusRoots": "{n} roots walked",
+    "statusFoundTotal": "{n} found",
+    "agoNow": "just now",
+    "agoSec": "{n}s ago",
+    "agoMin": "{n}m ago",
+    "agoHour": "{n}h ago",
+    "agoDay": "{n}d ago",
+    "toastDone": "Scan finished · {n} new finds",
+    "toastDoneEmpty": "Scan finished · nothing new",
+    "toastTruncated": "Partial result · {limit} directories is the ceiling",
+    "toastCanceled": "Scan cancelled · {n} finds kept",
+    "toastView": "View",
+    "toastExclusions": "Exclusions",
+    "ariaCancel": "Scanning {i}/{n} · click to cancel",
+    "ariaCanceling": "Cancelling the scan {i}/{n}",
+    "ariaDone": "Scan finished · {n} finds",
+    "ariaCanceled": "Scan cancelled · {n} finds"
   },
   "shell": {
     "scan": "Scan this machine",

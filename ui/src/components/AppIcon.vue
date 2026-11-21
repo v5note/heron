@@ -4,7 +4,9 @@
 const props = withDefaults(defineProps<{ name: IconName; size?: number }>(), { size: 15 });
 export type IconName =
   | "overview" | "library" | "discover" | "sources" | "projects" | "upgrades" | "doctor" | "settings"
-  | "sun" | "moon" | "search" | "refresh" | "check" | "close" | "plus" | "external" | "alert" | "chevron" | "copy";
+  | "sun" | "moon" | "search" | "refresh" | "check" | "close" | "plus" | "external" | "alert" | "chevron" | "copy"
+  | "grid" | "globe" | "spark" | "terminal" | "pointer" | "braces" | "home"
+  | "robot" | "rocket" | "star" | "cube" | "bolt" | "code" | "sparkles";
 
 const PATHS: Record<IconName, string> = {
   overview: '<path d="M3 12h4l2.5-6 4 12 2.5-6H21"/>',
@@ -26,6 +28,21 @@ const PATHS: Record<IconName, string> = {
   alert: '<path d="M12 4 21 20H3z"/><path d="M12 10v4"/>',
   chevron: '<path d="M9 6l6 6-6 6"/>',
   copy: '<rect x="9" y="9" width="11.5" height="11.5" rx="2.5"/><path d="M5.5 15.5A1.5 1.5 0 0 1 4 14V5.5A1.5 1.5 0 0 1 5.5 4H14a1.5 1.5 0 0 1 1.5 1.5"/>',
+  // Source clients. `agents` is the client-agnostic shared location, so it gets a globe.
+  grid: '<rect x="4" y="4" width="7" height="7" rx="1.6"/><rect x="13" y="4" width="7" height="7" rx="1.6"/><rect x="4" y="13" width="7" height="7" rx="1.6"/><rect x="13" y="13" width="7" height="7" rx="1.6"/>',
+  globe: '<circle cx="12" cy="12" r="8"/><path d="M4 12h16"/><path d="M12 4c2.4 2.2 2.4 13.8 0 16"/><path d="M12 4c-2.4 2.2-2.4 13.8 0 16"/>',
+  spark: '<path d="M12 3.5v17M4.6 7.75l14.8 8.5M19.4 7.75l-14.8 8.5"/>',
+  terminal: '<path d="M5 7l5 5-5 5"/><path d="M12 17h7"/>',
+  pointer: '<path d="M6 3.5 19 12l-6.2 1.3L9.6 20z"/>',
+  braces: '<path d="M9.5 4.5c-1.8 0-2.8.9-2.8 2.9v2.1c0 1.3-.7 2.1-2.2 2.5 1.5.4 2.2 1.2 2.2 2.5v2.1c0 2 1 2.9 2.8 2.9"/><path d="M14.5 4.5c1.8 0 2.8.9 2.8 2.9v2.1c0 1.3.7 2.1 2.2 2.5-1.5.4-2.2 1.2-2.2 2.5v2.1c0 2-1 2.9-2.8 2.9"/>',
+  home: '<path d="M4 11.5 12 4l8 7.5"/><path d="M6.5 10.5V20h11v-9.5"/>',
+  robot: '<rect x="5" y="8" width="14" height="11" rx="3"/><path d="M12 4.5V8"/><circle cx="12" cy="3.6" r="1"/><circle cx="9.5" cy="13" r="1.1"/><circle cx="14.5" cy="13" r="1.1"/><path d="M9.5 16.5h5"/>',
+  rocket: '<path d="M12 3.5c3 2.6 4.3 5.7 4.3 9.2L12 17.5l-4.3-4.8c0-3.5 1.3-6.6 4.3-9.2z"/><circle cx="12" cy="9.8" r="1.6"/><path d="M7.7 14.5 6 19l3.8-1.4M16.3 14.5 18 19l-3.8-1.4"/>',
+  star: '<path d="M12 4l2.4 5.1 5.4.6-4.1 3.8 1.2 5.5-4.9-2.9-4.9 2.9 1.2-5.5-4.1-3.8 5.4-.6z"/>',
+  cube: '<path d="M12 4l7 3.9v8.2L12 20l-7-3.9V7.9z"/><path d="M5 7.9 12 12l7-4.1M12 12v8"/>',
+  bolt: '<path d="M13 4 6.5 13.5H11L10 20l6.5-9.5H12z"/>',
+  code: '<path d="M8.5 8.5 4.5 12l4 3.5M15.5 8.5 19.5 12l-4 3.5"/>',
+  sparkles: '<path d="M11 4.5c.6 3 1.4 3.8 4.4 4.4-3 .6-3.8 1.4-4.4 4.4-.6-3-1.4-3.8-4.4-4.4 3-.6 3.8-1.4 4.4-4.4z"/><path d="M17 14c.4 1.8.9 2.3 2.7 2.7-1.8.4-2.3.9-2.7 2.7-.4-1.8-.9-2.3-2.7-2.7 1.8-.4 2.3-.9 2.7-2.7z"/>',
 };
 </script>
 

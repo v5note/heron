@@ -1,0 +1,565 @@
+<!doctype html><html lang="zh-CN" data-theme="dark"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Heron · 我的 Skill · v3</title>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&family=EB+Garamond:wght@400;600&display=swap" rel="stylesheet">
+<style>
+/*
+  我的 Skill 页面 v3 · 方向①「运维控制台」语言内的页面级迭代（非新方向，gate 见 direction-approved.md）
+
+  我的假设：
+  - 数据以真实 app 为准：目前库里只有 code-review（adopted / active，6 个落点均未扫描=空心点）。
+    为了展示全部 5 种链接状态，另放 3 行「示例」数据，行上有明确标记，交付落地时删除。
+  - 落点固定 6 个：heron / agents / claude / codex / cursor / opencode（与截图一致）。
+  - 修复三个现实现的信息架构问题：
+    1) 工具条上 6 个「投影到 X」批量按钮长得像筛选 → 收进一个「投影到…」弹层；
+    2) 只有一行时表格卡片悬在空白画布上 → 表格下方加「落点健康」读数条（Rams 仪器母题），
+       用每列的状态计数把空白变成有内容的差异化信息；
+    3) restart_required 没有点样式（现实现回落灰色）→ 补第 5 种点：warn 描边 + 中心点。
+  - 「状态」列原来显示的是 origin，语义错位 → 列名改「来源」；行内不加独立状态列，
+    实体级状态（active/…）放抽屉 kv，来源用 chip 表达。
+  - 追加设置页（用户指令「添加选项」+ 真实 app 设置截图）：主题 / 通用 / 数据与路径 / 客户端
+    四段，选项与截图一一对应；侧栏「我的 Skill」「设置」可切换，其余导航提示见 dir-1.html。
+
+  未解的问题：
+  - 列头要不要显示每个落点的生效计数（现在放健康条里）；先做健康条。
+  - 投影模式（符号链接/复制）在真实 app 里是否 per-target？先不放，抽屉只留 kv。
+
+  如果你看到这里觉得方向不对，现在是成本最低的时候改。
+*/
+:root{
+  --h-bg:#090807;--h-panel:#0F0E0C;--h-raised:#151310;--h-line:rgba(246,240,230,.08);
+  --h-line2:rgba(246,240,230,.16);--h-text:#EFE8DA;--h-dim:#C2BCB0;--h-faint:#A39B8C;
+  --h-ink:#181410;--h-good:#B2C77A;--h-warn:#E3C08A;--h-bad:#E47B66;--h-vit:#9EA8FF;
+  --h-sans:"Manrope",-apple-system,"PingFang SC","Hiragino Sans GB",sans-serif;
+  --h-mono:"JetBrains Mono",ui-monospace,Menlo,monospace;
+  --h-serif:"EB Garamond","Songti SC",Georgia,serif;
+  color-scheme:dark;
+}
+[data-theme="light"]{
+  --h-bg:#FAF9F6;--h-panel:#FFFFFF;--h-raised:#F5F2EC;--h-line:#E8E3DA;--h-line2:#D6CFC3;
+  --h-text:#211D18;--h-dim:#5C5650;--h-faint:#776F64;
+  --h-ink:#FFFFFF;--h-good:#5C7A2E;--h-warn:#8A6216;--h-bad:#A8452F;--h-vit:#4B4BC2;
+  color-scheme:light;
+}
+*{box-sizing:border-box}
+button{font:inherit;border:0;background:none;padding:0;color:inherit;cursor:pointer;line-height:normal}
+input{font:inherit;color:var(--h-text)}
+body{margin:0;background:var(--h-bg);color:var(--h-text);font-family:var(--h-sans);overflow:hidden}
+svg{stroke:currentColor;fill:none;stroke-width:1.5}
+
+.h-shell{display:grid;grid-template-columns:212px minmax(0,1fr);height:100vh}
+/* ---------- rail ---------- */
+.h-rail{display:flex;flex-direction:column;min-height:0;background:var(--h-panel);border-right:1px solid var(--h-line);padding:0 10px 10px}
+.h-rail-head{display:flex;align-items:center;gap:9px;padding:15px 6px 12px}
+.h-seal{width:25px;height:25px;border-radius:5px;background:var(--h-text);color:var(--h-bg);display:grid;place-items:center;flex:none}
+.h-seal svg{width:15px;height:15px}
+.h-wordmark{display:flex;flex-direction:column;line-height:1.12}
+.h-wordmark b{font-family:var(--h-serif);font-size:16px;font-weight:600;letter-spacing:.01em}
+.h-wordmark small{font-size:12.5px;color:var(--h-dim);letter-spacing:.08em}
+.h-search{display:flex;align-items:center;gap:8px;height:32px;padding:0 9px;margin:2px 0 10px;border:1px solid var(--h-line);border-radius:7px;color:var(--h-dim);font-size:12.5px;background:var(--h-raised)}
+.h-search svg{width:14px;height:14px}
+.h-search kbd{margin-left:auto;font-family:var(--h-mono);font-size:12.5px;color:var(--h-dim);border:1px solid var(--h-line);border-radius:4px;padding:1px 4px}
+.h-rail-scroll{flex:1;min-height:0;overflow:auto;display:flex;flex-direction:column;gap:1px}
+.h-group{font-size:12.5px;font-weight:600;letter-spacing:.02em;color:var(--h-dim);padding:14px 8px 6px}
+.h-nav{display:flex;align-items:center;gap:9px;height:30px;padding:0 8px;border-radius:6px;font-size:12.5px;color:var(--h-dim);position:relative;text-align:left;width:100%}
+.h-nav svg{width:14px;height:14px;flex:none}
+.h-nav:hover{background:var(--h-raised);color:var(--h-text)}
+.h-nav.is-active{background:var(--h-raised);color:var(--h-text);font-weight:600}
+.h-nav.is-active::before{content:"";position:absolute;left:0;top:7px;bottom:7px;width:2px;border-radius:2px;background:var(--h-vit)}
+.h-count{margin-left:auto;font-family:var(--h-mono);font-size:12.5px;color:var(--h-dim);min-width:16px;text-align:right}
+.h-count.tone-warn{color:var(--h-warn)}
+.h-rail-foot{display:flex;flex-direction:column;gap:8px;padding-top:10px;border-top:1px solid var(--h-line)}
+.h-healthline{display:flex;gap:7px;flex-wrap:wrap;padding:0 4px}
+.h-dot{display:inline-flex;align-items:center;gap:5px;font-size:12.5px;color:var(--h-dim)}
+.h-dot::before{content:"";width:6px;height:6px;border-radius:50%;background:var(--h-faint)}
+.h-dot.warn::before{background:var(--h-warn)} .h-dot.good::before{background:var(--h-good)}
+.h-theme{margin-left:auto;display:inline-flex;align-items:center;gap:5px;height:26px;padding:0 9px;border:1px solid var(--h-line);border-radius:999px;font-size:12.5px;color:var(--h-dim)}
+.h-theme svg{width:12px;height:12px}
+
+/* ---------- main ---------- */
+.h-main{display:flex;flex-direction:column;min-width:0;min-height:0}
+.h-topbar{display:flex;align-items:center;gap:10px;height:48px;padding:0 24px;border-bottom:1px solid var(--h-line);flex:none;background:var(--h-bg);z-index:5}
+.h-crumbs{display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--h-faint)}
+.h-crumbs b{color:var(--h-text);font-weight:600}
+.h-topbar .sp{flex:1}
+.h-btn{display:inline-flex;align-items:center;gap:7px;height:30px;padding:0 11px;border-radius:7px;font-size:12.5px;font-weight:500;border:1px solid var(--h-line2);color:var(--h-text);white-space:nowrap}
+.h-btn svg{width:14px;height:14px}
+.h-btn:hover{background:var(--h-raised)}
+.h-btn.primary{background:var(--h-text);border-color:var(--h-text);color:var(--h-bg)}
+.h-btn.primary:hover{opacity:.9}
+.h-btn:disabled{opacity:.72;cursor:default}
+.h-btn.sm{height:26px;padding:0 9px;font-size:12.5px}
+.h-view{padding:24px 28px 32px;overflow:auto;flex:1;min-height:0;position:relative}
+.h-view-head{display:flex;align-items:flex-end;gap:14px;margin-bottom:18px;flex-wrap:wrap}
+.h-h1{font-size:22px;font-weight:700;letter-spacing:-.01em;margin:0}
+.h-lead{margin:6px 0 0;color:var(--h-dim);font-size:14px}
+.h-actions{margin-left:auto;display:flex;gap:8px;align-items:center}
+
+/* toolbar */
+.toolbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:12px}
+.searchbox{display:inline-flex;align-items:center;gap:8px;height:30px;padding:0 10px;border:1px solid var(--h-line2);border-radius:7px;color:var(--h-dim);width:260px}
+.searchbox svg{width:14px;height:14px;flex:none}
+.searchbox input{border:0;background:transparent;outline:none;height:26px;padding:0;width:100%;font-size:12.5px}
+.searchbox:focus-within{border-color:var(--h-text)}
+.h-seg{display:inline-flex;border:1px solid var(--h-line2);border-radius:7px;overflow:hidden}
+.h-seg button{height:28px;padding:0 10px;font-size:12.5px;color:var(--h-dim)}
+.h-seg button.on{background:var(--h-text);color:var(--h-bg);font-weight:600}
+.toolbar .sp{flex:1}
+.selhint{font-size:12.5px;color:var(--h-faint)}
+
+/* popover */
+.pop{position:relative}
+.pop-menu{position:absolute;right:0;top:36px;z-index:20;min-width:230px;background:var(--h-panel);border:1px solid var(--h-line2);border-radius:10px;box-shadow:0 18px 44px rgba(0,0,0,.35);padding:5px;display:none}
+.pop.open .pop-menu{display:block}
+.pop-menu button{display:flex;align-items:center;gap:8px;width:100%;text-align:left;padding:7px 9px;border-radius:6px;font-size:12.5px;color:var(--h-text)}
+.pop-menu button:hover{background:var(--h-raised)}
+.pop-menu .n{margin-left:auto;font-family:var(--h-mono);font-size:12px;color:var(--h-faint)}
+.pop-menu hr{border:0;border-top:1px solid var(--h-line);margin:4px 6px}
+
+/* ---------- matrix table ---------- */
+.h-card{background:var(--h-panel);border:1px solid var(--h-line);border-radius:10px}
+.h-card{overflow-x:auto}
+.h-table{width:100%;min-width:820px;border-collapse:separate;border-spacing:0}
+.h-table th{text-align:left;font-size:12.5px;font-weight:500;color:var(--h-dim);padding:0 12px 9px;border-bottom:1px solid var(--h-line);white-space:nowrap}
+.h-table th.tcol,.h-table td.tcol{text-align:center;width:74px}
+.h-table td{padding:10px 12px;border-bottom:1px solid var(--h-line);font-size:12.5px;vertical-align:middle}
+.h-table tbody tr{cursor:pointer}
+.h-table tbody tr:hover td{background:var(--h-raised)}
+.h-table tbody tr.is-sel td{background:color-mix(in srgb,var(--h-vit) 9%,transparent)}
+.h-table tr:last-child td{border-bottom:0}
+.h-cb{appearance:none;-webkit-appearance:none;width:15px;height:15px;border:1px solid var(--h-line2);border-radius:4px;background:transparent;display:inline-grid;place-items:center;cursor:pointer;margin:0;flex:none;vertical-align:middle}
+.h-cb:checked{background:var(--h-text);border-color:var(--h-text)}
+.h-cb:checked::after{content:"";width:8px;height:4px;border-left:1.8px solid var(--h-bg);border-bottom:1.8px solid var(--h-bg);transform:rotate(-45deg) translateY(-1px)}
+.slug{font-weight:600}
+.desc{color:var(--h-dim);font-size:12.5px;margin-top:2px;max-width:430px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tag-sample{display:inline-block;font-size:12px;color:var(--h-faint);border:1px dashed var(--h-line2);border-radius:4px;padding:0 4px;margin-left:6px;vertical-align:1px}
+.h-mono{font-family:var(--h-mono);font-size:12.5px;color:var(--h-dim)}
+.h-chip{display:inline-flex;align-items:center;gap:6px;height:22px;padding:0 8px;border-radius:999px;font-size:12.5px;font-weight:500;border:1px solid transparent;white-space:nowrap}
+.h-chip::before{content:"";width:5px;height:5px;border-radius:50%;background:currentColor;opacity:.9;flex:none}
+.h-chip.good{color:var(--h-good);background:color-mix(in srgb,var(--h-good) 12%,transparent)}
+.h-chip.warn{color:var(--h-warn);background:color-mix(in srgb,var(--h-warn) 12%,transparent)}
+.h-chip.bad{color:var(--h-bad);background:color-mix(in srgb,var(--h-bad) 12%,transparent)}
+.h-chip.neutral{color:var(--h-dim);background:var(--h-raised);border-color:var(--h-line)}
+.h-chip.plain::before{display:none}
+
+/* state dots —— 页面母题：行=实体，列=落点，点=链接通断 */
+.dot{position:relative;display:inline-block;width:12px;height:12px;border-radius:50%;vertical-align:middle;transition:transform .12s}
+tr:hover .dot{transform:scale(1.15)}
+.dot.visible{background:var(--h-good)}
+.dot.shadowed{background:var(--h-warn)}
+.dot.broken{background:var(--h-bad)}
+.dot.not_scanned{background:transparent;border:1.5px solid var(--h-faint)}
+.dot.restart_required{background:transparent;border:1.5px solid var(--h-warn)}
+.dot.restart_required::after{content:"";position:absolute;inset:3px;border-radius:50%;background:var(--h-warn)}
+.cell-tip{position:relative}
+.cell-tip .tip{position:absolute;left:50%;bottom:calc(100% + 8px);transform:translateX(-50%) translateY(3px);background:var(--h-raised);border:1px solid var(--h-line2);border-radius:6px;padding:4px 8px;font-size:12.5px;color:var(--h-text);white-space:nowrap;opacity:0;pointer-events:none;transition:.12s;z-index:6}
+.cell-tip:hover .tip{opacity:1;transform:translateX(-50%)}
+.chev{color:var(--h-faint)}
+.chev svg{width:14px;height:14px}
+
+/* ---------- 落点健康读数条 ---------- */
+.hstrip{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:1px;background:var(--h-line);border-top:1px solid var(--h-line)}
+.hstrip .cell{background:var(--h-panel);padding:10px 12px 11px}
+.hstrip .name{display:flex;align-items:baseline;gap:6px;font-size:12.5px;font-weight:600;color:var(--h-text)}
+.hstrip .name .frac{margin-left:auto;font-family:var(--h-mono);font-size:12.5px;color:var(--h-dim)}
+.hbar{display:flex;height:5px;border-radius:5px;overflow:hidden;margin-top:8px;background:var(--h-raised)}
+.hbar i{display:block;height:100%}
+.hbar .v{background:var(--h-good)} .hbar .s{background:var(--h-warn)} .hbar .b{background:var(--h-bad)} .hbar .r{background:color-mix(in srgb,var(--h-warn) 55%,var(--h-bad))} .hbar .u{background:var(--h-line2)}
+.hstrip .sub{margin-top:6px;font-size:12.5px;color:var(--h-faint)}
+.legend{display:flex;gap:14px;flex-wrap:wrap;margin-top:10px;font-size:12.5px;color:var(--h-dim);align-items:center}
+.legend .k{display:inline-flex;align-items:center;gap:6px}
+.legend .dot{width:10px;height:10px}
+
+/* ---------- drawer ---------- */
+.h-drawer-mask{position:fixed;inset:0;background:color-mix(in srgb,var(--h-bg) 55%,transparent);backdrop-filter:blur(2px);z-index:38;opacity:0;pointer-events:none;transition:opacity .18s}
+.h-drawer{position:fixed;top:0;right:0;bottom:0;width:min(560px,92vw);background:var(--h-panel);border-left:1px solid var(--h-line2);z-index:39;display:flex;flex-direction:column;box-shadow:-24px 0 60px rgba(0,0,0,.35);transform:translateX(102%);transition:transform .22s cubic-bezier(.2,.7,.2,1)}
+.drawer-open .h-drawer-mask{opacity:1;pointer-events:auto}
+.drawer-open .h-drawer{transform:none}
+.h-drawer-h{display:flex;align-items:flex-start;gap:12px;padding:18px 20px 14px;border-bottom:1px solid var(--h-line)}
+.h-drawer-h .t{min-width:0}
+.h-drawer-h .l1{display:flex;gap:8px;align-items:center}
+.h-drawer-h h3{margin:0;font-size:17px;font-weight:700;letter-spacing:-.01em}
+.h-drawer-h .l2{color:var(--h-dim);font-size:12.5px;margin-top:5px;line-height:1.5}
+.h-close{width:28px;height:28px;border-radius:6px;display:grid;place-items:center;color:var(--h-dim);margin-left:auto;flex:none}
+.h-close:hover{background:var(--h-raised);color:var(--h-text)}
+.h-close svg{width:15px;height:15px}
+.h-drawer-b{flex:1;overflow:auto;padding:16px 20px;display:flex;flex-direction:column;gap:16px}
+.d-sec{font-size:12.5px;font-weight:600;letter-spacing:.02em;color:var(--h-dim);margin:0 0 8px}
+.d-sec .n{font-family:var(--h-mono);font-weight:500;color:var(--h-faint);margin-left:6px}
+.trow{display:grid;grid-template-columns:86px minmax(0,1fr) auto auto;gap:12px;align-items:center;padding:10px 12px;border-bottom:1px solid var(--h-line)}
+.trow:last-child{border-bottom:0}
+.trow:hover{background:var(--h-raised)}
+.trow .tn{font-weight:600;font-size:12.5px}
+.trow .tp{font-family:var(--h-mono);font-size:12.5px;color:var(--h-dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-align:left;unicode-bidi:plaintext}
+.h-kv{display:grid;grid-template-columns:92px 1fr;gap:7px 12px;font-size:12.5px;margin:0}
+.h-kv dt{color:var(--h-dim)} .h-kv dd{margin:0;font-family:var(--h-mono);font-size:12.5px}
+.h-drawer-f{display:flex;gap:8px;justify-content:flex-end;padding:12px 20px;border-top:1px solid var(--h-line)}
+
+/* ---------- settings ---------- */
+.set-card{margin-bottom:14px}
+.set-sec{font-size:13.5px;font-weight:600;color:var(--h-text);padding:12px 16px;border-bottom:1px solid var(--h-line)}
+.set-sec .n{font-weight:500;color:var(--h-faint);margin-left:8px;font-family:var(--h-mono);font-size:12.5px}
+.set-row{display:flex;align-items:center;gap:12px;padding:12px 16px;border-bottom:1px solid var(--h-line);font-size:13px}
+.set-row:last-child{border-bottom:0}
+.set-k{font-weight:500;white-space:nowrap}
+.set-h{color:var(--h-faint);font-size:12.5px}
+.set-row .sp{flex:1}
+.set-path{font-family:var(--h-mono);font-size:12.5px;color:var(--h-dim)}
+.h-sel{height:30px;padding:0 8px;border:1px solid var(--h-line2);border-radius:7px;background:var(--h-raised);color:var(--h-text);font-size:12.5px;outline:none}
+.sw{width:36px;height:21px;border-radius:999px;background:var(--h-line2);position:relative;transition:background .15s;flex:none}
+.sw::after{content:"";position:absolute;top:2.5px;left:2.5px;width:16px;height:16px;border-radius:50%;background:var(--h-panel);box-shadow:0 1px 3px rgba(0,0,0,.3);transition:left .15s}
+.sw.on{background:var(--h-vit)}
+.sw.on::after{left:17.5px}
+.sw:focus-visible{outline:2px solid var(--h-vit);outline-offset:2px}
+
+/* toast */
+.h-toasts{position:fixed;right:22px;bottom:22px;display:flex;flex-direction:column;gap:8px;z-index:50;align-items:flex-end}
+.h-toast{display:flex;align-items:center;gap:9px;max-width:420px;padding:10px 13px;border-radius:8px;font-size:12.5px;border:1px solid var(--h-line2);border-left:3px solid var(--h-good);background:var(--h-panel);box-shadow:0 12px 32px rgba(0,0,0,.35);animation:tin .22s cubic-bezier(.2,.7,.2,1)}
+@keyframes tin{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+.in{animation:hin .26s cubic-bezier(.2,.7,.2,1)}
+@keyframes hin{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+</style>
+</head>
+<body>
+<div class="h-shell">
+  <aside class="h-rail">
+    <div class="h-rail-head">
+      <span class="h-seal"><svg viewBox="0 0 24 24" stroke-width="1.6"><path d="M4 19c1.5-7.5 5-11.5 9.6-13.2"/><path d="M9.4 21c.4-4.7 2.3-8.4 5.6-10.6"/><path d="M14 21.6c.2-2.6 1.2-4.8 3-6.2"/><circle cx="18.4" cy="5.4" r="1.7"/></svg></span>
+      <span class="h-wordmark"><b>苍鹭 Heron</b><small>本地 SKILL 管理器</small></span>
+    </div>
+    <div class="h-search"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="6"/><path d="M15.5 15.5 20 20"/></svg>搜索<kbd>⌘K</kbd></div>
+    <nav class="h-rail-scroll">
+      <div class="h-group">工作台</div>
+      <button class="h-nav"><svg viewBox="0 0 24 24"><path d="M3 12h4l2.5-6 4 12 2.5-6H21"/></svg>概览</button>
+      <div class="h-group">收集 · 分发</div>
+      <button class="h-nav is-active" data-page="lib"><svg viewBox="0 0 24 24"><rect x="3.5" y="4" width="4" height="16" rx="1"/><rect x="9.5" y="4" width="4" height="16" rx="1"/><path d="M15.5 5.2l3.6 14.6"/></svg>我的 Skill<span class="h-count" id="navCount">4</span></button>
+      <button class="h-nav"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></svg>发现<span class="h-count tone-warn">52</span></button>
+      <button class="h-nav"><svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h10M4 17h13"/><circle cx="18.5" cy="16.5" r="2.5"/></svg>来源与市场<span class="h-count">52</span></button>
+      <div class="h-group">维护</div>
+      <button class="h-nav"><svg viewBox="0 0 24 24"><path d="M12 20V4"/><path d="M6.5 9.5 12 4l5.5 5.5"/></svg>更新</button>
+      <button class="h-nav"><svg viewBox="0 0 24 24"><path d="M3.5 12h4l1.5-4 3 8 2-4h6.5"/></svg>体检</button>
+      <button class="h-nav"><svg viewBox="0 0 24 24"><path d="M3.5 7.5A1.5 1.5 0 0 1 5 6h4l2 2h8a1.5 1.5 0 0 1 1.5 1.5V18A1.5 1.5 0 0 1 19 19.5H5A1.5 1.5 0 0 1 3.5 18z"/></svg>项目</button>
+      <button class="h-nav" data-page="set"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 3.5v2M12 18.5v2M3.5 12h2M18.5 12h2M6 6l1.4 1.4M16.6 16.6 18 18M6 18l1.4-1.4M16.6 7.4 18 6"/></svg>设置</button>
+    </nav>
+    <div class="h-rail-foot">
+      <div class="h-healthline">
+        <span class="h-dot warn">52 待处理</span>
+        <button class="h-theme" id="themeBtn"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6l1.4 1.4M17 17l1.4 1.4M5.6 18.4 7 17M17 7l1.4-1.4"/></svg><span id="themeLbl">浅色</span></button>
+      </div>
+      <div class="h-healthline"><span class="h-dot good">Git 2.50.1</span><span class="h-dot" style="--x:0">本应用 v0.1.0</span></div>
+    </div>
+  </aside>
+
+  <div class="h-main">
+    <header class="h-topbar">
+      <div class="h-crumbs"><span>苍鹭</span><span>/</span><b id="crumbNow">我的 Skill</b></div>
+      <span class="sp"></span>
+      <button class="h-btn"><svg viewBox="0 0 24 24"><path d="M19.5 12a7.5 7.5 0 1 1-2.2-5.3"/><path d="M19.5 4v4h-4"/></svg>扫描本机</button>
+      <button class="h-btn primary"><svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7"/></svg>校验</button>
+    </header>
+
+    <div class="h-view">
+    <div id="pageLib" class="in">
+      <div class="h-view-head">
+        <div>
+          <h1 class="h-h1">我的 Skill</h1>
+          <p class="h-lead">一份实体，多个落点：每个客户端看到的是它的链接。</p>
+        </div>
+        <div class="h-actions">
+          <span class="selhint" id="selHint"></span>
+          <div class="pop" id="pop">
+            <button class="h-btn" id="projBtn" disabled>投影到…<svg viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg></button>
+            <div class="pop-menu" id="popMenu"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="toolbar">
+        <label class="searchbox"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="6"/><path d="M15.5 15.5 20 20"/></svg><input id="q" type="search" placeholder="搜索名称或描述"></label>
+        <div class="h-seg">
+          <button id="fAll" class="on">全部 <span id="nAll"></span></button>
+          <button id="fIssues">有问题 <span id="nIssues"></span></button>
+        </div>
+        <span class="sp"></span>
+      </div>
+
+      <div class="h-card">
+        <table class="h-table">
+          <thead><tr>
+            <th style="width:34px"><input type="checkbox" class="h-cb" id="cbAll"></th>
+            <th>名称</th><th style="width:120px">来源</th>
+            <th class="tcol" id="th0"></th><th class="tcol" id="th1"></th><th class="tcol" id="th2"></th>
+            <th class="tcol" id="th3"></th><th class="tcol" id="th4"></th><th class="tcol" id="th5"></th>
+            <th style="width:34px"></th>
+          </tr></thead>
+          <tbody id="rows"></tbody>
+        </table>
+        <div class="hstrip" id="hstrip"></div>
+      </div>
+
+      <div class="legend">
+        <span class="k"><i class="dot visible"></i>生效中</span>
+        <span class="k"><i class="dot shadowed"></i>被压制</span>
+        <span class="k"><i class="dot restart_required"></i>需重启</span>
+        <span class="k"><i class="dot broken"></i>坏链</span>
+        <span class="k"><i class="dot not_scanned"></i>未被扫描</span>
+        <span style="margin-left:auto;color:var(--h-faint)">点 = 该落点上这份链接的当前状态</span>
+      </div>
+    </div><!-- /pageLib -->
+
+    <div id="pageSet" hidden class="in">
+      <div class="h-view-head">
+        <div>
+          <h1 class="h-h1">设置</h1>
+          <p class="h-lead">默认值可以改，路径会实时校验。</p>
+        </div>
+      </div>
+
+      <div class="h-card set-card">
+        <div class="set-sec">主题</div>
+        <div class="set-row"><span class="set-k">界面主题</span><span class="sp"></span>
+          <div class="h-seg" id="setTheme">
+            <button data-th="dark">深色</button><button data-th="light">浅色</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="h-card set-card">
+        <div class="set-sec">通用</div>
+        <div class="set-row"><span class="set-k">默认投影模式</span><span class="sp"></span>
+          <select class="h-sel"><option>符号链接</option><option>复制</option></select>
+        </div>
+        <div class="set-row"><span class="set-k">打开时自动扫描</span><span class="set-h">启动后自动更新落点状态</span><span class="sp"></span>
+          <button class="sw on" data-sw="打开时自动扫描"></button>
+        </div>
+        <div class="set-row"><span class="set-k">扫描完成后自动体检</span><span class="sp"></span>
+          <button class="sw" data-sw="扫描完成后自动体检"></button>
+        </div>
+        <div class="set-row"><span class="set-k">更新时保留本地改动</span><span class="sp"></span>
+          <button class="sw on" data-sw="更新时保留本地改动"></button>
+        </div>
+        <div class="set-row"><span class="set-k">语言</span><span class="sp"></span>
+          <select class="h-sel"><option>简体中文</option><option>English</option></select>
+        </div>
+      </div>
+
+      <div class="h-card set-card">
+        <div class="set-sec">数据与路径</div>
+        <div class="set-row"><span class="set-k">数据根目录</span><span class="sp"></span><span class="set-path">~/.heron</span><button class="h-btn sm" data-open="~/.heron">打开</button></div>
+        <div class="set-row"><span class="set-k">市场缓存</span><span class="sp"></span><span class="set-path">~/.cache/heron/market</span><button class="h-btn sm" data-open="~/.cache/heron/market">打开</button></div>
+        <div class="set-row"><span class="set-k">日志目录</span><span class="sp"></span><span class="set-path">~/.heron/logs</span><button class="h-btn sm" data-open="~/.heron/logs">打开</button></div>
+      </div>
+
+      <div class="h-card set-card">
+        <div class="set-sec">客户端<span class="n" id="setTgCount">6 个已启用</span></div>
+        <div id="setTargets"></div>
+      </div>
+    </div><!-- /pageSet -->
+    </div><!-- /h-view -->
+  </div>
+</div>
+
+<!-- drawer -->
+<div class="h-drawer-mask" id="mask"></div>
+<aside class="h-drawer" id="drawer">
+  <div class="h-drawer-h">
+    <div class="t">
+      <div class="l1"><h3 id="dSlug"></h3><span class="h-chip neutral plain" id="dOrigin"></span></div>
+      <div class="l2" id="dDesc"></div>
+    </div>
+    <button class="h-close" id="dClose"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+  </div>
+  <div class="h-drawer-b">
+    <div>
+      <div class="d-sec">每个客户端看到什么<span class="n" id="dCount"></span></div>
+      <div class="h-card" id="dTargets"></div>
+    </div>
+    <dl class="h-kv" id="dKv"></dl>
+  </div>
+  <div class="h-drawer-f">
+    <button class="h-btn">重新校验</button>
+    <span style="flex:1"></span>
+    <button class="h-btn" id="dCancelBtn">关闭</button>
+  </div>
+</aside>
+
+<div class="h-toasts" id="toasts"></div>
+
+<script>
+/* ================= 数据 =================
+   code-review 为真实数据（adopted / active，6 落点未扫描，与截图一致）；
+   其余 4 行是示例，用来展示 5 种链接状态与「有问题」筛选的排除效果，行上有「示例」标记。 */
+const TARGETS = ["heron","agents","claude","codex","cursor","opencode"];
+const TPATH = {heron:"~/.heron/skills",agents:"~/.agents/skills",claude:"~/.claude/skills",codex:"~/.codex/skills",cursor:"~/.cursor/skills",opencode:"~/.config/opencode/skills"};
+const SKILLS = [
+  {slug:"code-review",desc:"按仓库规范逐文件审阅，输出分级的意见清单",origin:"adopted",status:"active",
+   vis:{heron:"not_scanned",agents:"not_scanned",claude:"not_scanned",codex:"not_scanned",cursor:"not_scanned",opencode:"not_scanned"}},
+  {slug:"docx",sample:true,desc:"读写 .docx，保留批注与修订记录，生成规范报告",origin:"anthropic/skills",status:"active",
+   vis:{heron:"visible",agents:"visible",claude:"visible",codex:"visible",cursor:"visible",opencode:"visible"}},
+  {slug:"pdf",sample:true,desc:"抽取、合并、填写 PDF 表单，处理扫描件与 OCR",origin:"skills.sh",status:"active",
+   vis:{heron:"visible",agents:"visible",claude:"visible",codex:"shadowed",cursor:"broken",opencode:"not_scanned"}},
+  {slug:"slides",sample:true,desc:"从大纲生成 16:9 演示稿，含图表与讲者备注",origin:"本地编辑",status:"active",
+   vis:{heron:"visible",agents:"restart_required",claude:"visible",codex:"visible",cursor:"visible",opencode:"visible"}},
+  {slug:"web-clip",sample:true,desc:"把页面正文与配图整理成可检索的 Markdown",origin:"ClawHub",status:"paused",
+   vis:{heron:"not_scanned",agents:"not_scanned",claude:"visible",codex:"not_scanned",cursor:"not_scanned",opencode:"not_scanned"}},
+];
+const LABEL={visible:"生效中",shadowed:"被压制",broken:"坏链",not_scanned:"未被扫描",restart_required:"需重启"};
+const isProjected=s=>s==="visible"||s==="shadowed"||s==="restart_required";
+
+const state={query:"",filter:"all",selected:[],drawer:null};
+const $=id=>document.getElementById(id);
+const visible=()=>SKILLS.filter(s=>{
+  const n=state.query.trim().toLowerCase();
+  if(n&&!(s.slug+" "+s.desc).toLowerCase().includes(n))return false;
+  if(state.filter==="issues")return Object.values(s.vis).some(v=>v!=="visible");
+  return true;
+});
+const hasIssue=s=>Object.values(s.vis).some(v=>v!=="visible");
+
+/* ================= 表格 ================= */
+function render(){
+  const rows=visible();
+  $("nAll").textContent=SKILLS.length;
+  $("nIssues").textContent=SKILLS.filter(hasIssue).length;
+  $("navCount").textContent=SKILLS.length;
+  TARGETS.forEach((t,i)=>{ $("th"+i).textContent=t; });
+  $("rows").innerHTML=rows.map(s=>`
+    <tr data-slug="${s.slug}" class="${state.selected.includes(s.slug)?"is-sel":""}">
+      <td data-stop><input type="checkbox" class="h-cb" data-cb="${s.slug}" ${state.selected.includes(s.slug)?"checked":""}></td>
+      <td><span class="slug">${s.slug}</span>${s.sample?'<span class="tag-sample">示例</span>':''}<div class="desc">${s.desc}</div></td>
+      <td><span class="h-chip ${s.origin==="adopted"?"vit neutral":s.origin==="本地编辑"?"warn":"neutral"} plain">${s.origin}</span></td>
+      ${TARGETS.map(t=>`<td class="tcol cell-tip"><i class="dot ${s.vis[t]}"></i><span class="tip">${t} · ${LABEL[s.vis[t]]}</span></td>`).join("")}
+      <td class="chev" data-stop><svg viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></td>
+    </tr>`).join("")||`<tr><td colspan="10" style="text-align:center;color:var(--h-dim);padding:28px">没有符合条件的 Skill</td></tr>`;
+  renderStrip();
+  renderSel();
+  if(state.drawer)renderDrawer();
+}
+/* 落点健康读数条：每列一个仪器读数 */
+function renderStrip(){
+  const order=["visible","shadowed","restart_required","broken","not_scanned"];
+  $("hstrip").innerHTML=TARGETS.map(t=>{
+    const c=order.map(st=>SKILLS.filter(s=>s.vis[t]===st).length);
+    const tot=SKILLS.length, good=c[0];
+    const seg=order.map((st,i)=>c[i]?`<i class="${st[0]==="r"&&st!=="restart_required"?st[0]:st==="restart_required"?"r":st==="visible"?"v":st==="shadowed"?"s":st==="broken"?"b":"u"}" style="width:${c[i]/tot*100}%"></i>`:"").join("");
+    const bad=c[2]+c[3];
+    return `<div class="cell">
+      <div class="name">${t}<span class="frac">${good}/${tot}</span></div>
+      <div class="hbar">${seg}</div>
+      <div class="sub">${bad?bad+" 处需处理":c[4]?c[4]+" 未扫描":"全部正常"}</div>
+    </div>`;
+  }).join("");
+}
+function renderSel(){
+  const n=state.selected.length;
+  $("projBtn").disabled=!n;
+  $("selHint").textContent=n?`已选 ${n}`:"勾选后可批量投影";
+  const rows=visible();
+  $("cbAll").checked=rows.length>0&&rows.every(s=>state.selected.includes(s.slug));
+  $("popMenu").innerHTML=TARGETS.map(t=>{
+    const done=SKILLS.filter(s=>isProjected(s.vis[t])).length;
+    return `<button data-proj="${t}">投影所选到 <b style="font-family:var(--h-mono)">${t}</b><span class="n">${TPATH[t]}</span></button>`;
+  }).join("")+`<hr><button data-proj="__all">全部落点<span class="n">6</span></button>`;
+}
+
+/* ================= 抽屉 ================= */
+function renderDrawer(){
+  const s=SKILLS.find(x=>x.slug===state.drawer); if(!s)return;
+  $("dSlug").textContent=s.slug;
+  $("dOrigin").textContent=s.origin;
+  $("dDesc").textContent=s.desc;
+  $("dCount").textContent=`${Object.values(s.vis).filter(v=>v==="visible").length} / ${TARGETS.length} 生效`;
+  $("dTargets").innerHTML=TARGETS.map(t=>`
+    <div class="trow" data-t="${t}">
+      <span class="tn">${t}</span>
+      <span class="tp" title="${TPATH[t]}/${s.slug}">${TPATH[t]}/${s.slug}</span>
+      <span class="h-chip ${s.vis[t]==="visible"?"good":s.vis[t]==="broken"?"bad":s.vis[t]==="not_scanned"?"neutral":"warn"}">${LABEL[s.vis[t]]}</span>
+      <button class="h-btn sm" data-toggle="${t}">${isProjected(s.vis[t])?"取消投影":"投影"}</button>
+    </div>`).join("");
+  $("dKv").innerHTML=`<dt>来源</dt><dd>${s.origin}</dd><dt>状态</dt><dd>${s.status}</dd><dt>存储位置</dt><dd>~/.heron/skills/${s.slug}</dd>`;
+}
+function openDrawer(slug){state.drawer=slug;renderDrawer();document.body.classList.add("drawer-open");}
+function closeDrawer(){state.drawer=null;document.body.classList.remove("drawer-open");}
+
+/* ================= toast ================= */
+function toast(text){
+  const el=document.createElement("div");el.className="h-toast";el.textContent=text;
+  $("toasts").appendChild(el);setTimeout(()=>el.remove(),2600);
+}
+
+/* ================= 事件 ================= */
+$("q").addEventListener("input",e=>{state.query=e.target.value;render();});
+$("fAll").addEventListener("click",()=>{state.filter="all";$("fAll").classList.add("on");$("fIssues").classList.remove("on");render();});
+$("fIssues").addEventListener("click",()=>{state.filter="issues";$("fIssues").classList.add("on");$("fAll").classList.remove("on");render();});
+$("cbAll").addEventListener("change",e=>{state.selected=e.target.checked?visible().map(s=>s.slug):[];render();});
+$("rows").addEventListener("click",e=>{
+  const cb=e.target.closest("[data-cb]");
+  if(cb){const slug=cb.dataset.cb;state.selected=state.selected.includes(slug)?state.selected.filter(x=>x!==slug):[...state.selected,slug];render();return;}
+  if(e.target.closest("[data-stop]"))return;
+  const tr=e.target.closest("tr[data-slug]");if(tr)openDrawer(tr.dataset.slug);
+});
+$("pop").addEventListener("click",e=>{
+  const b=e.target.closest("[data-proj]");
+  if(b){
+    const t=b.dataset.proj;
+    const list=t==="__all"?TARGETS:[t];
+    state.selected.forEach(slug=>{const s=SKILLS.find(x=>x.slug===slug);list.forEach(t=>{if(!isProjected(s.vis[t]))s.vis[t]="visible";});});
+    $("pop").classList.remove("open");
+    toast(`${state.selected.length} 个 Skill 已投影到 ${t==="__all"?"全部落点":t}`);
+    state.selected=[];render();return;
+  }
+  if(e.target.closest("#projBtn"))$("pop").classList.toggle("open");
+});
+document.addEventListener("click",e=>{if(!e.target.closest("#pop"))$("pop").classList.remove("open");});
+$("mask").addEventListener("click",closeDrawer);$("dClose").addEventListener("click",closeDrawer);$("dCancelBtn").addEventListener("click",closeDrawer);
+document.addEventListener("keydown",e=>{if(e.key==="Escape"){closeDrawer();$("pop").classList.remove("open");}});
+$("dTargets").addEventListener("click",e=>{
+  const b=e.target.closest("[data-toggle]");if(!b)return;
+  const s=SKILLS.find(x=>x.slug===state.drawer),t=b.dataset.toggle;
+  s.vis[t]=isProjected(s.vis[t])?"not_scanned":"visible";
+  toast(`${s.slug} ${s.vis[t]==="visible"?"已投影到":"已从"} ${t}${s.vis[t]==="visible"?"":" 取消投影"}`);
+  render();
+});
+/* ================= 设置页 ================= */
+function renderTargets(){
+  $("setTargets").innerHTML=TARGETS.map(t=>`
+    <div class="set-row"><i class="dot visible"></i><span class="set-k" style="font-family:var(--h-mono)">${t}</span>
+    <span class="set-path">${TPATH[t]}</span><span class="sp"></span><button class="sw on" data-tg="${t}"></button></div>`).join("");
+}
+renderTargets();
+$("pageSet").addEventListener("click",e=>{
+  const sw=e.target.closest("[data-sw]");
+  if(sw){sw.classList.toggle("on");toast(`${sw.dataset.sw} ${sw.classList.contains("on")?"已开启":"已关闭"}`);return;}
+  const tg=e.target.closest("[data-tg]");
+  if(tg){tg.classList.toggle("on");
+    const n=$("setTargets").querySelectorAll(".sw.on").length;
+    $("setTgCount").textContent=n?`${n} 个已启用`:"全部停用";
+    toast(`${tg.dataset.tg} ${tg.classList.contains("on")?"已启用":"已停用"}`);return;}
+  const op=e.target.closest("[data-open]");
+  if(op){toast(`演示：在访达中打开 ${op.dataset.open}`);return;}
+});
+
+/* ================= 视图切换 ================= */
+function goPage(p){
+  $("pageLib").hidden=p!=="lib";$("pageSet").hidden=p!=="set";
+  document.querySelectorAll(".h-nav[data-page]").forEach(b=>b.classList.toggle("is-active",b.dataset.page===p));
+  $("crumbNow").textContent=p==="set"?"设置":"我的 Skill";
+}
+document.querySelector(".h-rail-scroll").addEventListener("click",e=>{
+  const b=e.target.closest(".h-nav");if(!b)return;
+  if(b.dataset.page)goPage(b.dataset.page);
+  else toast("原型聚焦「我的 Skill」与「设置」，其余页面见 dir-1.html");
+});
+
+/* 主题 */
+function setTheme(th){
+  document.documentElement.setAttribute("data-theme",th);localStorage.setItem("heron.theme",th);
+  $("themeLbl").textContent=th==="dark"?"浅色":"深色";
+  document.querySelectorAll("#setTheme button").forEach(b=>b.classList.toggle("on",b.dataset.th===th));
+}
+setTheme(localStorage.getItem("heron.theme")||"dark");
+$("themeBtn").addEventListener("click",()=>setTheme(document.documentElement.getAttribute("data-theme")==="dark"?"light":"dark"));
+$("setTheme").addEventListener("click",e=>{const b=e.target.closest("[data-th]");if(b)setTheme(b.dataset.th);});
+render();
+</script>
+</body></html>

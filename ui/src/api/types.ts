@@ -14,6 +14,48 @@ export interface ScanReport {
   roots_missing: string[];
 }
 
+/** Where the background walk is. `done` and `canceled` are terminal and carry the final tally. */
+export type ScanPhase = "prepare" | "walk" | "parse" | "persist" | "summary" | "done" | "canceled";
+
+/**
+ * One `scan://progress` push. Every field is optional: a root that has not started yet reports
+ * nothing about itself, and `percent` is null whenever no total can be estimated — the UI must not
+ * invent a percentage it was not given.
+ */
+export interface ScanProgress {
+  phase: ScanPhase;
+  /** 1-based index of the root being walked (`rootIndex`/`rootTotal` render as "2/6"). */
+  rootIndex?: number;
+  rootTotal?: number;
+  currentRoot?: string;
+  dirsVisited?: number;
+  found?: number;
+  percent?: number | null;
+  truncated?: boolean;
+  /** Set by the terminal push when the walk stopped at the directory ceiling. */
+  limit?: number;
+}
+
+/**
+ * One `scan://hit` batch. The rows carry the same content as `DetectedRow`, in the camelCase the
+ * event contract uses (`observedSlug`, `frontmatterOk`); the snake_case spellings are accepted too,
+ * because that is what the query commands return.
+ */
+export interface ScanHit {
+  path?: string;
+  kind?: string;
+  clientId?: string | null;
+  client_id?: string | null;
+  scope?: string | null;
+  observedSlug?: string | null;
+  observed_slug?: string | null;
+  frontmatterOk?: boolean | null;
+  frontmatter_ok?: boolean | null;
+  nestedSuspect?: boolean;
+  adoptState?: string;
+  adopt_state?: string;
+}
+
 export interface DetectedRow {
   path: string;
   client_id: string | null;

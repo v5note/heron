@@ -1,0 +1,1138 @@
+<!doctype html><html lang="zh-CN" data-theme="dark"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Heron · 扫描进度 + 概览改版 v2</title>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&family=EB+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/gsap.min.js"></script>
+<style>
+:root{
+  --h-bg:#090807;--h-panel:#0F0E0C;--h-raised:#151310;--h-line:rgba(246,240,230,.08);
+  --h-line2:rgba(246,240,230,.16);--h-text:#EFE8DA;--h-dim:#C2BCB0;--h-faint:#A39B8C;
+  --h-ink:#181410;--h-good:#B2C77A;--h-warn:#E3C08A;--h-bad:#E47B66;--h-vit:#9EA8FF;
+  --h-sans:"Manrope",-apple-system,"PingFang SC","Hiragino Sans GB",sans-serif;
+  --h-mono:"JetBrains Mono",ui-monospace,Menlo,monospace;
+  --h-serif:"EB Garamond","Songti SC",Georgia,serif;
+  --h-lift:0 6px 18px rgba(0,0,0,.42);
+  color-scheme:dark;
+}
+[data-theme="light"]{
+  --h-bg:#FAF9F6;--h-panel:#FFFFFF;--h-raised:#F5F2EC;--h-line:#E8E3DA;--h-line2:#D6CFC3;
+  --h-text:#211D18;--h-dim:#5C5650;--h-faint:#776F64;
+  --h-ink:#FFFFFF;--h-good:#5C7A2E;--h-warn:#8A6216;--h-bad:#A8452F;--h-vit:#4B4BC2;
+  --h-lift:0 6px 18px rgba(33,29,24,.14);
+  color-scheme:light;
+}
+html,body{margin:0;padding:0;background:var(--h-bg);color:var(--h-text)}
+.h-body{background:var(--h-bg);color:var(--h-text);font-family:var(--h-sans);overflow:hidden}
+.h-shell{display:grid;grid-template-columns:212px minmax(0,1fr);grid-template-rows:1fr;height:100vh;overflow:hidden}
+@media (max-width:880px){ .h-shell{grid-template-columns:1fr} }
+[data-rail]{display:none}
+@media (max-width:880px){ [data-rail]{display:none !important} }
+/* rail */
+.h-rail{display:flex;flex-direction:column;min-height:0;background:var(--h-panel);border-right:1px solid var(--h-line);padding:0 10px 10px}
+.h-rail-head{display:flex;align-items:center;gap:9px;padding:15px 6px 12px}
+.h-seal{width:25px;height:25px;border-radius:5px;background:var(--h-text);color:var(--h-bg);display:grid;place-items:center;flex:none}
+.h-seal svg{width:15px;height:15px}
+.h-wordmark{display:flex;flex-direction:column;line-height:1.12}
+.h-wordmark b{font-family:var(--h-serif);font-size:16px;font-weight:600;letter-spacing:.01em}
+.h-wordmark small{font-size:12px;color:var(--h-dim);letter-spacing:.08em}
+.h-search{display:flex;align-items:center;gap:8px;height:32px;padding:0 9px;margin:2px 0 10px;border:1px solid var(--h-line);border-radius:7px;color:var(--h-dim);font-size:12px;background:var(--h-raised)}
+.h-search kbd{margin-left:auto;font-family:var(--h-mono);font-size:12px;color:var(--h-dim);border:1px solid var(--h-line);border-radius:4px;padding:1px 4px}
+.h-rail-scroll{flex:1;min-height:0;overflow:auto;display:flex;flex-direction:column;gap:1px;scrollbar-width:thin}
+.h-group{font-size:12.5px;font-weight:600;letter-spacing:.02em;color:var(--h-dim);padding:14px 8px 6px}
+.h-nav{display:flex;align-items:center;gap:9px;height:30px;padding:0 8px;border-radius:6px;font-size:12.5px;color:var(--h-dim);position:relative;text-align:left;width:100%}
+.h-nav svg{width:14px;height:14px;flex:none;stroke:currentColor;fill:none;stroke-width:1.5}
+.h-nav:hover{background:var(--h-raised);color:var(--h-text)}
+.h-nav.is-active{background:var(--h-raised);color:var(--h-text);font-weight:600}
+.h-nav.is-active::before{content:"";position:absolute;left:0;top:7px;bottom:7px;width:2px;border-radius:2px;background:var(--h-vit)}
+.h-count{margin-left:auto;font-family:var(--h-mono);font-size:12px;color:var(--h-dim);min-width:16px;text-align:right}
+.h-count.tone-warn{color:var(--h-warn)} .h-count.tone-bad{color:var(--h-bad)}
+.h-rail-foot{display:flex;flex-direction:column;gap:8px;padding-top:10px;border-top:1px solid var(--h-line)}
+.h-health{display:flex;gap:7px;flex-wrap:wrap;padding:0 4px}
+.h-dot{display:inline-flex;align-items:center;gap:5px;font-size:12px;color:var(--h-dim)}
+.h-dot::before{content:"";width:6px;height:6px;border-radius:50%;background:var(--h-faint)}
+.h-dot.good::before{background:var(--h-good)} .h-dot.warn::before{background:var(--h-warn)} .h-dot.bad::before{background:var(--h-bad)}
+.h-theme{margin-left:auto;display:inline-flex;align-items:center;gap:5px;height:26px;padding:0 9px;border:1px solid var(--h-line);border-radius:999px;font-size:12px;color:var(--h-dim)}
+.h-theme svg{width:12px;height:12px;stroke:currentColor;fill:none;stroke-width:1.6}
+.h-main{display:flex;flex-direction:column;min-width:0;min-height:0}
+/* topbar */
+.h-topbar{display:flex;align-items:center;gap:10px;height:48px;padding:0 24px;border-bottom:1px solid var(--h-line);flex:none;background:var(--h-bg);z-index:5;position:relative}
+.h-crumbs{display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--h-faint);white-space:nowrap;overflow:hidden}
+.h-crumbs b{color:var(--h-text);font-weight:600}
+.h-topbar .sp{flex:1}
+.h-btn{display:inline-flex;align-items:center;gap:7px;height:30px;padding:0 11px;border-radius:7px;font-size:12.5px;font-weight:500;border:1px solid var(--h-line2);color:var(--h-text);white-space:nowrap}
+.h-btn svg{width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:1.6}
+.h-btn:hover{background:var(--h-raised)}
+.h-btn.primary{background:var(--h-text);border-color:var(--h-text);color:var(--h-bg)}
+.h-btn.primary:hover{opacity:.9}
+.h-btn:disabled{opacity:.45;cursor:default}
+.h-view{padding:24px 28px 46px;overflow:auto;flex:1;min-height:0;position:relative}
+.h-view-head{display:flex;align-items:flex-end;gap:14px;margin-bottom:14px;flex-wrap:wrap}
+.h-h1{font-size:22px;font-weight:700;letter-spacing:-.01em;margin:0}
+.h-lead{margin:6px 0 0;color:var(--h-dim);font-size:14px}
+.h-actions{margin-left:auto;display:flex;gap:8px;flex-wrap:wrap}
+/* surfaces */
+.h-card{background:var(--h-panel);border:1px solid var(--h-line);border-radius:10px}
+.h-card-h{display:flex;align-items:center;gap:8px;padding:12px 15px;border-bottom:1px solid var(--h-line)}
+.h-card-h h3{margin:0;font-size:12.5px;font-weight:600;letter-spacing:.02em}
+.h-card-h .r{margin-left:auto;display:flex;align-items:center;gap:8px}
+.h-card-b{padding:14px 15px}
+.h-sec{display:flex;align-items:center;gap:10px;margin:18px 0 10px}
+.h-sec h2{margin:0;font-size:13px;font-weight:600;letter-spacing:.02em}
+.h-sec .line{flex:1;height:1px;background:var(--h-line)}
+/* chips */
+.h-chip{display:inline-flex;align-items:center;gap:6px;height:22px;padding:0 8px;border-radius:999px;font-size:12px;font-weight:500;border:1px solid transparent;white-space:nowrap}
+.h-chip::before{content:"";width:5px;height:5px;border-radius:50%;background:currentColor;opacity:.9;flex:none}
+.h-chip.good{color:var(--h-good);background:color-mix(in srgb,var(--h-good) 12%,transparent)}
+.h-chip.warn{color:var(--h-warn);background:color-mix(in srgb,var(--h-warn) 12%,transparent)}
+.h-chip.bad{color:var(--h-bad);background:color-mix(in srgb,var(--h-bad) 12%,transparent)}
+.h-chip.neutral{color:var(--h-dim);background:var(--h-raised);border-color:var(--h-line)}
+.h-chip.vit{color:var(--h-vit);background:color-mix(in srgb,var(--h-vit) 12%,transparent)}
+.h-chip.plain::before{display:none}
+.h-mono{font-family:var(--h-mono);font-size:12px;color:var(--h-dim)}
+.h-path{font-family:var(--h-mono);font-size:12px;color:var(--h-dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;direction:ltr}
+.h-muted{color:var(--h-dim)}
+/* rows / table */
+.h-table{width:100%;border-collapse:separate;border-spacing:0}
+.h-table th{text-align:left;font-size:12px;font-weight:600;color:var(--h-dim);font-weight:500;padding:0 12px 8px;border-bottom:1px solid var(--h-line)}
+.h-table td{padding:7px 12px;border-bottom:1px solid var(--h-line);font-size:12.5px;vertical-align:middle}
+.h-table tbody tr{cursor:pointer}
+.h-table tbody tr:hover td{background:var(--h-raised)}
+.h-table tbody tr.is-sel td{background:color-mix(in srgb,var(--h-vit) 9%,transparent)}
+.h-table tr:last-child td{border-bottom:0}
+/* checkbox */
+.h-cb{appearance:none;width:15px;height:15px;border:1px solid var(--h-line2);border-radius:4px;background:transparent;display:inline-grid;place-items:center;cursor:pointer;margin:0;flex:none}
+.h-cb:checked{background:var(--h-text);border-color:var(--h-text)}
+.h-cb:checked::after{content:"";width:8px;height:4px;border-left:1.8px solid var(--h-bg);border-bottom:1.8px solid var(--h-bg);transform:rotate(-45deg) translateY(-1px)}
+.h-switch{position:relative;width:30px;height:17px;border-radius:999px;background:var(--h-line2);cursor:pointer;flex:none;transition:background .15s}
+.h-switch::after{content:"";position:absolute;top:2px;left:2px;width:13px;height:13px;border-radius:50%;background:var(--h-panel);transition:transform .15s}
+.h-switch.on{background:var(--h-text)}
+.h-switch.on::after{transform:translateX(13px)}
+/* toast */
+.h-toasts{position:fixed;right:22px;bottom:22px;display:flex;flex-direction:column;gap:8px;z-index:50;align-items:flex-end}
+.h-toast{display:flex;align-items:center;gap:9px;max-width:420px;padding:10px 13px;border-radius:8px;font-size:12.5px;border:1px solid var(--h-line2);box-shadow:0 12px 32px rgba(0,0,0,.35);background:var(--h-panel);color:var(--h-text)}
+.h-toast.ok{border-left:3px solid var(--h-good)}
+.h-toast.warn{border-left:3px solid var(--h-warn)} .h-toast.error{border-left:3px solid var(--h-bad)}
+.h-toast .x{margin-left:6px;color:var(--h-faint);font-size:14px}
+/* dialog */
+.h-overlay{position:fixed;inset:0;background:color-mix(in srgb,var(--h-bg) 62%,transparent);backdrop-filter:blur(3px);z-index:40;display:grid;place-items:center;padding:24px}
+.h-dialog{width:min(560px,100%);background:var(--h-panel);border:1px solid var(--h-line2);border-radius:12px;box-shadow:0 30px 80px rgba(0,0,0,.45)}
+.h-dialog-h{padding:16px 18px 6px}
+.h-dialog-h h3{margin:0;font-size:15px}
+.h-dialog-h p{margin:6px 0 0;color:var(--h-dim);font-size:12.5px}
+.h-dialog-b{padding:14px 18px 18px}
+.h-dialog-f{display:flex;gap:8px;justify-content:flex-end;padding:12px 18px;border-top:1px solid var(--h-line)}
+.h-tabs{display:flex;gap:4px;border-bottom:1px solid var(--h-line);padding:0 18px}
+.h-tab{height:34px;font-size:12.5px;color:var(--h-dim);border-bottom:2px solid transparent;margin-bottom:-1px}
+.h-tab.is-active{color:var(--h-text);border-bottom-color:var(--h-text);font-weight:600}
+.h-tab .n{font-family:var(--h-mono);font-size:12px;margin-left:5px;color:var(--h-faint)}
+/* drawer */
+.h-drawer-mask{position:fixed;inset:0;background:color-mix(in srgb,var(--h-bg) 55%,transparent);backdrop-filter:blur(2px);z-index:38}
+.h-drawer{position:fixed;top:0;right:0;bottom:0;width:min(620px,92vw);background:var(--h-panel);border-left:1px solid var(--h-line2);z-index:39;display:flex;flex-direction:column;box-shadow:-24px 0 60px rgba(0,0,0,.35)}
+.h-drawer-h{display:flex;align-items:flex-start;gap:12px;padding:18px 20px;border-bottom:1px solid var(--h-line)}
+.h-drawer-b{flex:1;overflow:auto;padding:18px 20px;display:flex;flex-direction:column;gap:14px}
+.h-drawer-f{display:flex;gap:8px;justify-content:flex-end;padding:12px 20px;border-top:1px solid var(--h-line)}
+.h-close{width:28px;height:28px;border-radius:6px;display:grid;place-items:center;color:var(--h-dim);margin-left:auto}
+.h-close:hover{background:var(--h-raised);color:var(--h-text)}
+/* misc */
+.h-kv{display:grid;grid-template-columns:110px 1fr;gap:8px 12px;font-size:12.5px}
+.h-kv dt{color:var(--h-dim)} .h-kv dd{margin:0}
+.h-empty{padding:34px 16px;text-align:center;color:var(--h-dim);font-size:13px}
+.h-bar{height:4px;border-radius:4px;background:var(--h-line2);overflow:hidden}
+.h-bar i{display:block;height:100%;background:var(--h-text);border-radius:4px}
+.h-bar.warn i{background:var(--h-bad)}
+.h-link{color:var(--h-vit);text-decoration:none;border-bottom:1px solid color-mix(in srgb,var(--h-vit) 40%,transparent)}
+.h-code{font-family:var(--h-mono);font-size:12px;line-height:1.65;background:var(--h-raised);border:1px solid var(--h-line);border-radius:8px;padding:12px;margin:0;overflow:auto;white-space:pre}
+.h-split{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+@media (max-width:1100px){ .h-split{grid-template-columns:1fr} }
+.h-field{display:flex;flex-direction:column;gap:6px;font-size:12px;color:var(--h-dim)}
+.h-input{height:32px;padding:0 10px;border:1px solid var(--h-line2);border-radius:7px;background:var(--h-raised);color:var(--h-text);font-size:12.5px;outline:none;width:100%}
+.h-input:focus{border-color:var(--h-text)}
+.h-seg{display:inline-flex;border:1px solid var(--h-line2);border-radius:7px;overflow:hidden}
+button{font:inherit;border:0;background:none;padding:0;color:inherit;cursor:pointer;line-height:normal}
+input[type=checkbox]{-webkit-appearance:none;appearance:none}
+.h-seg button{height:26px;padding:0 9px;font-size:12px;color:var(--h-dim)}
+.h-seg button.is-active{background:var(--h-text);color:var(--h-bg);font-weight:600}
+.h-in{animation:h-in .28s cubic-bezier(.2,.7,.2,1)}
+@keyframes h-in{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+.i{display:inline-flex;align-items:center}.i svg{width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:1.5}
+.h-nav .i svg,.h-btn .i svg{width:14px;height:14px}
+.h-search input{outline:none;color:var(--h-text)}
+.h-tabs-m{display:none}
+@media (max-width:880px){
+  .h-tabs-m{display:grid;grid-template-columns:repeat(5,1fr);border-top:1px solid var(--h-line);background:var(--h-panel);padding:6px 4px;gap:2px}
+  .h-tabs-m button{display:flex;flex-direction:column;align-items:center;gap:3px;font-size:12px;color:var(--h-dim);padding:4px 0}
+  .h-tabs-m button.is-active{color:var(--h-text)}
+  .h-view{padding:16px}
+  .h-drawer{width:100vw}
+}
+/* ============ v2 · 扫描仪器 ============ */
+/* 顶栏下沿 2px 全局进度轨：整轮真实比率（绝不 per-root），跨页存活 */
+.h-track{position:absolute;left:0;right:0;bottom:-2px;height:2px;overflow:hidden;opacity:0;transition:opacity .2s;pointer-events:none}
+.h-track.on{opacity:1}
+.h-track i{position:absolute;top:0;bottom:0;left:0;width:calc(var(--p,0) * 100%);border-radius:0 2px 2px 0;overflow:hidden;
+  background:color-mix(in srgb,var(--h-vit) 45%,transparent);transition:width .12s linear}
+/* 整轮真实比率 + accent 流光：root 内没有可信子进度，所以只在已完成的整轮比率上扫一道光 */
+.h-track i::after{content:"";position:absolute;inset:0;
+  background:linear-gradient(90deg,transparent,color-mix(in srgb,var(--h-vit) 96%,transparent),transparent);
+  animation:h-trackflow 1.5s linear infinite}
+@keyframes h-trackflow{0%{transform:translateX(-100%)}100%{transform:translateX(100%)}}
+.h-track.flash i{background:var(--h-good);animation:h-flash .55s ease-out 1 forwards}
+.h-track.flash i::after{animation:none;opacity:0}
+@keyframes h-flash{0%{opacity:1}60%{opacity:1}100%{opacity:0}}
+
+/* 扫描按钮：宽度恒定，状态切换只换内部，绝不抖动（min-width 取最宽态：点击取消 · 6/6 + 6 枚刻度计 + 图标） */
+.h-scanbtn{min-width:190px;justify-content:flex-start;gap:6px;transition:border-color .15s,color .15s,background .15s}
+/* 非扫描态没有右侧刻度计，定宽后若仍左对齐会留一块空白：居中摆放 */
+.h-scanbtn:not(.scanning){justify-content:center}
+.h-scanbtn .spin{animation:h-spin 2s linear infinite;transform-origin:50% 50%;display:inline-flex;flex:none}
+.h-scanbtn .spin svg{width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:1.6}
+@keyframes h-spin{to{transform:rotate(360deg)}}
+.h-ticks{display:inline-flex;gap:2px;margin-left:auto;flex:none}
+.h-tick{width:6px;height:8px;border-radius:2px;border:1px solid var(--h-line2);background:transparent;flex:none}
+.h-tick.done{background:var(--h-vit);border-color:var(--h-vit)}
+.h-tick.cur{border-color:var(--h-vit);background:color-mix(in srgb,var(--h-vit) 22%,transparent);position:relative;overflow:hidden}
+.h-tick.cur::after{content:"";position:absolute;inset:0;transform:translateX(-100%);
+  background:linear-gradient(90deg,transparent,color-mix(in srgb,var(--h-vit) 85%,transparent),transparent);
+  animation:h-tickflow 1.1s linear infinite}
+@keyframes h-tickflow{to{transform:translateX(100%)}}
+/* 取消待命：扫描中 hover 按钮 → 文案换「点击取消」，warn */
+.h-scanbtn.scanning:hover .lbl-run{display:none}
+.h-scanbtn.scanning:hover .lbl-cancel{display:inline}
+.h-scanbtn .lbl-cancel{display:none}
+/* 描边按钮：warn 描边 + warn 文字（两主题都压在深/浅底上，对比足够） */
+.h-btn:not(.primary).h-scanbtn.scanning:hover{border-color:var(--h-warn);color:var(--h-warn);background:color-mix(in srgb,var(--h-warn) 8%,transparent)}
+.h-btn:not(.primary).h-scanbtn.scanning:hover .h-tick{border-color:color-mix(in srgb,var(--h-warn) 55%,transparent)}
+.h-btn:not(.primary).h-scanbtn.scanning:hover .h-tick.done{background:color-mix(in srgb,var(--h-warn) 70%,transparent);border-color:color-mix(in srgb,var(--h-warn) 70%,transparent)}
+.h-btn:not(.primary).h-scanbtn.scanning:hover .h-tick.cur{border-color:var(--h-warn);background:color-mix(in srgb,var(--h-warn) 25%,transparent)}
+/* 实心主按钮：整颗换成 warn 底 + 墨色字，刻度计跟着换墨色（warn 文字压反色底会掉到 4.5 以下） */
+.h-btn.primary.h-scanbtn.scanning:hover{background:var(--h-warn);border-color:var(--h-warn);color:var(--h-ink);opacity:1}
+.h-btn.primary.h-scanbtn.scanning:hover .h-tick{border-color:color-mix(in srgb,var(--h-ink) 40%,transparent)}
+.h-btn.primary.h-scanbtn.scanning:hover .h-tick.done{background:var(--h-ink);border-color:var(--h-ink)}
+.h-btn.primary.h-scanbtn.scanning:hover .h-tick.cur{border-color:var(--h-ink);background:color-mix(in srgb,var(--h-ink) 28%,transparent)}
+/* 结果态：描边按钮用状态色；主按钮保持反色文字，完成信号交给进度轨闪光 / chip / toast */
+.h-btn:not(.primary).h-scanbtn.done-ok{border-color:color-mix(in srgb,var(--h-good) 55%,transparent);color:var(--h-good)}
+.h-btn:not(.primary).h-scanbtn.canceled{border-color:color-mix(in srgb,var(--h-warn) 55%,transparent);color:var(--h-warn)}
+.h-btn.primary.h-scanbtn.done-ok,.h-btn.primary.h-scanbtn.canceled{background:var(--h-text);border-color:var(--h-text);color:var(--h-bg)}
+
+/* 概览扫描状态行（mono 12.5 --faint，唯一允许的新元素） */
+.h-statusline{display:flex;align-items:center;gap:7px;padding:0 2px 10px;margin:0 0 14px;
+  border-bottom:1px solid var(--h-line);font-family:var(--h-mono);font-size:12.5px;color:var(--h-faint);
+  font-variant-numeric:tabular-nums;min-height:20px;white-space:nowrap;overflow:hidden}
+.h-statusline .sep{color:color-mix(in srgb,var(--h-faint) 55%,transparent)}
+.h-statusline .live{color:var(--h-vit)}
+.h-statusline .cancel{margin-left:6px;color:var(--h-warn);border-bottom:1px solid color-mix(in srgb,var(--h-warn) 40%,transparent)}
+.h-statusline .num{color:var(--h-text)}
+.h-statusline .trunc{color:var(--h-warn)}
+
+/* 决定队列 */
+.h-queue{display:flex;flex-direction:column;padding:4px 15px}
+/* 空态不要把卡片撑成一片空白：与右侧读数卡等高并居中 */
+.h-queue.is-empty{display:grid;place-items:center;min-height:238px;padding:0 15px}
+.h-qrow{display:flex;align-items:center;gap:12px;padding:11px 0;border-bottom:1px solid var(--h-line)}
+.h-qrow:last-of-type{border-bottom:0}
+.h-qrow .qbody{min-width:0;flex:1}
+.h-qrow .qmain{font-size:14px;font-weight:600;color:var(--h-text);display:block}
+.h-qrow .qmain .num{font-variant-numeric:tabular-nums}
+.h-qrow .qctx{font-family:var(--h-mono);font-size:12px;color:var(--h-dim);display:block;margin-top:3px;font-variant-numeric:tabular-nums}
+.h-qrow .h-btn{margin-left:auto;flex:none}
+
+/* 系统读数（Rams 仪器面板：三读数 + root 刻度计 + 投影条块） */
+.h-readout{display:flex;flex-direction:column;gap:0}
+.h-bignums{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;padding:12px 15px 10px}
+.h-bignum .stat{font-size:26px;font-weight:700;letter-spacing:-.02em;font-variant-numeric:tabular-nums;line-height:1.05;display:inline-block}
+.h-bignum .lab{font-size:12px;color:var(--h-dim);margin-top:5px}
+.h-bignum.live .stat{color:var(--h-vit)}
+/* 扫描期间读数变化 → accent 脉冲一下 */
+.stat.pulse{animation:h-pulse .55s cubic-bezier(.2,.7,.2,1)}
+@keyframes h-pulse{0%{transform:translateY(0)}30%{color:var(--h-vit);transform:translateY(-2px)}100%{transform:translateY(0)}}
+/* root 刻度计：6 段小格 */
+.h-gauge-wrap{padding:2px 15px 12px;display:flex;flex-direction:column;gap:8px}
+.h-gauge-h{display:flex;align-items:baseline;gap:8px}
+.h-gauge-h .cap{font-family:var(--h-mono);font-size:12px;color:var(--h-faint);font-variant-numeric:tabular-nums}
+.h-gauge-h .cap b{color:var(--h-text);font-weight:500}
+.h-gauge-h .rt{margin-left:auto;font-family:var(--h-mono);font-size:12px;color:var(--h-faint)}
+.h-gauge{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:5px}
+.h-gseg{position:relative;height:8px;border-radius:3px;background:var(--h-line2);overflow:hidden}
+.h-gseg.done{background:var(--h-good)}
+.h-gseg.cur{background:color-mix(in srgb,var(--h-good) 26%,var(--h-line2))}
+.h-gseg.cur::after{content:"";position:absolute;top:0;bottom:0;left:0;width:55%;
+  background:linear-gradient(90deg,transparent,var(--h-good),transparent);animation:h-gaugeflow .95s linear infinite}
+@keyframes h-gaugeflow{0%{transform:translateX(-120%)}100%{transform:translateX(240%)}}
+.h-gauge-note{font-family:var(--h-mono);font-size:12px;color:var(--h-faint)}
+.h-card-h button.tbtn{font-family:var(--h-mono);font-size:12px;color:var(--h-dim);border:1px solid var(--h-line);border-radius:6px;height:22px;padding:0 8px}
+.h-card-h button.tbtn:hover{background:var(--h-raised);color:var(--h-text)}
+.h-proj{border-top:1px solid var(--h-line);padding:10px 15px 12px;display:flex;flex-direction:column;gap:8px}
+.h-proj-row{display:flex;justify-content:space-between;align-items:center;font-size:12px;margin-bottom:-3px}
+.h-proj-row .h-mono{font-size:12px}
+
+/* 落点状态卡片网格（替换原四列表格；行距节奏对齐决定队列的 11px 呼吸） */
+.h-tgrid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+@media (max-width:1180px){ .h-tgrid{grid-template-columns:repeat(2,minmax(0,1fr))} }
+@media (max-width:760px){ .h-tgrid{grid-template-columns:minmax(0,1fr)} }
+.h-tcard{display:flex;flex-direction:column;gap:10px;padding:12px 14px;cursor:pointer;
+  background:var(--h-panel);border:1px solid var(--h-line);border-radius:10px;
+  transition:border-color .15s,box-shadow .15s,transform .15s}
+.h-tcard:hover{border-color:var(--h-line2);box-shadow:var(--h-lift);transform:translateY(-1px)}
+.h-tcard .th{display:flex;align-items:center;gap:10px;min-width:0}
+.h-tcard .tn{font-size:14px;font-weight:600;white-space:nowrap}
+.h-tcard .tdef{margin-left:6px}
+.h-tcard .th .h-chip{margin-left:auto;flex:none}
+/* 客户端标识：34px 弱底容器 + 26px 品牌线描图标（发现页下拉同一套 path） */
+.h-tglyph{width:34px;height:34px;border-radius:9px;flex:none;display:grid;place-items:center;
+  box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--h-text) 7%,transparent)}
+.h-tglyph .gi{display:grid;place-items:center}
+.h-tglyph svg{width:26px;height:26px;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
+.h-tglyph img{width:26px;height:26px;display:block;object-fit:contain}
+.h-tcard .tp{display:flex;align-items:center;gap:8px;position:relative}
+.h-tcard .tp .h-path{flex:1;min-width:0}
+.h-tcard .tcopied{width:44px;flex:none;font-size:12px;color:var(--h-good);text-align:right}
+.h-copy{width:24px;height:22px;flex:none;display:grid;place-items:center;border-radius:5px;
+  border:1px solid var(--h-line);background:transparent;color:var(--h-faint)}
+.h-copy svg{width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:1.6}
+.h-copy:hover{color:var(--h-text);border-color:var(--h-line2);background:var(--h-raised)}
+.h-copy.copied{color:var(--h-good);border-color:color-mix(in srgb,var(--h-good) 45%,transparent)}
+.h-tcard .tf{display:flex;align-items:center;gap:8px;padding-top:10px;border-top:1px solid var(--h-line);
+  font-size:12px;color:var(--h-dim)}
+.h-tcard .tf .cnt{margin-left:auto;font-family:var(--h-mono);font-size:12px;color:var(--h-faint);font-variant-numeric:tabular-nums}
+.h-switch.sm{width:22px;height:13px}
+.h-switch.sm::after{width:9px;height:9px;top:2px;left:2px}
+.h-switch.sm.on{background:var(--h-vit)}
+.h-switch.sm.on::after{transform:translateX(9px)}
+
+/* 发现页：增量流入卡片 */
+.h-newchip{font-family:var(--h-mono);font-size:12px;color:var(--h-vit);background:color-mix(in srgb,var(--h-vit) 12%,transparent);
+  border:1px solid color-mix(in srgb,var(--h-vit) 35%,transparent);border-radius:999px;padding:2px 9px;font-variant-numeric:tabular-nums}
+.h-newchip.flash{animation:h-chipflash .6s ease-out 2}
+.h-stream{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:10px}
+.h-dcard{display:flex;align-items:center;gap:11px;padding:10px 12px;background:var(--h-panel);border:1px solid var(--h-line);border-radius:10px}
+.h-dcard:hover{background:var(--h-raised)}
+.h-glyph{width:34px;height:34px;border-radius:8px;display:grid;place-items:center;flex:none;
+  font-family:var(--h-mono);font-size:14px;font-weight:600;color:var(--h-bg)}
+.h-dcard .dn{font-size:13px;font-weight:600}
+.h-dcard .dp{margin-top:2px}
+.h-dcard .client{display:inline-flex;align-items:center;gap:5px;font-size:12px;color:var(--h-dim);margin-left:auto;flex:none}
+.h-dcard .client::before{content:"";width:6px;height:6px;border-radius:50%;background:var(--cc,var(--h-faint))}
+.stream-enter-active{transition:opacity .28s ease,transform .28s cubic-bezier(.2,.7,.2,1);transition-delay:var(--sd,0ms)}
+.stream-enter-from{opacity:0;transform:translateY(6px)}
+/* prepend 每 ~300ms 一批，做 FLIP 位移过渡会被下一批打断并残留 transform（截图里卡片互相压叠）：
+   旧卡直接归位，只有新卡淡入上移 */
+.stream-leave-active{transition:opacity .15s;position:absolute}
+.stream-leave-to{opacity:0}
+.count-bump{animation:h-bump .5s cubic-bezier(.2,.7,.2,1)}
+@keyframes h-bump{0%{transform:translateY(0)}35%{transform:translateY(-3px);color:var(--h-vit)}100%{transform:translateY(0)}}
+
+/* toast 内动作按钮 */
+.h-toast .tact{margin-left:8px;height:24px;padding:0 9px;border:1px solid var(--h-line2);border-radius:6px;font-size:12px;color:var(--h-text);white-space:nowrap;flex:none}
+.h-toast .tact:hover{background:var(--h-raised)}
+.h-toast .tact.link{border-color:color-mix(in srgb,var(--h-vit) 45%,transparent);color:var(--h-vit)}
+
+/* 演示 chrome（窗口左下，非 app UI）：状态机快进 / speed / 截断开关 */
+.h-demo{position:fixed;left:224px;bottom:10px;z-index:45;display:flex;align-items:center;gap:6px;
+  font-family:var(--h-mono);font-size:12px;color:var(--h-faint);
+  background:color-mix(in srgb,var(--h-panel) 88%,transparent);border:1px solid var(--h-line);border-radius:7px;padding:4px 8px}
+.h-demo button{height:21px;padding:0 8px;border:1px solid var(--h-line2);border-radius:5px;color:var(--h-dim);white-space:nowrap}
+.h-demo button:hover{background:var(--h-raised);color:var(--h-text)}
+.h-demo button.on{border-color:color-mix(in srgb,var(--h-warn) 55%,transparent);color:var(--h-warn)}
+.h-demo label{display:flex;align-items:center;gap:5px;padding-left:2px}
+.h-demo input[type=range]{width:62px;accent-color:var(--h-vit)}
+.h-demo b{color:var(--h-dim);font-weight:500;font-variant-numeric:tabular-nums}
+.h-demo .keys{color:var(--h-faint);border-left:1px solid var(--h-line);padding-left:9px;margin-left:2px;white-space:nowrap}
+
+@media (prefers-reduced-motion: reduce){
+  .h-scanbtn .spin{animation:none}
+  .h-tcard{transition:none}
+  .h-tcard:hover{transform:none}
+  .h-tick.cur::after,.h-gseg.cur::after{animation:none;background:var(--h-vit);opacity:.6;transform:none;width:100%}
+  .h-gseg.cur::after{background:var(--h-good)}
+  .h-track i{transition:none}
+  .h-track i::after{animation:none;opacity:0}
+  .h-track.flash i{animation:none}
+  .stream-enter-active{transition:none}
+  .count-bump,.stat.pulse{animation:none}
+  .h-in{animation:none}
+}
+</style>
+<script>
+const ICON_RAW = {"overview":"<path d=\"M3 12h4l2.5-6 4 12 2.5-6H21\"/>","library":"<rect x=\"3.5\" y=\"4\" width=\"4\" height=\"16\" rx=\"1\"/><rect x=\"9.5\" y=\"4\" width=\"4\" height=\"16\" rx=\"1\"/><path d=\"M15.5 5.2l3.6 14.6\"/>","discover":"<circle cx=\"11\" cy=\"11\" r=\"6.5\"/><path d=\"M16 16l4.5 4.5\"/>","sources":"<path d=\"M4 7h16M4 12h10M4 17h13\"/><circle cx=\"18.5\" cy=\"16.5\" r=\"2.5\"/>","projects":"<path d=\"M3.5 7.5A1.5 1.5 0 0 1 5 6h4l2 2h8a1.5 1.5 0 0 1 1.5 1.5V18A1.5 1.5 0 0 1 19 19.5H5A1.5 1.5 0 0 1 3.5 18z\"/>","upgrades":"<path d=\"M12 20V4\"/><path d=\"M6.5 9.5 12 4l5.5 5.5\"/>","doctor":"<path d=\"M3.5 12h4l1.5-4 3 8 2-4h6.5\"/>","settings":"<circle cx=\"12\" cy=\"12\" r=\"3\"/><path d=\"M12 3.5v2M12 18.5v2M3.5 12h2M18.5 12h2M6 6l1.4 1.4M16.6 16.6 18 18M6 18l1.4-1.4M16.6 7.4 18 6\"/>","sun":"<circle cx=\"12\" cy=\"12\" r=\"4\"/><path d=\"M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6l1.4 1.4M17 17l1.4 1.4M5.6 18.4 7 17M17 7l1.4-1.4\"/>","moon":"<path d=\"M20 14.2A8 8 0 1 1 9.8 4a6.4 6.4 0 0 0 10.2 10.2z\"/>","search":"<circle cx=\"11\" cy=\"11\" r=\"6\"/><path d=\"M15.5 15.5 20 20\"/>","refresh":"<path d=\"M19.5 12a7.5 7.5 0 1 1-2.2-5.3\"/><path d=\"M19.5 4v4h-4\"/>","check":"<path d=\"M5 12.5l4.5 4.5L19 7\"/>","x":"<path d=\"M6 6l12 12M18 6 6 18\"/>","chevron":"<path d=\"M9 6l6 6-6 6\"/>","link":"<path d=\"M10 14a4 4 0 0 0 5.7 0l2.8-2.8a4 4 0 0 0-5.7-5.7L11.5 7\"/><path d=\"M14 10a4 4 0 0 0-5.7 0l-2.8 2.8a4 4 0 0 0 5.7 5.7l1.3-1.3\"/>","alert":"<path d=\"M12 4 21 20H3z\"/><path d=\"M12 10v4\"/>","plus":"<path d=\"M12 5v14M5 12h14\"/>","external":"<path d=\"M14 4h6v6\"/><path d=\"M20 4 11 13\"/><path d=\"M18 14v5.5H4.5V6H10\"/>","copy":"<rect x=\"8.5\" y=\"8.5\" width=\"11\" height=\"11\" rx=\"1.5\"/><path d=\"M15.5 8.5v-4h-11v11h4\"/>","branch":"<circle cx=\"6.5\" cy=\"6\" r=\"2\"/><circle cx=\"17.5\" cy=\"6\" r=\"2\"/><circle cx=\"6.5\" cy=\"18\" r=\"2\"/><path d=\"M6.5 8v8M17.5 8v3.5a3 3 0 0 1-3 3H8.5\"/>","shield":"<path d=\"M12 3.5 19 6v5.5c0 4.4-3 7.6-7 9-4-1.4-7-4.6-7-9V6z\"/>","grid":"<rect x=\"4\" y=\"4\" width=\"7\" height=\"7\" rx=\"1\"/><rect x=\"13\" y=\"4\" width=\"7\" height=\"7\" rx=\"1\"/><rect x=\"4\" y=\"13\" width=\"7\" height=\"7\" rx=\"1\"/><rect x=\"13\" y=\"13\" width=\"7\" height=\"7\" rx=\"1\"/>","globe":"<circle cx=\"12\" cy=\"12\" r=\"8\"/><path d=\"M4 12h16\"/><path d=\"M12 4c2.4 2.2 2.4 13.8 0 16\"/><path d=\"M12 4c-2.4 2.2-2.4 13.8 0 16\"/>","spark":"<path d=\"M12 3.5v17M4.6 7.75l14.8 8.5M19.4 7.75l-14.8 8.5\"/>","terminal":"<path d=\"M5 7l5 5-5 5\"/><path d=\"M12 17h7\"/>","pointer":"<path d=\"M6 3.5 19 12l-6.2 1.3L9.6 20z\"/>","braces":"<path d=\"M9.5 4.5c-1.8 0-2.8.9-2.8 2.9v2.1c0 1.3-.7 2.1-2.2 2.5 1.5.4 2.2 1.2 2.2 2.5v2.1c0 2 1 2.9 2.8 2.9\"/><path d=\"M14.5 4.5c1.8 0 2.8.9 2.8 2.9v2.1c0 1.3.7 2.1 2.2 2.5-1.5.4-2.2 1.2-2.2 2.5v2.1c0 2-1 2.9-2.8 2.9\"/>"};
+const VIEWS = {"overview":"概览","library":"我的 Skill","discover":"发现","sources":"来源与市场","projects":"项目与落点","upgrades":"更新","doctor":"体检","settings":"设置"};
+</script>
+<script>
+/* ---- 扫描时间线：准备 0.8s → 6 root 各 ~1.7s（不等长）→ 入库 0.6 → 汇总 0.4 ≈ 12.0s ----
+   speed 参数实时缩放；批次 = root 内每 ~300ms 冒一小批（9/5/3/8/6/21 = 52） */
+const PHASE_PREP = 800, PHASE_INGEST = 600, PHASE_SUM = 400;
+const SCAN_ROOTS = [
+  { path:'~/.claude/skills',            client:'claude',   dur:1900, count:9  },
+  { path:'~/.agents/skills',            client:'agents',   dur:1600, count:5  },
+  { path:'~/.codex/skills',             client:'codex',    dur:1800, count:3  },
+  { path:'~/.cursor/skills',            client:'cursor',   dur:1500, count:8  },
+  { path:'~/.config/opencode/skills',   client:'opencode', dur:1700, count:6  },
+  { path:'~/.trae/skills',              client:'trae',     dur:1700, count:21 },
+];
+/* 52 个样例发现（spec 点名的 huashu-design/pdf/pptx/tdd/lark-docs/grilling/docx/
+   code-review/research/wizard/slides/dynamic-ui 全部在池内） */
+const SAMPLE_NAMES = {
+  claude:['huashu-design','pptx','research','grilling','slides','skill-creator','page-prd','meeting-minutes','email-draft'],
+  agents:['lark-docs','tdd','wizard','lark-base','task-board'],
+  codex:['pdf','code-review','sql-lens'],
+  cursor:['wechat-mp','migrate-to-shoehorn','setup-pre-commit','code-navigation','theme-tune','editor-maps','plugin-scan','lint-sweep'],
+  opencode:['diagnose-loop','patch-notes','term-lookup','config-sync','dotfile-audit','repo-map'],
+  trae:['docx','dynamic-ui','logo-design','motion-recipe','canvas-sketch','deck-outline','brand-tokens',
+        'prototype','domain-modeling','codebase-design','diagnosing-bugs','writing-for-agents',
+        'scaffold-exercises','merge-conflicts','browser-use','component-diff','tokens-sync',
+        'icon-audit','layout-grid','color-contrast','a11y-pass'],
+};
+const CLIENT_COLORS = { agents:'#339af0', claude:'#e8590c', codex:'#0ca678', cursor:'#9c36b5', opencode:'#f08c00', trae:'#4263eb', heron:'#6c757d' };
+/* 客户端图标：逐字移植 ui/src/components/AppIcon.vue 的 PATHS + DiscoverView 的 CLIENT_ICONS
+   （发现页筛选下拉里那套线描图标：agents=地球、claude=星芒、codex=>_、cursor=箭头、opencode=花括号） */
+const CLIENT_ICON = { agents:'globe', claude:'spark', codex:'terminal', cursor:'pointer', opencode:'braces' };
+/* heron 卡片用真实应用图标（src-tauri/icons/128x128.png，单文件原型必须 base64 内嵌） */
+const HERON_ICON = 'data:image/png;base64,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';
+/* 落点状态：与真实 app 一致——store.targets 里客户端与 `<id>:global`
+   目标会各占一行（agents/claude/codex 各 2 行），生效计数基本为 0。
+   第二个 claude（claude:global）留 1 处坏链，呼应决定队列的 claude · pptx 断链 */
+const TARGET_ROWS = [
+  { kind:'heron', def:true, path:'~/.heron/skills', live:0, broken:0 },
+  { kind:'agents', def:false, path:'~/.agents/skills', live:0, broken:0 },
+  { kind:'agents', def:false, path:'~/.agents/skills', live:0, broken:0 },
+  { kind:'claude', def:false, path:'~/.claude/skills', live:0, broken:0 },
+  { kind:'claude', def:false, path:'~/.claude/skills', live:1, broken:1 },
+  { kind:'codex', def:false, path:'~/.codex/skills', live:0, broken:0 },
+  { kind:'codex', def:false, path:'~/.codex/skills', live:0, broken:0 },
+  { kind:'cursor', def:false, path:'~/.cursor/skills', live:0, broken:0 },
+  { kind:'opencode', def:false, path:'~/.config/opencode/skills', live:0, broken:0 },
+];
+/* ---- dir-1 其余视图数据（原样搬） ---- */
+const SKILLS = [{"slug":"pdf","name":"PDF Toolkit","desc":"抽取、合并、填写 PDF 表单，处理扫描件与 OCR 的常用流程","origin":"skills.sh","ver":"1.4.2","vis":{"claude":"visible","codex":"visible","cursor":"shadowed","opencode":"not_scanned"}},{"slug":"docx","name":"Word 文档","desc":"读写 .docx，保留批注与修订记录，生成规范报告","origin":"anthropic/skills","ver":"0.9.0","vis":{"claude":"visible","codex":"visible","cursor":"visible","opencode":"visible"}},{"slug":"slides","name":"幻灯片工坊","desc":"从大纲生成 16:9 演示稿，含图表与讲者备注","origin":"本地编辑","ver":"0.4.1","vis":{"claude":"visible","codex":"shadowed","cursor":"broken","opencode":"not_scanned"}},{"slug":"xlsx","name":"表格计算","desc":"公式重算、透视表、图表导出 CSV 与 PDF","origin":"github.com/acme/skills","ver":"2.0.0","vis":{"claude":"visible","codex":"visible","cursor":"visible","opencode":"visible"}},{"slug":"web-clip","name":"网页剪藏","desc":"把页面正文与配图整理成可检索的 Markdown","origin":"ClawHub","ver":"1.1.0","vis":{"claude":"visible","codex":"not_scanned","cursor":"not_scanned","opencode":"not_scanned"}},{"slug":"code-review","name":"代码评审","desc":"按仓库规范逐文件审阅，输出分级的意见清单","origin":"anthropic/skills","ver":"0.7.3","vis":{"claude":"visible","codex":"visible","cursor":"visible","opencode":"visible"}}];
+const DETECTED = [{"path":"~/.claude/skills/pdf","client":"Claude Code","kind":"skill","fm":true,"scope":"全局"},{"path":"~/.codex/skills/notion-sync","client":"Codex","kind":"skill","fm":true,"scope":"全局"},{"path":"~/.agents/skills/legacy/translate","client":"Agents","kind":"legacy-command","fm":true,"scope":"全局"},{"path":"~/.cursor/skills/web-clip","client":"Cursor","kind":"skill","fm":false,"scope":"全局"},{"path":"~/work/notes-app/.claude/skills/local-note","client":"Claude Code","kind":"skill","fm":true,"scope":"项目"},{"path":"~/.codex/skills","client":"Codex","kind":"nested-suspect","fm":null,"scope":"全局"}];
+const TARGETS = [{"id":"claude","kind":"Claude Code","scope":"全局","path":"~/.claude/skills","enabled":true,"def":true},{"id":"codex","kind":"Codex","scope":"全局","path":"~/.codex/skills","enabled":true,"def":false},{"id":"agents","kind":"Agents","scope":"全局","path":"~/.agents/skills","enabled":true,"def":false},{"id":"cursor","kind":"Cursor","scope":"全局","path":"~/.cursor/skills","enabled":true,"def":false},{"id":"opencode","kind":"opencode","scope":"全局","path":"~/.config/opencode/skills","enabled":false,"def":false},{"id":"notes","kind":"Claude Code · 项目","scope":"notes-app","path":"~/work/notes-app/.claude/skills","enabled":true,"def":false}];
+const UPGRADES = [{"slug":"docx","state":"has_update","installed":"0.9.0","baseline":"0.9.0","latest":"1.0.0","source":"github.com/anthropics/skills"},{"slug":"slides","state":"has_update","installed":"0.4.1","baseline":"0.4.1","latest":"0.5.0","source":"github.com/acme/slides"},{"slug":"pdf","state":"diverged","installed":"1.4.2","baseline":"1.3.0","latest":"1.5.0","source":"skills.sh/pdf"},{"slug":"xlsx","state":"local_modified","installed":"2.0.0","baseline":"2.0.0","latest":"2.0.0","source":"github.com/acme/skills"},{"slug":"code-review","state":"up_to_date","installed":"0.7.3","baseline":"0.7.3","latest":"0.7.3","source":"github.com/anthropics/skills"},{"slug":"web-clip","state":"not_tracked","installed":"1.1.0","baseline":"—","latest":null,"source":null}];
+const ISSUES = [{"id":"broken-link","sev":"error","subject":"~/.cursor/skills/slides","actions":["reproject","unproject"],"label":"坏链"},{"id":"nested-suspect","sev":"warn","subject":"~/.codex/skills","actions":["ignore"],"label":"病态嵌套"},{"id":"frontmatter-invalid","sev":"warn","subject":"~/.cursor/skills/web-clip","actions":["fix-frontmatter"],"label":"frontmatter 无效"}];
+const PROJECTS = [{"root":"~/work/notes-app","clients":["claude-code"],"skills":["local-note","docx"]},{"root":"~/work/heron","clients":["claude-code","cursor"],"skills":["code-review"]}];
+const MARKETS = [{"id":"skills_sh","name":"skills.sh","cap":"indexed","on":true},{"id":"clawhub","name":"ClawHub","cap":"indexed","on":true},{"id":"qoder","name":"Qoder","cap":"guided","on":true},{"id":"skillhub_cn","name":"SkillHub","cap":"guided","on":true},{"id":"skillsmp","name":"SkillsMP","cap":"guided","on":false}];
+</script>
+<script type="text/plain" id="v2-tpl">
+<div class="h-body">
+<div class="h-shell">
+  <aside class="h-rail" data-rail>
+    <div class="h-rail-head">
+      <span class="h-seal"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 19c1.5-7.5 5-11.5 9.6-13.2"/><path d="M9.4 21c.4-4.7 2.3-8.4 5.6-10.6"/><path d="M14 21.6c.2-2.6 1.2-4.8 3-6.2"/><circle cx="18.4" cy="5.4" r="1.7"/></svg></span>
+      <span class="h-wordmark"><b>苍鹭 Heron</b><small>SKILL CONTROL</small></span>
+    </div>
+    <div class="h-search" @click="say('搜索面板（⌘K）在实现里挂全局模糊搜索')"><span v-html="ICON.search" class="i"></span>搜索 Skill<kbd>⌘K</kbd></div>
+    <nav class="h-rail-scroll">
+      <template v-for="g in NAV" :key="g.group">
+        <div class="h-group">{{ g.group }}</div>
+        <button v-for="it in g.items" :key="it.id" class="h-nav" :class="{'is-active': view===it.id}" @click="go(it.id)">
+          <span class="i" v-html="ICON[it.icon]"></span>{{ it.label }}
+          <span v-if="it.count!==undefined" class="h-count" :class="[it.tone?'tone-'+it.tone:'', it.bump?'count-bump':'']">{{ it.count }}</span>
+        </button>
+      </template>
+    </nav>
+    <div class="h-rail-foot">
+      <div class="h-health"><span class="h-dot good">Git 2.50.1</span><span class="h-muted" style="font-size:12px;margin-left:auto">本应用 v0.1.0</span></div>
+      <div class="h-health"><span class="h-dot warn">{{ unmanaged }} 待处理</span><button class="h-theme" @click="toggleTheme"><span class="i" v-html="theme==='dark'?ICON.sun:ICON.moon"></span>{{ theme==='dark'?'浅色':'深色' }}</button></div>
+    </div>
+  </aside>
+
+  <div class="h-main">
+    <header class="h-topbar">
+      <div class="h-crumbs"><span>苍鹭</span><span>/</span><b>{{ VIEWS[view] }}</b></div>
+      <span class="sp"></span>
+      <button class="h-btn h-scanbtn" :class="{scanning:running,'done-ok':scan.phase==='done',canceled:scan.phase==='canceled'}" @click="scanClick">
+        <template v-if="scan.phase==='idle'"><span class="i" v-html="ICON.refresh"></span>扫描本机</template>
+        <template v-else-if="running">
+          <span class="spin" v-html="ICON.refresh"></span>
+          <span class="lbl-run">扫描中{{ runSuffix }}</span>
+          <span class="lbl-cancel">点击取消{{ cancelSuffix }}</span>
+          <span class="h-ticks"><i v-for="(r,n) in SCAN_ROOTS" :key="r.path" class="h-tick" :class="tickClass(n)"></i></span>
+        </template>
+        <template v-else-if="scan.phase==='done'"><span class="i" v-html="ICON.check"></span>{{ scan.found }} 发现</template>
+        <template v-else><span class="i" v-html="ICON.x"></span>已取消</template>
+      </button>
+      <button class="h-btn primary"><span class="i" v-html="ICON.check"></span>校验</button>
+      <div class="h-track" :class="{on:running,flash:scan.phase==='done'}" :style="{'--p':prog}"><i></i></div>
+    </header>
+
+    <div class="h-view">
+    <!-- ============ OVERVIEW ============ -->
+    <div v-if="view==='overview'" class="h-in">
+      <div class="h-view-head">
+        <div>
+          <h1 class="h-h1">概览</h1>
+          <p class="h-lead">收拢 → 分发 → 升级：下面只列现在真正需要你决定的事。</p>
+        </div>
+        <div class="h-actions">
+          <button class="h-btn primary h-scanbtn" :class="{scanning:running,'done-ok':scan.phase==='done',canceled:scan.phase==='canceled'}" @click="scanClick">
+            <template v-if="scan.phase==='idle'"><span class="i" v-html="ICON.refresh"></span>扫描本机</template>
+            <template v-else-if="running">
+              <span class="spin" v-html="ICON.refresh"></span>
+              <span class="lbl-run">扫描中{{ runSuffix }}</span>
+              <span class="lbl-cancel">点击取消{{ cancelSuffix }}</span>
+              <span class="h-ticks"><i v-for="(r,n) in SCAN_ROOTS" :key="r.path" class="h-tick" :class="tickClass(n)"></i></span>
+            </template>
+            <template v-else-if="scan.phase==='done'"><span class="i" v-html="ICON.check"></span>{{ scan.found }} 发现</template>
+            <template v-else><span class="i" v-html="ICON.x"></span>已取消</template>
+          </button>
+          <button class="h-btn" @click="go('doctor')"><span class="i" v-html="ICON.doctor"></span>运行体检</button>
+        </div>
+      </div>
+
+      <!-- 扫描状态行 -->
+      <div class="h-statusline">
+        <template v-if="running">
+          <span>阶段 ·</span><span class="live">{{ stageText }}</span><span class="sep">·</span>
+          <span>root <span class="num">{{ rootNo }}/6</span></span><span class="sep">·</span>
+          <span>已发现 <span class="num">{{ scan.found }}</span></span>
+          <button class="cancel" @click="scanCancel">取消</button>
+          <span v-if="truncated" class="trunc">结果不完整</span>
+        </template>
+        <template v-else-if="scan.phase==='canceled'">
+          <span>扫描已取消 · 已发现 <span class="num">{{ scan.found }}</span> 处保留</span>
+          <span class="sep">·</span><span>可随时重新扫描</span>
+        </template>
+        <template v-else>
+          <span>上次扫描 {{ lastScanLabel }}</span><span class="sep">·</span>
+          <span>遍历 6 个根</span><span class="sep">·</span>
+          <span>发现 <span class="num">{{ unmanaged }}</span> 处</span><span class="sep">·</span>
+          <span>已纳管 1</span>
+          <span v-if="truncated" class="trunc">结果不完整</span>
+        </template>
+      </div>
+
+      <div style="display:grid;grid-template-columns:minmax(0,1.35fr) minmax(0,1fr);gap:16px">
+        <!-- 左：决定队列 -->
+        <div class="h-card">
+          <div class="h-card-h"><h3>决定队列</h3><span class="r h-mono">{{ queueCount }} 项</span></div>
+          <div class="h-queue" :class="{'is-empty':queueCount===0}">
+            <div v-if="brokenLinks>0" class="h-qrow">
+              <span class="h-chip bad" style="min-width:52px;justify-content:center">坏链</span>
+              <div class="qbody"><span class="qmain">claude · pptx 投影断链</span><small class="qctx">~/.claude/skills/pptx → 目标不存在</small></div>
+              <button class="h-btn" style="height:26px" @click="go('doctor')">体检</button>
+            </div>
+            <div v-if="unmanaged>0" class="h-qrow">
+              <span class="h-chip warn" style="min-width:64px;justify-content:center">待纳管</span>
+              <div class="qbody"><span class="qmain"><span class="num">{{ unmanaged }}</span> 处 Skill 尚未纳管</span><small class="qctx">6 个根 · 样例</small></div>
+              <button class="h-btn" style="height:26px" @click="go('discover')">发现</button>
+            </div>
+            <p v-if="queueCount===0" class="h-empty">一切干净——现在没有需要你决定的事。</p>
+          </div>
+        </div>
+        <!-- 右：系统读数（仪器面板） -->
+        <div class="h-card">
+          <div class="h-card-h"><h3>系统读数</h3><span class="r"><button class="tbtn" :disabled="running" @click="scanClick">刷新</button></span></div>
+          <div class="h-readout">
+            <div class="h-bignums">
+              <div class="h-bignum" :class="{live:running}"><div class="stat" :class="{pulse:numPulse}">{{ unmanaged }}</div><div class="lab">待决定</div></div>
+              <div class="h-bignum"><div class="stat">6</div><div class="lab">启用落点</div></div>
+              <div class="h-bignum"><div class="stat">1</div><div class="lab">已纳管</div></div>
+            </div>
+            <div class="h-gauge-wrap">
+              <div class="h-gauge-h"><span class="cap">扫描根 · root <b>{{ rootNo }}/6</b></span><span class="rt">{{ rootShort }}</span></div>
+              <div class="h-gauge">
+                <i v-for="(r,n) in SCAN_ROOTS" :key="r.path" class="h-gseg" :class="tickClass(n)" :title="r.path"></i>
+              </div>
+              <div class="h-gauge-note">{{ gaugeNote }}</div>
+            </div>
+            <div class="h-proj">
+              <div class="h-proj-row"><span class="h-muted">生效中的投影</span><span class="h-mono">0 / 0</span></div>
+              <div class="h-bar"><i style="width:0%"></i></div>
+              <div class="h-proj-row"><span class="h-muted">被压制 / 坏链</span><span class="h-mono">0 / 0</span></div>
+              <div class="h-bar warn"><i style="width:0%"></i></div>
+              <div class="h-proj-row"><span class="h-muted">共 0 处投影</span><span class="h-mono">0%</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="h-sec"><h2>落点状态</h2><span class="line"></span><span class="h-mono">每个客户端真正读取的目录</span></div>
+      <div class="h-tgrid">
+        <div v-for="(t,i) in TARGET_ROWS" :key="i" class="h-tcard" @click="go('projects')">
+          <div class="th">
+            <span class="h-tglyph" :style="tglyph(t.kind)">
+              <img v-if="t.kind==='heron'" :src="HERON_ICON" alt="苍鹭">
+              <i v-else class="gi" v-html="ICON[CLIENT_ICON[t.kind]]"></i>
+            </span>
+            <span class="tn">{{ t.kind }}</span>
+            <span v-if="t.def" class="h-chip vit plain tdef">默认</span>
+            <span class="h-chip" :class="tState(t).cls">{{ tState(t).txt }}</span>
+          </div>
+          <div class="tp">
+            <span class="h-path" :title="t.path">{{ t.path }}</span>
+            <span class="tcopied" v-if="copied===i">已复制</span><span v-else class="tcopied"></span>
+            <button class="h-copy" :class="{copied:copied===i}" :aria-label="'复制路径'"
+                    @click.stop="copyPath(t.path,i)" v-html="copied===i?ICON.check:ICON.copy"></button>
+          </div>
+          <div class="tf">
+            <span class="h-switch sm on"></span><span>已启用</span>
+            <span class="cnt">{{ t.live }} 个 Skill 生效</span>
+          </div>
+        </div>
+      </div>
+    </div>
+    <!-- ============ DISCOVER ============ -->
+    <div v-else-if="view==='discover'" class="h-in">
+      <div class="h-view-head">
+        <div><h1 class="h-h1">发现</h1><p class="h-lead">磁盘上存在、但苍鹭尚未接管的 Skill。收拢后原位置变成链接，不会丢文件。</p></div>
+        <div class="h-actions" style="align-items:center">
+          <span v-if="scan.phase==='run'||scan.phase==='done'" class="h-newchip" :class="{flash:scan.phase==='done'}">+{{ scan.found }} 新发现</span>
+          <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--h-dim)"><input type="checkbox" class="h-switch" :class="{on:adoptKeep}" @change="adoptKeep=!adoptKeep">保留原位置</label>
+          <button class="h-btn primary" :disabled="!selected.length" @click="dialog='adopt'">收拢所选 <span class="h-mono" v-if="selected.length">({{ selected.length }})</span></button>
+        </div>
+      </div>
+      <TransitionGroup name="stream" tag="div" class="h-stream" style="position:relative">
+        <div v-for="d in discoveredNow" :key="d.path" class="h-dcard" :style="{'--sd':(d.sd||0)+'ms'}">
+          <span class="h-glyph" :style="{background:'hsl('+d.hue+'deg 42% 55%)'}">{{ d.initial }}</span>
+          <div style="min-width:0">
+            <div class="dn">{{ d.name }}</div>
+            <div class="h-path dp" :title="d.path">{{ d.path }}</div>
+          </div>
+          <span class="client" :style="{'--cc':CLIENT_COLORS[d.client]}">{{ d.client }}</span>
+        </div>
+      </TransitionGroup>
+      <p class="h-muted" style="font-size:12px;display:flex;gap:6px;align-items:center;margin-top:14px"><span class="i" v-html="ICON.alert"></span>样例数据：52 处发现按 root 分批流入；病态嵌套只报告，不会自动改动。</p>
+    </div>
+
+    <!-- ============ LIBRARY ============ -->
+    <div v-else-if="view==='library'" class="h-in">
+      <div class="h-view-head">
+        <div><h1 class="h-h1">我的 Skill</h1><p class="h-lead">每份实体只有一份，各个客户端看到的是它的链接。</p></div>
+        <div class="h-actions">
+          <div class="h-seg"><button :class="{'is-active':libView==='table'}" @click="libView='table'">列表</button><button :class="{'is-active':libView==='grid'}" @click="libView='grid'">网格</button></div>
+          <button class="h-btn" :disabled="!selected.length" @click="dialog='project'">投影到… <span class="h-mono" v-if="selected.length">({{ selected.length }})</span></button>
+        </div>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center;margin-bottom:12px;flex-wrap:wrap">
+        <label class="h-search" style="margin:0;width:260px;background:transparent;height:30px"><span class="i" v-html="ICON.search"></span><input v-model="query" class="h-input" style="border:0;background:transparent;height:28px;padding:0;font-size:12px" placeholder="按名称、描述搜索"></label>
+        <div class="h-seg"><button :class="{'is-active':filter==='all'}" @click="filter='all'">全部 {{ SKILLS.length }}</button><button :class="{'is-active':filter==='issues'}" @click="filter='issues'">有问题 3</button></div>
+      </div>
+      <div v-if="libView==='table'" class="h-card" style="padding:0 4px">
+        <table class="h-table">
+          <thead><tr><th style="width:34px"><input type="checkbox" class="h-cb" :checked="selected.length===visibleSkills.length" @change="selected = selected.length===visibleSkills.length?[]:visibleSkills.map(s=>s.slug)"></th><th>Skill</th><th>版本</th><th>来源</th><th>Claude</th><th>Codex</th><th>Cursor</th><th>opencode</th></tr></thead>
+          <tbody>
+            <tr v-for="s in visibleSkills" :key="s.slug" :class="{'is-sel':selected.includes(s.slug)}" @click="drawer=s.slug">
+              <td @click.stop><input type="checkbox" class="h-cb" :checked="selected.includes(s.slug)" @change="toggleSel(s.slug)"></td>
+              <td><b style="font-weight:600">{{ s.slug }}</b><div class="h-muted" style="font-size:12px;margin-top:2px">{{ s.desc }}</div></td>
+              <td class="h-mono">{{ s.ver }}</td>
+              <td class="h-mono">{{ s.origin }}</td>
+              <td v-for="c in ['claude','codex','cursor','opencode']" :key="c"><span class="h-chip" :class="VIS_TONE[s.vis[c]]" :title="VIS_LABEL[s.vis[c]]"></span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <div v-else style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px">
+        <div v-for="s in visibleSkills" :key="s.slug" class="h-card" style="padding:14px;cursor:pointer" @click="drawer=s.slug">
+          <div style="display:flex;align-items:center;gap:8px"><b>{{ s.slug }}</b><span class="h-mono" style="margin-left:auto">{{ s.ver }}</span></div>
+          <p class="h-muted" style="font-size:12px;margin:8px 0 12px;line-height:1.55;min-height:36px">{{ s.desc }}</p>
+          <div style="display:flex;gap:5px;flex-wrap:wrap">
+            <span v-for="c in ['claude','codex','cursor','opencode']" :key="c" class="h-chip" :class="VIS_TONE[s.vis[c]]">{{ c }}</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============ SOURCES ============ -->
+    <div v-else-if="view==='sources'" class="h-in">
+      <div class="h-view-head">
+        <div><h1 class="h-h1">来源与市场</h1><p class="h-lead">可搜索的市场直接装；只能浏览的市场在浏览器里看，回来粘贴地址。</p></div>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px">
+        <button v-for="m in MARKETS" :key="m.id" class="h-btn" :class="{primary:activeMarket===m.id}" @click="activeMarket=m.id">
+          {{ m.name }}<span class="h-mono" style="font-size:12px;opacity:.7">{{ m.cap==='indexed'?'可搜索':'仅浏览' }}</span><span v-if="!m.on" class="h-mono" style="font-size:12px;opacity:.6">默认关</span>
+        </button>
+      </div>
+      <div style="display:flex;gap:8px;margin-bottom:14px">
+        <input class="h-input" v-model="marketQuery" style="max-width:380px" placeholder="输入关键词搜索 skills.sh">
+        <button class="h-btn primary">搜索</button>
+      </div>
+      <div class="h-card" style="padding:0 4px">
+        <table class="h-table">
+          <thead><tr><th>结果</th><th>版本</th><th>安装方式</th><th></th></tr></thead>
+          <tbody>
+            <tr v-for="i in MARKET_ITEMS" :key="i.key">
+              <td><b class="h-mono" style="color:var(--h-text)">{{ i.key }}</b><div class="h-muted" style="font-size:12px;margin-top:2px">{{ i.summary }}</div></td>
+              <td class="h-mono">{{ i.ver }}</td>
+              <td><span class="h-chip good">可安装 · git</span></td>
+              <td style="text-align:right"><button class="h-btn" style="height:26px" @click="say('预览：将在 ~/.heron/store/pdf 安装 1.5.0')">预览</button> <button class="h-btn primary" style="height:26px" @click="say('pdf 1.5.0 已安装到存储区')">安装</button></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="h-sec"><h2>粘贴地址安装</h2><span class="line"></span></div>
+      <div style="display:flex;gap:8px"><input class="h-input" style="max-width:420px" placeholder="https://github.com/anthropics/skills/tree/main/pdf"><button class="h-btn">预览</button></div>
+    </div>
+
+    <!-- ============ PROJECTS ============ -->
+    <div v-else-if="view==='projects'" class="h-in">
+      <div class="h-view-head">
+        <div><h1 class="h-h1">项目与落点</h1><p class="h-lead">落点是客户端真正读取的目录；项目落点只对该项目生效。</p></div>
+      </div>
+      <div style="display:grid;grid-template-columns:minmax(0,1.4fr) minmax(0,1fr);gap:16px">
+        <div class="h-card">
+          <div class="h-card-h"><h3>全局落点</h3><span class="r"><button class="h-btn" style="height:26px" @click="say('重新扫描落点')"><span class="i" v-html="ICON.refresh"></span>扫描</button></span></div>
+          <div style="padding:0 4px"><table class="h-table"><tbody>
+            <tr v-for="t in TARGETS.filter(t=>t.scope==='全局')" :key="t.id">
+              <td style="width:130px"><b>{{ t.kind }}</b> <span v-if="t.def" class="h-chip vit plain" style="margin-left:4px">默认</span></td>
+              <td><span class="h-path">{{ t.path }}</span></td>
+              <td style="width:56px;text-align:right"><span class="h-switch" :class="{on:t.enabled}" @click="t.enabled=!t.enabled"></span></td>
+            </tr>
+          </tbody></table></div>
+        </div>
+        <div class="h-card">
+          <div class="h-card-h"><h3>项目</h3><span class="r h-mono">{{ PROJECTS.length }}</span></div>
+          <div class="h-card-b" style="display:flex;flex-direction:column;gap:10px">
+            <div v-for="p in PROJECTS" :key="p.root" style="border:1px solid var(--h-line);border-radius:8px;padding:10px 12px">
+              <div style="display:flex;gap:8px;align-items:center"><span class="i" v-html="ICON.projects"></span><span class="h-path" style="color:var(--h-text)">{{ p.root }}</span></div>
+              <div style="display:flex;gap:5px;flex-wrap:wrap;margin-top:8px"><span v-for="c in p.clients" :key="c" class="h-chip neutral plain">{{ c }}</span><span v-for="s in p.skills" :key="s" class="h-chip vit plain">{{ s }}</span></div>
+            </div>
+            <button class="h-btn" @click="say('选择项目目录…')"><span class="i" v-html="ICON.plus"></span>添加项目</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============ UPGRADES ============ -->
+    <div v-else-if="view==='upgrades'" class="h-in">
+      <div class="h-view-head">
+        <div><h1 class="h-h1">更新</h1><p class="h-lead">三方合并：你的改动和上游的改动都保留；合不上的地方由你逐文件决定。</p></div>
+        <div class="h-actions"><button class="h-btn" @click="say('已刷新上游')"><span class="i" v-html="ICON.refresh"></span>刷新上游</button><button class="h-btn primary">全部升级 (3)</button></div>
+      </div>
+      <div class="h-card" style="padding:0 4px">
+        <table class="h-table">
+          <thead><tr><th style="width:34px"></th><th>Skill</th><th>状态</th><th>本地</th><th>上游</th><th>来源</th><th></th></tr></thead>
+          <tbody>
+            <tr v-for="u in UPGRADES" :key="u.slug">
+              <td><input type="checkbox" class="h-cb" :disabled="!['has_update','diverged'].includes(u.state)"></td>
+              <td><b>{{ u.slug }}</b></td>
+              <td><span class="h-chip" :class="UP_TONE[u.state]">{{ UP_LABEL[u.state] }}</span></td>
+              <td class="h-mono">{{ u.installed }}</td>
+              <td class="h-mono">{{ u.latest || '—' }}</td>
+              <td class="h-mono">{{ u.source || '—' }}</td>
+              <td style="text-align:right">
+                <button class="h-btn" style="height:24px" @click="dialog='conflict'" v-if="u.state==='diverged'">解决冲突</button>
+                <button class="h-btn" style="height:24px" v-else-if="u.state==='has_update'">升级</button>
+                <button class="h-btn" style="height:24px" v-else-if="u.state==='local_modified'">比较</button>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- ============ DOCTOR ============ -->
+    <div v-else-if="view==='doctor'" class="h-in">
+      <div class="h-view-head">
+        <div><h1 class="h-h1">体检</h1><p class="h-lead">只读检查：重复、坏链、病态嵌套、来源丢失。不会改动任何文件。</p></div>
+        <div class="h-actions"><button class="h-btn primary" @click="say('体检完成：3 个问题')"><span class="i" v-html="ICON.check"></span>运行体检</button></div>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:16px">
+        <div class="h-card h-card-b"><div class="h-chip bad">错误 1</div><div style="font-size:12px;margin-top:8px" class="h-muted">坏链不会被任何客户端加载</div></div>
+        <div class="h-card h-card-b"><div class="h-chip warn">警告 2</div><div style="font-size:12px;margin-top:8px" class="h-muted">病态嵌套与 frontmatter</div></div>
+        <div class="h-card h-card-b"><div class="h-chip good">通过 40</div><div style="font-size:12px;margin-top:8px" class="h-muted">其余检查项无问题</div></div>
+      </div>
+      <div class="h-card" style="padding:0 4px">
+        <table class="h-table">
+          <thead><tr><th>级别</th><th>检查项</th><th>对象</th><th>建议</th><th></th></tr></thead>
+          <tbody>
+            <tr v-for="i in ISSUES" :key="i.id+i.subject">
+              <td><span class="h-chip" :class="i.sev==='error'?'bad':'warn'">{{ i.label }}</span></td>
+              <td class="h-mono">{{ i.id }}</td>
+              <td><span class="h-path">{{ i.subject }}</span></td>
+              <td class="h-muted" style="font-size:12px">{{ i.actions.join(' / ') }}</td>
+              <td style="text-align:right"><button class="h-btn" style="height:24px" @click="say('已按建议修复：' + i.subject)">一键修复</button></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- ============ SETTINGS ============ -->
+    <div v-else-if="view==='settings'" class="h-in" style="max-width:760px">
+      <div class="h-view-head"><div><h1 class="h-h1">设置</h1><p class="h-lead">所有改动立即保存。</p></div></div>
+      <div class="h-card" style="margin-bottom:16px">
+        <div class="h-card-h"><h3>外观与语言</h3></div>
+        <div class="h-card-b" style="display:flex;flex-direction:column;gap:14px">
+          <div style="display:flex;align-items:center"><span style="width:140px" class="h-muted">主题</span>
+            <div class="h-seg"><button :class="{'is-active':theme==='light'}" @click="theme='light'">浅色</button><button :class="{'is-active':theme==='dark'}" @click="theme='dark'">深色</button></div>
+          </div>
+          <div style="display:flex;align-items:center"><span style="width:140px" class="h-muted">语言</span><div class="h-seg"><button class="is-active">简体中文</button><button>English</button></div></div>
+        </div>
+      </div>
+      <div class="h-card" style="margin-bottom:16px">
+        <div class="h-card-h"><h3>扫描与排除</h3><span class="r h-mono">上限 50 000 目录</span></div>
+        <div class="h-card-b" style="display:flex;align-items:center;gap:10px"><span class="h-muted" style="font-size:12.5px">遍历 6 个根；排除目录与 truncated 上限在此配置。</span><button class="h-btn" style="margin-left:auto">编辑排除</button></div>
+      </div>
+      <div class="h-card">
+        <div class="h-card-h"><h3>应用更新</h3><span class="r h-mono">当前 0.1.0</span></div>
+        <div class="h-card-b" style="display:flex;align-items:center;gap:10px"><span class="h-muted" style="font-size:12.5px">已是最新版本</span><button class="h-btn" style="margin-left:auto">检查更新</button></div>
+      </div>
+    </div><!-- /settings -->
+
+    <div class="h-tabs-m" data-rail>
+      <button v-for="t in ['overview','library','discover','upgrades','settings']" :key="t" :class="{'is-active':view===t}" @click="go(t)"><span class="i" v-html="ICON[t]"></span>{{ VIEWS[t] }}</button>
+    </div>
+  </div>
+</div>
+
+<!-- toasts -->
+<div class="h-toasts">
+  <div v-if="toast" class="h-toast" :class="toast.level">
+    <span v-html="toast.icon||ICON.check" class="i"></span>
+    <span>{{ toast.text }}</span>
+    <button v-if="toast.actionLabel" class="tact" :class="{link:!!toast.link}" @click="toast.action()">{{ toast.actionLabel }}</button>
+    <button class="x" @click="toast=null">×</button>
+  </div>
+</div>
+
+<!-- skill drawer -->
+<template v-if="drawer && sel">
+  <div class="h-drawer-mask" @click="drawer=null"></div>
+  <aside class="h-drawer">
+    <div class="h-drawer-h">
+      <div><div style="display:flex;gap:8px;align-items:center"><b style="font-size:17px">{{ sel.slug }}</b><span class="h-chip neutral plain h-mono">{{ sel.ver }}</span></div>
+        <div class="h-muted" style="font-size:12.5px;margin-top:4px">{{ sel.name }} · {{ sel.desc }}</div></div>
+      <button class="h-close" @click="drawer=null"><span class="i" v-html="ICON.x"></span></button>
+    </div>
+    <div class="h-drawer-b">
+      <div>
+        <div class="h-mono" style="margin-bottom:8px">每个客户端看到什么</div>
+        <div class="h-card" style="padding:0 4px"><table class="h-table"><tbody>
+          <tr v-for="t in TARGETS.filter(t=>t.id!=='notes')" :key="t.id">
+            <td style="width:120px"><b>{{ t.kind }}</b></td>
+            <td><span class="h-path">{{ t.path }}/{{ sel.slug }}</span></td>
+            <td style="width:96px"><span class="h-chip" :class="VIS_TONE[sel.vis[t.id]]">{{ VIS_LABEL[sel.vis[t.id]] }}</span></td>
+            <td style="width:56px;text-align:right"><span class="h-switch" :class="{on:sel.vis[t.id]!=='not_scanned'}" @click="setVis(t.id, sel.vis[t.id]==='not_scanned'?'visible':'not_scanned')"></span></td>
+          </tr>
+        </tbody></table></div>
+      </div>
+      <dl class="h-kv"><dt>来源</dt><dd class="h-mono">{{ sel.origin }}</dd><dt>存储位置</dt><dd class="h-mono">~/.heron/store/{{ sel.slug }}</dd><dt>上游提交</dt><dd class="h-mono">3f2c91a · 11-19</dd></dl>
+      <div>
+        <div class="h-mono" style="margin-bottom:8px">投影模式</div>
+        <div class="h-seg"><button class="is-active">符号链接</button><button>复制</button></div>
+        <p class="h-muted" style="font-size:12px;margin:8px 0 0">复制模式适合不支持符号链接的客户端，但升级后需要重新投影。</p>
+      </div>
+    </div>
+    <div class="h-drawer-f"><button class="h-btn" @click="say('已卸载，文件保留在存储区','warn')">卸载</button><span style="flex:1"></span><button class="h-btn" @click="drawer=null">关闭</button><button class="h-btn primary" @click="say('已在所有落点重新投影')">重新投影</button></div>
+  </aside>
+</template>
+
+<!-- project dialog -->
+<template v-if="dialog==='project'">
+  <div class="h-overlay" @click.self="dialog=null">
+    <div class="h-dialog">
+      <div class="h-dialog-h"><h3>投影 {{ selected.length }} 个 Skill</h3><p>选落点；已存在的会显示「已生效」。</p></div>
+      <div class="h-tabs" style="border-bottom:0;padding:6px 18px 0"><button v-for="g in ['全部落点','全局','项目']" :key="g" class="h-tab" :class="{'is-active':g==='全部落点'}">{{ g }}</button></div>
+      <div class="h-dialog-b"><div class="h-card" style="padding:0 4px"><table class="h-table"><tbody>
+        <tr v-for="t in TARGETS" :key="t.id"><td style="width:36px"><input type="checkbox" class="h-cb" :checked="t.id==='claude'||t.id==='codex'"></td><td><b>{{ t.kind }}</b><div class="h-path">{{ t.path }}</div></td><td style="width:80px;text-align:right"><span class="h-chip good" v-if="t.id==='claude'">已生效</span></td></tr>
+      </tbody></table></div></div>
+      <div class="h-dialog-f"><button class="h-btn" @click="dialog=null">取消</button><button class="h-btn primary" @click="projectSelected">投影</button></div>
+    </div>
+  </div>
+</template>
+
+<!-- adopt dialog -->
+<template v-if="dialog==='adopt'">
+  <div class="h-overlay" @click.self="dialog=null">
+    <div class="h-dialog">
+      <div class="h-dialog-h"><h3>收拢 {{ selected.length }} 处</h3><p>先预览；确认后才移动任何文件。</p></div>
+      <div class="h-dialog-b">
+        <label style="display:flex;align-items:center;gap:8px;font-size:12.5px;margin-bottom:10px"><input type="checkbox" class="h-cb" v-model="adoptKeep">保留原位置（把原目录改为链接）</label>
+        <pre class="h-code"><span class="h-muted">$ heron adopt --dry-run {{ selected.join(' ') || '...' }}</span>
+→ 存储    ~/.heron/store/pdf            (新建副本, 1.2 MB)
+→ 链接    ~/.claude/skills/pdf → store/pdf
+→ 跳过    重复内容 1 处（hash 相同，自动去重）
+→ 备份    ~/.heron/backup/2026-11-20-1109
+完成 4 处，跳过 1 处，0 错误</pre>
+      </div>
+      <div class="h-dialog-f"><button class="h-btn" @click="dialog=null">取消</button><button class="h-btn primary" @click="dialog=null; say('已收拢 ' + selected.length + ' 处')">执行</button></div>
+    </div>
+  </div>
+</template>
+
+<!-- conflict -->
+<template v-if="dialog==='conflict'">
+  <div class="h-overlay" @click.self="dialog=null">
+    <div class="h-dialog" style="width:min(980px,100%)">
+      <div class="h-dialog-h"><h3>解决冲突 · pdf 1.4.2 → 1.5.0</h3><p>每个文件都要你决定；「保存并重试」会提交选择并重新跑一次升级。</p></div>
+      <div class="h-tabs"><button v-for="(f,i) in ['SKILL.md','scripts/extract.py','reference/form-fill.md']" :key="f" class="h-tab" :class="{'is-active':diffFile===i}" @click="diffFile=i">{{ f }}</button></div>
+      <div class="h-dialog-b"><div class="h-split">
+        <div><div style="display:flex;align-items:center;margin-bottom:6px"><span class="h-mono">本地（你的改动）</span><button class="h-btn" style="margin-left:auto;height:24px">采用本地</button></div><pre class="h-code"># PDF Toolkit
+
+## 用法
+- 抽取：<b style="color:var(--h-bad)">- pdf extract in.pdf --pages 1-5</b>
+<span style="background:color-mix(in srgb,var(--h-bad) 18%,transparent)">+ pdf extract in.pdf --range 1-5 --ocr</span>
+- 合并、填表见 scripts/</pre></div>
+        <div><div style="display:flex;align-items:center;margin-bottom:6px"><span class="h-mono">上游（1.5.0）</span><button class="h-btn" style="margin-left:auto;height:24px">采用上游</button></div><pre class="h-code"># PDF Toolkit
+
+## 用法
+- 抽取：<b style="color:var(--h-good)">pdf extract --pages 1-5 in.pdf</b>
+<span style="background:color-mix(in srgb,var(--h-good) 18%,transparent)">+ pdf fill form.pdf data.json</span>
+- 合并、填表见 scripts/</pre></div>
+      </div></div>
+      <div class="h-dialog-f"><span class="h-mono" style="margin-right:auto">1 / 3 个文件已决定</span><button class="h-btn" @click="dialog=null">稍后再说</button><button class="h-btn primary" @click="dialog=null; say('冲突已解决，已重新升级')">保存并重试</button></div>
+    </div>
+  </div>
+</template>
+
+<div class="h-demo">
+  <button @click="scanClick">{{ running ? '停止扫描' : '开始扫描' }}</button>
+  <button @click="demoAt(5)">at=5</button>
+  <button @click="demoAt(8)">at=8</button>
+  <button @click="demoAt(12)">at=12</button>
+  <button :class="{on:truncated}" @click="truncated=!truncated">T 截断</button>
+  <label>speed<input type="range" min="1" max="8" step="1" v-model.number="speed"><b>{{ speed }}×</b></label>
+  <span class="keys meta">1440×900 · Esc=取消扫描 · ?scan=auto&at=5</span>
+</div>
+</div>
+</div>
+</script>
+<script type="module">
+import * as Vue from 'https://cdn.jsdelivr.net/npm/vue@3.5.13/dist/vue.esm-browser.prod.js';
+const { createApp, ref, reactive, computed, watch, onMounted } = Vue;
+const ICON = Object.fromEntries(Object.entries(ICON_RAW).map(([k,v]) => [k, '<svg viewBox="0 0 24 24">' + v + '</svg>']));
+const app = createApp({
+  template: document.getElementById('v2-tpl').textContent,
+  setup(){
+    const params = new URLSearchParams(location.search);
+    const speed = ref(Math.min(8, Math.max(1, parseInt(params.get('speed') || '1', 10) || 1)));
+    const queueClean = params.has('clean');       // ?clean=1 → 决定队列空态演示
+    const paramTheme = ['dark','light'].includes(params.get('theme')) ? params.get('theme') : null;
+    const theme = ref(paramTheme || localStorage.getItem('heron.theme') || 'dark');
+    const applyTheme = () => { document.documentElement.dataset.theme = theme.value; if(!paramTheme) localStorage.setItem('heron.theme', theme.value); };
+    watch(theme, applyTheme, { immediate:true });
+    const ALL_VIEWS = ['overview','library','discover','sources','projects','upgrades','doctor','settings'];
+    const view = ref(ALL_VIEWS.includes(params.get('view')) ? params.get('view') : 'overview');
+
+    /* ---------- 发现池（按 root 顺序的 52 个样例） ---------- */
+    const hashHue = s => { let h=0; for(const c of s) h=(h*31+c.charCodeAt(0))%360; return h; };
+    const DISCOVERED = [];
+    SCAN_ROOTS.forEach(r=>{ SAMPLE_NAMES[r.client].slice(0,r.count).forEach(n=>{
+      DISCOVERED.push({ name:n, client:r.client, path:r.path+'/'+n, hue:hashHue(n), initial:n[0].toUpperCase() });
+    }); });
+
+    /* ---------- 扫描状态机：idle → run(prep/traverse/ingest/sum) → done|canceled → idle ---------- */
+    const scan = reactive({ phase:'idle', stage:'prep', root:0, found:0 });
+    const prog = ref(0);                             // 顶栏进度轨 = 整轮真实比率
+    const lastScanLabel = ref('42 秒前');
+    const truncated = ref(false);
+    const stream = ref(DISCOVERED.slice());
+    const running = computed(()=> scan.phase==='run');
+    const ROOT_OFF = SCAN_ROOTS.reduce((a,r,i)=>{ a.push(i?a[i-1]+SCAN_ROOTS[i-1].count:0); return a; },[]);
+    const TOTAL = PHASE_PREP + SCAN_ROOTS.reduce((s,r)=>s+r.dur,0) + PHASE_INGEST + PHASE_SUM; // =12000
+    let TL=null, tIdx=0, tTimer=null, elapsed=0, lastNow=0;
+    const rootCursor = [0,0,0,0,0,0];
+
+    function buildTimeline(){
+      const ev=[]; let t=PHASE_PREP;
+      ev.push({t:0, type:'prep'});
+      SCAN_ROOTS.forEach((r,i)=>{
+        ev.push({t, type:'root', i});
+        const nb = Math.max(1, Math.min(r.count, Math.round(r.dur/320)));   // 每 ~300ms 一小批
+        const base = Math.floor(r.count/nb), rem = r.count%nb, span = r.dur-500;
+        for(let k=0;k<nb;k++){
+          const n = base + (k<rem?1:0);
+          if(n>0) ev.push({t:t+250+span*k/(nb-1||1), type:'batch', i, n});
+        }
+        t += r.dur;
+      });
+      ev.push({t, type:'ingest'}); t += PHASE_INGEST;
+      ev.push({t, type:'sum'});    t += PHASE_SUM;
+      ev.push({t, type:'end'});
+      return ev;
+    }
+    TL = buildTimeline();
+
+    function scanStart(at){
+      if(scan.phase!=='idle') return;              // 扫描中重复点击=取消，永不排队第二个任务
+      scan.phase='run'; scan.stage='prep'; scan.root=0; scan.found=0; prog.value=0;
+      rootCursor.fill(0);
+      stream.value=[]; tIdx=0;
+      elapsed = Number.isFinite(at) ? at*1000 : 0;   // ?at=SECONDS 快进
+      lastNow = performance.now();
+      tTimer = setInterval(tick,50);
+      tick();
+    }
+    function demoAt(n){                              // 演示条：直接落到第 n 秒
+      if(tTimer){ clearInterval(tTimer); tTimer=null; }
+      scan.phase='idle'; scanStart(n);
+    }
+    function tick(){
+      const now=performance.now();
+      elapsed += (now-lastNow)*speed.value; lastNow=now;
+      prog.value = Math.min(1, elapsed/TOTAL);       // 只有整轮比率，root 内不报百分比
+      while(tIdx<TL.length && TL[tIdx].t<=elapsed){
+        const e=TL[tIdx++];
+        if(e.type==='root'){ scan.stage='traverse'; scan.root=e.i; }
+        else if(e.type==='batch'){
+          const from=ROOT_OFF[e.i]+rootCursor[e.i], items=DISCOVERED.slice(from,from+e.n);
+          rootCursor[e.i]+=e.n; scan.found+=e.n;
+          items.forEach((d,k)=>{ d.sd = Math.min(k,4)*55 });  // stagger 固定在入批时刻，不随索引漂移
+          stream.value = items.concat(stream.value);  // 增量流入：新批次顶到最前
+          pulse(bump); pulse(numPulse);
+        }
+        else if(e.type==='prep') scan.stage='prep';
+        else if(e.type==='ingest') scan.stage='ingest';
+        else if(e.type==='sum') scan.stage='sum';
+        else finishScan();
+      }
+    }
+    function scanCancel(){
+      if(scan.phase!=='run') return;
+      clearInterval(tTimer); tTimer=null;
+      const kept=scan.found;
+      scan.phase='canceled'; prog.value=0;
+      setTimeout(()=>{ if(scan.phase==='canceled') scan.phase='idle'; },1400);
+      say(`扫描已取消 · 已发现 ${kept} 处保留`,'warn');
+    }
+    function finishScan(){
+      clearInterval(tTimer); tTimer=null;
+      SCAN_ROOTS.forEach((r,i)=>{ rootCursor[i]=r.count; });
+      scan.found=52; scan.stage='sum'; prog.value=1; stream.value=DISCOVERED.slice();
+      scan.phase='done'; lastScanLabel.value='刚刚'; pulse(bump); pulse(numPulse);
+      setTimeout(()=>{ if(scan.phase==='done'){ scan.phase='idle'; prog.value=0; } },1600);
+      if(truncated.value)
+        say('结果不完整 · 已达 50 000 目录上限','error',{icon:ICON.alert,actionLabel:'排除设置',link:true,action:()=>go('settings')});
+      else
+        say('扫描完成 · 52 个新发现 · 2.8s','ok',{actionLabel:'查看',action:()=>go('discover')});
+    }
+    function scanClick(){ scan.phase==='run' ? scanCancel() : scanStart(); }
+    const unmanaged = computed(()=> running.value ? scan.found : (queueClean ? 0 : 52));
+    const brokenLinks = ref(queueClean ? 0 : 1);
+    const queueCount = computed(()=> (brokenLinks.value>0?1:0)+(unmanaged.value>0?1:0));
+    /* 派生显示值 */
+    const rootNo = computed(()=> !running.value ? (scan.phase==='done' ? 6 : '—')
+                              : (scan.stage==='prep' ? 0 : (scan.stage==='traverse' ? scan.root+1 : 6)));
+    const stageText = computed(()=>{
+      if(scan.stage==='prep') return '准备 → 枚举扫描根';
+      if(scan.stage==='ingest') return '入库 → 写入 Skill 索引';
+      if(scan.stage==='sum') return '汇总 → 统计与去重';
+      return '遍历中 → '+SCAN_ROOTS[scan.root].path;
+    });
+    const runSuffix = computed(()=> scan.stage==='traverse' ? ' '+(scan.root+1)+'/6' : ' '+({prep:'准备',ingest:'入库',sum:'汇总'})[scan.stage]);
+    const cancelSuffix = computed(()=> scan.stage==='traverse' ? ' · '+(scan.root+1)+'/6' : '');
+    const rootShort = computed(()=> !running.value ? (scan.phase==='done' ? '完成' : '待机')
+                              : (scan.stage==='traverse' ? SCAN_ROOTS[scan.root].client : ({prep:'枚举中',ingest:'写入',sum:'统计'})[scan.stage]));
+    const gaugeNote = computed(()=> running.value && scan.stage==='traverse'
+      ? '遍历 '+SCAN_ROOTS[scan.root].path+' · root 内不报百分比'
+      : '6 个根 · 完成即点亮 · root 内不报百分比');
+    function tickClass(n){
+      if(scan.phase==='done') return 'done';
+      if(!running.value || scan.stage==='prep') return '';
+      if(scan.stage==='traverse') return n<scan.root?'done':(n===scan.root?'cur':'');
+      return 'done';
+    }
+    function pulse(r){
+      r.value=false;
+      requestAnimationFrame(()=>{ r.value=true; setTimeout(()=>{ r.value=false; },560); });
+    }
+
+    /* ---------- 侧栏（真实分组） ---------- */
+    const bump = ref(false), numPulse = ref(false);
+    const NAV = computed(()=>[
+      { group:'工作台', items:[
+        { id:'overview', label:'概览', icon:'overview' },
+      ]},
+      { group:'收集·分发', items:[
+        { id:'library',  label:'我的 Skill', icon:'library', count:1 },
+        { id:'discover', label:'发现',       icon:'discover', count:unmanaged.value, tone:'warn', bump:bump.value },
+        { id:'sources',  label:'来源与市场', icon:'sources' },
+      ]},
+      { group:'维护', items:[
+        { id:'upgrades', label:'更新', icon:'upgrades', count:3 },
+        { id:'doctor',   label:'体检', icon:'doctor', count:1, tone:'bad' },
+        { id:'projects', label:'项目', icon:'projects' },
+        { id:'settings', label:'设置', icon:'settings' },
+      ]},
+    ]);
+
+    /* ---------- toast ---------- */
+    const toast = ref(null); let toastTimer=null;
+    function say(text, level, opts){
+      toast.value = Object.assign({ text, level:level||'ok', icon:level==='warn'?ICON.alert:(level==='error'?ICON.x:ICON.check) }, opts||{});
+      clearTimeout(toastTimer); toastTimer=setTimeout(()=>toast.value=null, (opts&&opts.actionLabel)?5000:2600);
+    }
+    function go(v){ view.value=v; selected.value=[]; if(v==='doctor') toast.value=null; }
+    function toggleTheme(){ theme.value = theme.value==='dark'?'light':'dark'; }
+
+    /* ---------- 落点卡片：状态 chip、品牌线描图标弱底、路径复制 ---------- */
+    function tState(t){
+      if(t.broken>0) return { cls:'bad', txt:'坏链 '+t.broken };
+      if(t.live>0)   return { cls:'good', txt:'生效 '+t.live };
+      return { cls:'neutral', txt:'未被扫描' };
+    }
+    // WCAG 相对亮度 / 对比度，用来把品牌描边色在弱底上拉到 ≥4.5:1
+    const relLum = hex => { const v=parseInt(hex.slice(1),16), ch=c=>c<=0.03928?c/12.92:Math.pow((c+0.055)/1.055,2.4);
+      return 0.2126*ch((v>>16&255)/255)+0.7152*ch((v>>8&255)/255)+0.0722*ch((v&255)/255); };
+    const toRgb = h => { const v=parseInt(h.slice(1),16); return [v>>16&255, v>>8&255, v&255]; };
+    const toHex = a => '#' + a.map(c=>Math.round(Math.max(0,Math.min(255,c))).toString(16).padStart(2,'0')).join('');
+    const mixc = (a,b,t) => { const x=toRgb(a), y=toRgb(b); return toHex(x.map((c,i)=>c+(y[i]-c)*t)); };
+    const crat = (a,b) => { const l1=relLum(a), l2=relLum(b); return (Math.max(l1,l2)+0.05)/(Math.min(l1,l2)+0.05); };
+    const PANEL = { dark:'#0F0E0C', light:'#FFFFFF' };
+    function tglyph(kind){
+      // 真实应用图标是透明底的黑鹭，深主题需要一块浅托，否则描不出形
+      if(kind==='heron') return { background: theme.value==='dark' ? '#E9E3D6' : '#F1EDE5' };
+      const brand = CLIENT_COLORS[kind] || '#868e96', dark = theme.value==='dark';
+      const bg = mixc(PANEL[dark?'dark':'light'], brand, .12);   // 与 .h-chip 弱底同一词汇
+      let ink = brand, k = 0;
+      while(crat(bg, ink) < 4.5 && k < .72){ k += .03; ink = mixc(brand, dark ? '#FFFFFF' : '#0B0A09', k); }
+      return { background:bg, color:ink };
+    }
+    const copied = ref(-1); let copiedTimer=null;
+    function copyPath(text, i){
+      const ok = () => { copied.value=i; clearTimeout(copiedTimer); copiedTimer=setTimeout(()=>copied.value=-1,1500); };
+      const legacy = () => { const ta=document.createElement('textarea'); ta.value=text;
+        ta.style.cssText='position:fixed;top:-20px;opacity:0'; document.body.appendChild(ta); ta.select();
+        try{ document.execCommand('copy'); ok(); }catch(e){} ta.remove(); };
+      if(navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(ok, legacy);
+      else legacy();
+    }
+
+    /* ---------- 其余视图状态（照搬 dir-1） ---------- */
+    const query=ref(''), filter=ref('all'), libView=ref('table'), drawer=ref(null), selected=ref([]);
+    const diffFile=ref(0), adoptKeep=ref(false), dialog=ref(null), activeMarket=ref('skills_sh'), marketQuery=ref('');
+    const sel = computed(()=> SKILLS.find(s=>s.slug===drawer.value));
+    const visibleSkills = computed(()=> SKILLS.filter(s=>{
+      const q=query.value.trim().toLowerCase();
+      if(q && !(s.slug+s.name+s.desc).toLowerCase().includes(q)) return false;
+      if(filter.value==='issues') return ['broken','shadowed'].includes(Object.values(s.vis)[2])||s.vis.cursor==='broken';
+      return true;
+    }));
+    function toggleSel(k){ const i=selected.value.indexOf(k); i<0?selected.value.push(k):selected.value.splice(i,1); }
+    function setVis(t,v){ const s=sel.value; if(s) s.vis[t]=v; }
+    function projectSelected(){ dialog.value=null; say(`已投影 ${selected.value.length} 个 Skill 到 2 个落点`); selected.value=[]; }
+    const VIS_TONE = { visible:'good', shadowed:'warn', broken:'bad', not_scanned:'neutral' };
+    const VIS_LABEL = { visible:'生效', shadowed:'被压制', broken:'坏链', not_scanned:'未扫描' };
+    const UP_TONE = { up_to_date:'good', has_update:'vit', diverged:'bad', local_modified:'warn', not_tracked:'neutral' };
+    const UP_LABEL = { up_to_date:'已最新', has_update:'有更新', diverged:'分叉', local_modified:'本地已改', not_tracked:'未跟踪' };
+    const MARKET_ITEMS = [
+      { key:'anthropics/skills · pdf', ver:'1.5.0', summary:'PDF 表单、抽取与合并；官方维护' },
+      { key:'skills.sh/pdf', ver:'1.4.2', summary:'社区镜像，含 OCR 扩展' },
+      { key:'anthropics/skills · docx', ver:'1.0.0', summary:'Word 文档读写，保留批注' },
+      { key:'acme/slides', ver:'0.5.0', summary:'大纲 → 演示稿，含图表' },
+    ];
+
+    /* ---------- 键盘与演示参数 ---------- */
+    onMounted(()=>{
+      addEventListener('keydown', e=>{
+        if(e.target && ['INPUT','TEXTAREA'].includes(e.target.tagName)) return;
+        if(e.key==='t'||e.key==='T'){ truncated.value=!truncated.value; say(`truncated 演示：${truncated.value?'开（完成 toast 换成结果不完整）':'关'}`, truncated.value?'warn':'ok'); }
+        if(e.key==='Escape' && scan.phase==='run'){ e.preventDefault(); scanCancel(); }   // Esc = 取消扫描
+      });
+      const at = parseFloat(params.get('at'));
+      if(params.get('scan')==='auto') setTimeout(()=>scanStart(Number.isFinite(at)?at:null), 350);
+    });
+
+    return { view, theme, ICON, VIEWS, NAV, SCAN_ROOTS, CLIENT_COLORS, TARGET_ROWS,
+      scan, running, prog, unmanaged, brokenLinks, queueCount, lastScanLabel, truncated, bump, numPulse,
+      stageText, rootNo, rootShort, gaugeNote, runSuffix, cancelSuffix, tickClass,
+      scanClick, scanCancel, scanStart, demoAt, speed,
+      tState, tglyph, CLIENT_ICON, HERON_ICON, copied, copyPath,
+      SKILLS, TARGETS, UPGRADES, ISSUES, PROJECTS, MARKETS,
+      stream, discoveredNow:computed(()=>stream.value),
+      toast, say, go, toggleTheme, dialog, drawer, selected, query, filter, libView, diffFile, adoptKeep, activeMarket, marketQuery,
+      sel, visibleSkills, toggleSel, setVis, projectSelected,
+      VIS_TONE, VIS_LABEL, UP_TONE, UP_LABEL, MARKET_ITEMS };
+  }
+});
+app.mount('body');
+</script>
+</body></html>

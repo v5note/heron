@@ -1,10 +1,11 @@
 <script setup lang="ts">
-import { computed, onMounted } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { useRoute, useRouter } from "vue-router";
 import AppIcon, { type IconName } from "./components/AppIcon.vue";
 import logoDark from "./assets/logo-dark.png";
 import logoLight from "./assets/logo-light.png";
+import ScanPill from "./components/ScanPill.vue";
 import ToastHost from "./components/ToastHost.vue";
 import { useAppStore } from "./stores/app";
 import pkg from "../package.json";
@@ -77,8 +78,43 @@ function openGitSettings() {
   void router.push(store.git ? "/sources" : "/settings");
 }
 
+/* ---------- the walk, at the shell layer ---------- *
+ * The rail and the Esc key live here because the scan does: it outlives every page, and there is no
+ * global hotkey system in this app to register a chord with. Both read `store.scan` only. */
+const railOn = computed(() => store.scan.running || store.scan.flash?.kind === "done");
+const railDone = computed(() => !store.scan.running && store.scan.flash?.kind === "done");
+/** 0..1, or 1 for the completion flash; a cancel drops it to 0 and the rail fades out unlit. */
+const railValue = computed(() => (railDone.value ? 1 : store.railProgress ?? 0));
+
+function onKeydown(event: KeyboardEvent) {
+  if (event.key !== "Escape" || !store.scanning) return;
+  // Whatever already owns Escape keeps it: an open dialog or drawer closes itself first, and a key
+  // typed into a field is text, not a command.
+  const target = event.target as HTMLElement | null;
+  if (target?.closest?.("input, textarea, select, [contenteditable], .scrim, .dialog, .drawer")) return;
+  event.preventDefault();
+  void store.cancelScan();
+}
+
+/** The sidebar's 发现 count is the walk's live readout, so a batch landing is worth a nudge. */
+const discoverBump = ref(false);
+let bumpTimer: number | undefined;
+watch(() => store.unmanaged.length, (to, from) => {
+  if (to <= from) return;
+  discoverBump.value = true;
+  clearTimeout(bumpTimer);
+  bumpTimer = window.setTimeout(() => (discoverBump.value = false), 520);
+});
+
 onMounted(() => {
   void store.init();
+  void store.watchScan();
+  window.addEventListener("keydown", onKeydown);
+});
+
+onBeforeUnmount(() => {
+  window.removeEventListener("keydown", onKeydown);
+  clearTimeout(bumpTimer);
 });
 
 function go(to: string) {
@@ -117,7 +153,11 @@ function go(to: string) {
           >
             <AppIcon :name="item.icon" :size="15" class="rail-icon" />
             <span>{{ t(`nav.${item.key}`) }}</span>
-            <span v-if="item.count !== undefined && item.count > 0" class="rail-count" :class="item.tone">{{ item.count }}</span>
+            <span
+              v-if="item.count !== undefined && item.count > 0"
+              class="rail-count"
+              :class="[item.tone, { 'count-bump': item.to === '/discover' && discoverBump }]"
+            >{{ item.count }}</span>
           </button>
         </template>
       </nav>
@@ -131,11 +171,11 @@ function go(to: string) {
           <button
             type="button"
             class="theme-toggle"
-            :title="store.theme === 'dark' ? t('settings.themeLight') : t('settings.themeDark')"
+            :title="store.mode === 'dark' ? t('settings.themeLight') : t('settings.themeDark')"
             @click="store.toggleTheme()"
           >
-            <AppIcon :name="store.theme === 'dark' ? 'sun' : 'moon'" :size="12" class="rail-icon" />
-            {{ store.theme === 'dark' ? t("settings.themeLight") : t("settings.themeDark") }}
+            <AppIcon :name="store.mode === 'dark' ? 'sun' : 'moon'" :size="12" class="rail-icon" />
+            {{ store.mode === 'dark' ? t("settings.themeLight") : t("settings.themeDark") }}
           </button>
         </div>
         <button type="button" class="foot-row foot-status foot-status-full" :title="store.git ? t('shell.gitHint') : t('shell.gitMissingHint')" @click="openGitSettings()">
@@ -155,14 +195,16 @@ function go(to: string) {
           <b>{{ t(`nav.${String(route.name ?? "overview")}`) }}</b>
         </div>
         <span class="spacer" />
-        <button class="btn" :disabled="store.busy" @click="store.scan()">
-          <AppIcon name="refresh" :size="14" class="rail-icon" />
-          {{ t("shell.scan") }}
-        </button>
+        <!-- The walk owns its own state: `busy` only locks request-shaped commands, so 校验 stays
+             clickable while a scan runs. -->
+        <ScanPill :label="t('shell.scan')" />
         <button class="btn primary" :disabled="store.busy" @click="store.verify()">
           <AppIcon name="check" :size="14" class="rail-icon" />
           {{ t("common.verify") }}
         </button>
+        <div class="scan-rail" :class="{ on: railOn, flash: railDone }" aria-hidden="true">
+          <i :style="{ '--p': railValue }" />
+        </div>
       </header>
 
       <main class="view">
@@ -182,7 +224,7 @@ function go(to: string) {
 .rail { display: flex; flex-direction: column; min-height: 0; background: var(--panel); border-right: 1px solid var(--line); padding: 0 10px 10px; }
 .rail-head { display: flex; align-items: center; gap: 10px; padding: 14px 6px 12px; }
 /* Two files, one slot: the painted heron for the light theme, the silhouette for dark. Switched by
-   the theme attribute on <html>, so the right logo is already in place on first paint — no JS, no
+   the data-color-mode attribute on <html>, so the right logo is already in place on first paint — no JS, no
    flash of the other one.
 
    Both masters are complete 1024px app tiles (rounded plate, bird centred, little padding), so at
@@ -202,8 +244,8 @@ function go(to: string) {
   object-fit: contain; border-radius: 9px;
 }
 .on-dark { display: none; }
-:root[data-theme="dark"] .on-light { display: none; }
-:root[data-theme="dark"] .on-dark { display: block; }
+:root[data-color-mode="dark"] .on-light { display: none; }
+:root[data-color-mode="dark"] .on-dark { display: block; }
 .wordmark { display: flex; flex-direction: column; line-height: 1.15; min-width: 0; }
 .wordmark b { font-family: var(--font-serif); font-size: 16px; font-weight: 600; }
 .wordmark small { font-size: 11.5px; color: var(--dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -258,7 +300,56 @@ function go(to: string) {
 .theme-toggle svg { stroke: currentColor; fill: none; stroke-width: 1.6; }
 
 /* topbar + content */
-.topbar { display: flex; align-items: center; gap: 10px; height: 48px; padding: 0 24px; border-bottom: 1px solid var(--line); flex: none; }
+.topbar { position: relative; display: flex; align-items: center; gap: 10px; height: 48px; padding: 0 24px; border-bottom: 1px solid var(--line); flex: none; }
+/* The only progress meter in the app: 2px on the topbar's lower edge, spanning the full width, so
+   it reads as furniture of the toolbar rather than a widget bolted under it. It lives here, not on
+   the overview page, because the walk keeps going after you leave that page.
+
+   No per-root sub-progress is faked: `--p` is the whole-run ratio the backend is able to state
+   (`percent` when it sends one, the roots already walked when it does not), and the flowing sheen
+   inside the lit part is what says "still working" while that ratio cannot move. */
+.scan-rail {
+  position: absolute; left: 0; right: 0; bottom: -2px; height: 2px;
+  overflow: hidden; opacity: 0; pointer-events: none;
+  transition: opacity 0.2s ease;
+}
+.scan-rail.on { opacity: 1; }
+.scan-rail i {
+  position: absolute; top: 0; bottom: 0; left: 0; overflow: hidden;
+  width: calc(var(--p, 0) * 100%); border-radius: 0 2px 2px 0;
+  background: color-mix(in srgb, var(--accent) 45%, transparent);
+  transition: width 0.12s linear;
+}
+.scan-rail i::after {
+  content: ""; position: absolute; inset: 0;
+  background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--accent) 96%, transparent), transparent);
+  animation: heron-rail-flow 1.5s linear infinite;
+}
+/* Done: the whole rail turns good and fades out. Cancelled: it is already unlit, so it just goes. */
+.scan-rail.flash i { background: var(--good); animation: heron-rail-flash 0.55s ease-out 1 forwards; }
+.scan-rail.flash i::after { animation: none; opacity: 0; }
+@keyframes heron-rail-flow {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+@keyframes heron-rail-flash {
+  0% { opacity: 1; }
+  60% { opacity: 1; }
+  100% { opacity: 0; }
+}
+/* A count that changed in front of you: one lift, in the accent it already colours with. */
+.count-bump { animation: heron-bump 0.5s cubic-bezier(0.2, 0.7, 0.2, 1); }
+@keyframes heron-bump {
+  0% { transform: translateY(0); }
+  35% { transform: translateY(-3px); color: var(--accent); }
+  100% { transform: translateY(0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .scan-rail i { transition: none; }
+  .scan-rail i::after { animation: none; opacity: 0; }
+  .scan-rail.flash i { animation: none; }
+  .count-bump { animation: none; }
+}
 .crumbs { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--faint); white-space: nowrap; overflow: hidden; }
 .crumbs b { color: var(--text); font-weight: 600; }
 .rail-icon { stroke: currentColor; fill: none; stroke-width: 1.6; flex: none; }

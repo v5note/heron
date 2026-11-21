@@ -1,53 +1,195 @@
 /* Design tokens and shared components.
  *
- * Two themes share one skeleton: dark is the default ("运维控制台"), light is the same layout on
- * warm paper. The active theme lives on <html data-theme="dark|light"> so every surface switches
- * together; nothing here follows prefers-color-scheme on its own.
+ * Four palettes share one skeleton, each in a light and a dark cut: the palette lives on
+ * <html data-theme="default|dusk|forest-ink|wanqing"> and the resolved light/dark on
+ * <html data-color-mode="light|dark">, so every surface switches together. No dark cut is a
+ * neutral black: every base carries its palette's hue (green ink, olive, forest night, night
+ * blue), lifted in steps from --bg to --panel to --raised. The colour mode follows the system
+ * only through the store; nothing in this file reads prefers-color-scheme on its own.
  *
  * This is plain CSS: use /* … *​/ comments only. A "//" line here is swallowed by the minifier and
  * takes the token block that follows it down with it. */
 
-:root[data-theme="dark"] {
-  color-scheme: dark;
-  --bg: #090807;
-  --panel: #0f0e0c;
-  --raised: #151310;
-  --line: rgba(246, 240, 230, 0.08);
-  --line-strong: rgba(246, 240, 230, 0.16);
-  --text: #efe8da;
-  --dim: #c2bcb0;
-  --faint: #a39b8c;
-  --on-text: #181410;
-  --good: #b2c77a;
-  --warn: #e3c08a;
-  --bad: #e47b66;
-  --accent: #9ea8ff;
-  --accent-weak: rgba(158, 168, 255, 0.14);
-  --shadow: 0 12px 32px rgba(0, 0, 0, 0.4);
-  --scrim: rgba(9, 8, 7, 0.62);
-  /* Ring around the rail logo, in the rail colour, so the tile does not read as a pasted image. */
-  --logo-ring: rgba(246, 240, 230, 0.10);
-}
-
-:root[data-theme="light"] {
+/* 默认：节气暖纸底 + 墨绿强调 */
+:root[data-theme="default"][data-color-mode="light"] {
   color-scheme: light;
-  --bg: #faf9f6;
-  --panel: #ffffff;
-  --raised: #f5f2ec;
-  --line: #e8e3da;
-  --line-strong: #d6cfc3;
-  --text: #211d18;
-  --dim: #5c5650;
-  --faint: #776f64;
-  --on-text: #ffffff;
+  --bg: #f3efe4;
+  --panel: #fbf7ee;
+  --raised: #ebe4d4;
+  --line: #e3dbcc;
+  --line-strong: #d3c9b8;
+  --text: #2a2924;
+  --dim: #5d574c;
+  --faint: #7a7368;
+  --on-text: #fbf7ee;
   --good: #5c7a2e;
   --warn: #8a6216;
   --bad: #a8452f;
-  --accent: #4b4bc2;
-  --accent-weak: rgba(75, 75, 194, 0.1);
-  --shadow: 0 12px 32px rgba(33, 29, 24, 0.12);
-  --scrim: rgba(250, 249, 246, 0.66);
-  --logo-ring: rgba(33, 29, 24, 0.10);
+  --accent: #2f5b48;
+  --accent-weak: rgba(47, 91, 72, 0.1);
+  --shadow: 0 12px 32px rgba(42, 41, 36, 0.12);
+  /* Hover lift for clickable cards — lighter than --shadow, which is for overlays. */
+  --lift: 0 1px 4px rgba(42, 41, 36, 0.06), 0 6px 18px -8px rgba(42, 41, 36, 0.18);
+  --scrim: rgba(243, 239, 228, 0.66);
+  /* Ring around the rail logo, in the rail colour, so the tile does not read as a pasted image. */
+  --logo-ring: rgba(42, 41, 36, 0.10);
+}
+
+:root[data-theme="default"][data-color-mode="dark"] {
+  color-scheme: dark;
+  --bg: #1a221c;
+  --panel: #222b24;
+  --raised: #2a342e;
+  --line: rgba(230, 238, 232, 0.09);
+  --line-strong: rgba(230, 238, 232, 0.18);
+  --text: #e6eee8;
+  --dim: #b6c4ba;
+  --faint: #9aab9f;
+  --on-text: #1a221c;
+  --good: #b2c77a;
+  --warn: #e3c08a;
+  --bad: #e0a090;
+  --accent: #7fb59a;
+  --accent-weak: rgba(127, 181, 154, 0.14);
+  --shadow: 0 12px 32px rgba(10, 14, 11, 0.5);
+  --lift: 0 1px 3px rgba(10, 14, 11, 0.35), 0 8px 20px -10px rgba(10, 14, 11, 0.6);
+  --scrim: rgba(26, 34, 28, 0.62);
+  --logo-ring: rgba(230, 238, 232, 0.10);
+}
+
+/* 暮色：暖褐纸底 + 赭棕强调，深色为深橄榄 */
+:root[data-theme="dusk"][data-color-mode="light"] {
+  color-scheme: light;
+  --bg: #ece7df;
+  --panel: #f7f3ec;
+  --raised: #e5dfd4;
+  --line: #dfd7ca;
+  --line-strong: #cdc3b3;
+  --text: #2c2924;
+  --dim: #5f5a52;
+  --faint: #7a7368;
+  --on-text: #f7f3ec;
+  --good: #5c7a2e;
+  --warn: #8a6216;
+  --bad: #a8452f;
+  --accent: #5c4a32;
+  --accent-weak: rgba(92, 74, 50, 0.1);
+  --shadow: 0 12px 32px rgba(44, 41, 36, 0.12);
+  --lift: 0 1px 4px rgba(44, 41, 36, 0.06), 0 6px 18px -8px rgba(44, 41, 36, 0.18);
+  --scrim: rgba(236, 231, 223, 0.66);
+  --logo-ring: rgba(44, 41, 36, 0.10);
+}
+
+:root[data-theme="dusk"][data-color-mode="dark"] {
+  color-scheme: dark;
+  --bg: #17140f;
+  --panel: #211d17;
+  --raised: #2a251e;
+  --line: rgba(240, 232, 220, 0.09);
+  --line-strong: rgba(240, 232, 220, 0.18);
+  --text: #f0e8dc;
+  --dim: #c8bda9;
+  --faint: #a89c8c;
+  --on-text: #17140f;
+  --good: #b2c77a;
+  --warn: #e3c08a;
+  --bad: #e0a090;
+  --accent: #c4a882;
+  --accent-weak: rgba(196, 168, 130, 0.14);
+  --shadow: 0 12px 32px rgba(8, 7, 4, 0.5);
+  --lift: 0 1px 3px rgba(8, 7, 4, 0.35), 0 8px 20px -10px rgba(8, 7, 4, 0.6);
+  --scrim: rgba(23, 20, 15, 0.62);
+  --logo-ring: rgba(240, 232, 220, 0.10);
+}
+
+/* 林墨：冷绿纸底 + 墨绿强调，深色为林间夜色 */
+:root[data-theme="forest-ink"][data-color-mode="light"] {
+  color-scheme: light;
+  --bg: #e8f0ea;
+  --panel: #f7fbf8;
+  --raised: #dce8e0;
+  --line: #cfdcd4;
+  --line-strong: #b9c9bf;
+  --text: #1e3328;
+  --dim: #4c6055;
+  --faint: #64796d;
+  --on-text: #f7fbf8;
+  --good: #5c7a2e;
+  --warn: #8a6216;
+  --bad: #a8452f;
+  --accent: #3d6b54;
+  --accent-weak: rgba(61, 107, 84, 0.1);
+  --shadow: 0 12px 32px rgba(30, 51, 40, 0.12);
+  --lift: 0 1px 4px rgba(30, 51, 40, 0.06), 0 6px 18px -8px rgba(30, 51, 40, 0.18);
+  --scrim: rgba(232, 240, 234, 0.66);
+  --logo-ring: rgba(30, 51, 40, 0.10);
+}
+
+:root[data-theme="forest-ink"][data-color-mode="dark"] {
+  color-scheme: dark;
+  --bg: #141c17;
+  --panel: #1c2620;
+  --raised: #243028;
+  --line: rgba(226, 238, 230, 0.09);
+  --line-strong: rgba(226, 238, 230, 0.18);
+  --text: #e2eee6;
+  --dim: #b0c2b6;
+  --faint: #8fa498;
+  --on-text: #141c17;
+  --good: #b2c77a;
+  --warn: #e3c08a;
+  --bad: #e0a090;
+  --accent: #6fad8e;
+  --accent-weak: rgba(111, 173, 142, 0.14);
+  --shadow: 0 12px 32px rgba(6, 10, 7, 0.5);
+  --lift: 0 1px 3px rgba(6, 10, 7, 0.35), 0 8px 20px -10px rgba(6, 10, 7, 0.6);
+  --scrim: rgba(20, 28, 23, 0.62);
+  --logo-ring: rgba(226, 238, 230, 0.10);
+}
+
+/* 晚晴：暖纸底 + 靛蓝强调，深色为夜蓝 */
+:root[data-theme="wanqing"][data-color-mode="light"] {
+  color-scheme: light;
+  --bg: #f6f1e7;
+  --panel: #fffcf5;
+  --raised: #ece4d6;
+  --line: #e0d7c9;
+  --line-strong: #cec3b2;
+  --text: #2c2a3a;
+  --dim: #5c5870;
+  --faint: #6f6a7c;
+  --on-text: #fffcf5;
+  --good: #5c7a2e;
+  --warn: #8a6216;
+  --bad: #a8452f;
+  --accent: #4a5a86;
+  --accent-weak: rgba(74, 90, 134, 0.1);
+  --shadow: 0 12px 32px rgba(44, 42, 58, 0.12);
+  --lift: 0 1px 4px rgba(44, 42, 58, 0.06), 0 6px 18px -8px rgba(44, 42, 58, 0.18);
+  --scrim: rgba(246, 241, 231, 0.66);
+  --logo-ring: rgba(44, 42, 58, 0.10);
+}
+
+:root[data-theme="wanqing"][data-color-mode="dark"] {
+  color-scheme: dark;
+  --bg: #191d26;
+  --panel: #21262f;
+  --raised: #2a2f3b;
+  --line: rgba(230, 227, 220, 0.09);
+  --line-strong: rgba(230, 227, 220, 0.18);
+  --text: #e6e3dc;
+  --dim: #b9b6ae;
+  --faint: #9a97a8;
+  --on-text: #191d26;
+  --good: #b2c77a;
+  --warn: #e3c08a;
+  --bad: #e0a090;
+  --accent: #9aa9d4;
+  --accent-weak: rgba(154, 169, 212, 0.14);
+  --shadow: 0 12px 32px rgba(9, 11, 15, 0.5);
+  --lift: 0 1px 3px rgba(9, 11, 15, 0.35), 0 8px 20px -10px rgba(9, 11, 15, 0.6);
+  --scrim: rgba(25, 29, 38, 0.62);
+  --logo-ring: rgba(230, 227, 220, 0.10);
 }
 
 :root {
@@ -173,6 +315,46 @@ a { color: var(--accent); }
    the page's right edge so it does not shuffle every time the button label changes. */
 .page-head .actions > .list-count { margin-left: 4px; }
 
+/* ---------- scan status line ---------- *
+ * One mono line under the page head: what the walk is doing right now, or what the last one left
+ * behind. It is the only extra row the overview grows, and it is a hairline-ruled instrument strip,
+ * not a paragraph — mono and tabular digits because every token on it changes while you read it. */
+.scan-status {
+  display: flex; align-items: center; gap: 7px;
+  margin: 0 0 14px; padding: 0 2px 10px; min-height: 20px;
+  border-bottom: 1px solid var(--line);
+  font-family: var(--font-mono); font-size: 12.5px; color: var(--faint);
+  font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden;
+}
+.scan-status .sep { color: color-mix(in srgb, var(--faint) 55%, transparent); }
+/* The stage and the path it walks are the live part; the readings next to them stay quiet. */
+.scan-status .live { color: var(--accent); overflow: hidden; text-overflow: ellipsis; }
+.scan-status .num { color: var(--text); }
+.scan-status svg { fill: none; stroke: currentColor; stroke-width: 1.6; flex: none; }
+/* Truncation is a warning you can read but cannot fix from here. */
+.scan-status .trunc { color: var(--warn); }
+/* Cancelling from the line is an underlined word, not a second pill: it must not compete with the
+   toolbar control for the "that is the scan button" read. */
+.scan-status .cancel {
+  margin-left: 6px; color: var(--warn); flex: none;
+  border-bottom: 1px solid color-mix(in srgb, var(--warn) 40%, transparent);
+}
+.scan-status .cancel:hover { color: var(--text); border-bottom-color: var(--text); }
+
+/* A row the walk surfaced while you were already looking at the list arrives in arrival order,
+   6px up, instead of repainting the grid around you. `--sd` is the stagger the stream asked for. */
+.flow-in { animation: heron-flow 0.28s cubic-bezier(0.2, 0.7, 0.2, 1) both; animation-delay: var(--sd, 0ms); }
+@keyframes heron-flow { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+
+/* One spin definition for every "this is alive" glyph in the app (pill, status line). */
+.spin { animation: heron-spin 1.9s linear infinite; }
+@keyframes heron-spin { to { transform: rotate(360deg); } }
+/* A spin nobody asked for is noise: the counts and the rail keep saying "alive" without it. */
+@media (prefers-reduced-motion: reduce) {
+  .spin { animation: none; }
+  .flow-in { animation: none; }
+}
+
 .table { width: 100%; border-collapse: separate; border-spacing: 0; }
 .table th {
   text-align: left; font-size: 11.5px; font-weight: 600; color: var(--dim);
@@ -278,6 +460,15 @@ a { color: var(--accent); }
 }
 .toast-close:hover { background: var(--raised); color: var(--text); }
 .toast-close svg { width: 12px; height: 12px; stroke: currentColor; fill: none; stroke-width: 1.8; }
+/* A toast that ends a long job says where the result lives, and takes you there: the action is the
+ * same 24px control the prototype uses, kept quiet (raised, hairline) so it reads as an offer and
+ * not as the message itself. */
+.toast-action {
+  flex: none; align-self: center; height: 24px; padding: 0 9px;
+  border: 1px solid var(--line-strong); border-radius: 6px;
+  font-size: 12px; font-weight: 500; color: var(--text); white-space: nowrap;
+}
+.toast-action:hover { background: var(--raised); border-color: var(--text); }
 
 /* Enter from the corner, leave back into it: the motion points at where the toast came from. */
 .toast-enter-active, .toast-leave-active { transition: opacity 0.18s ease, transform 0.18s ease; }

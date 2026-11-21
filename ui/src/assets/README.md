@@ -7,7 +7,7 @@ The rail logo in the top-left corner of the app shell.
 | `logo-light.png` | **derived** from `docs/icons/icon-master-2.png` | light theme |
 | `logo-dark.png` | **derived** from `docs/icons/icon-master-6.png` | dark theme |
 
-`App.vue` shows exactly one of them, chosen by `<html data-theme>`, so the right logo is on
+`App.vue` shows exactly one of them, chosen by `<html data-color-mode>`, so the right logo is on
 screen at first paint — no JS, no flash of the other one.
 
 ## Why both are derived

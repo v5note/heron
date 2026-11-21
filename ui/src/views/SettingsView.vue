@@ -8,7 +8,7 @@ import { api } from "../api";
 import type { NativeScanStatus } from "../api/types";
 import { checkForUpdate, installUpdate, type UpdateInfo } from "../api/updater";
 import { setLocale, type Locale } from "../i18n";
-import { useAppStore } from "../stores/app";
+import { useAppStore, type ThemeId } from "../stores/app";
 import pkg from "../../package.json";
 
 const store = useAppStore();
@@ -22,7 +22,54 @@ const progress = ref<string | null>(null);
 const currentVersion = pkg.version;
 
 // The header slot used to render the caption "主题立即生效…" where the current theme belongs.
-const themeLabel = computed(() => t(`settings.themeStatus.${store.theme}`));
+const themeLabel = computed(() => `${t(`settings.palette.${store.theme}`)} · ${t(`settings.themeStatus.${store.mode}`)}`);
+
+interface PaletteShade {
+  bg: string;
+  panel: string;
+  surface: string;
+  line: string;
+  accent: string;
+}
+
+/**
+ * Mini-preview colours per palette, keyed by the ids on `<html data-theme>`. They mirror the
+ * token blocks in style.css (--bg / --panel / --raised / --line / --accent) — change both.
+ */
+const palettes: { id: ThemeId; light: PaletteShade; dark: PaletteShade }[] = [
+  {
+    id: "default",
+    light: { bg: "#f3efe4", panel: "#fbf7ee", surface: "#ebe4d4", line: "#e3dbcc", accent: "#2f5b48" },
+    dark: { bg: "#1a221c", panel: "#222b24", surface: "#2a342e", line: "#344038", accent: "#7fb59a" },
+  },
+  {
+    id: "dusk",
+    light: { bg: "#ece7df", panel: "#f7f3ec", surface: "#e5dfd4", line: "#dfd7ca", accent: "#5c4a32" },
+    dark: { bg: "#17140f", panel: "#211d17", surface: "#2a251e", line: "#3a342c", accent: "#c4a882" },
+  },
+  {
+    id: "forest-ink",
+    light: { bg: "#e8f0ea", panel: "#f7fbf8", surface: "#dce8e0", line: "#cfdcd4", accent: "#3d6b54" },
+    dark: { bg: "#141c17", panel: "#1c2620", surface: "#243028", line: "#2e3c34", accent: "#6fad8e" },
+  },
+  {
+    id: "wanqing",
+    light: { bg: "#f6f1e7", panel: "#fffcf5", surface: "#ece4d6", line: "#e0d7c9", accent: "#4a5a86" },
+    dark: { bg: "#191d26", panel: "#21262f", surface: "#2a2f3b", line: "#333947", accent: "#9aa9d4" },
+  },
+];
+
+/** Cards show each palette in the mode actually on screen, so 浅色/深色 has visible feedback. */
+function previewStyle(p: (typeof palettes)[number]): Record<string, string> {
+  const c = p[store.mode];
+  return {
+    "--pv-bg": c.bg,
+    "--pv-panel": c.panel,
+    "--pv-surface": c.surface,
+    "--pv-line": c.line,
+    "--pv-accent": c.accent,
+  };
+}
 
 async function checkUpdate() {
   checking.value = true;
@@ -80,22 +127,50 @@ function changeLocale(event: Event) {
       <div class="card-body">
         <div class="row">
           <span class="label">{{ t("settings.theme") }}</span>
-          <div class="theme-switch" role="group" :aria-label="t('settings.theme')">
+          <div class="palette-grid" role="group" :aria-label="t('settings.theme')">
             <button
-              :class="{ on: store.theme === 'dark' }"
-              :aria-pressed="store.theme === 'dark'"
-              @click="store.setTheme('dark')"
+              v-for="p in palettes"
+              :key="p.id"
+              type="button"
+              class="palette-card"
+              :class="{ on: store.theme === p.id }"
+              :aria-pressed="store.theme === p.id"
+              @click="store.setTheme(p.id)"
             >
-              <AppIcon name="moon" :size="14" />{{ t("settings.themeDark") }}
-            </button>
-            <button
-              :class="{ on: store.theme === 'light' }"
-              :aria-pressed="store.theme === 'light'"
-              @click="store.setTheme('light')"
-            >
-              <AppIcon name="sun" :size="14" />{{ t("settings.themeLight") }}
+              <span class="palette-preview" :style="previewStyle(p)">
+                <span class="pv-rail" />
+                <span class="pv-body">
+                  <span class="pv-bar b1" />
+                  <span class="pv-bar b2" />
+                  <span class="pv-bar b3" />
+                  <span class="pv-dot" />
+                </span>
+                <span class="pv-page" />
+              </span>
+              <span class="palette-text">
+                <span class="palette-name">{{ t(`settings.palette.${p.id}`) }}</span>
+                <span class="palette-desc">{{ t(`settings.paletteDesc.${p.id}`) }}</span>
+              </span>
+              <span v-if="store.theme === p.id" class="pv-check">✓</span>
             </button>
           </div>
+        </div>
+        <div class="row">
+          <span class="label">{{ t("settings.colorMode") }}</span>
+          <span class="mode-cell">
+            <div class="theme-switch" role="group" :aria-label="t('settings.colorMode')">
+              <button :class="{ on: store.colorMode === 'system' }" :aria-pressed="store.colorMode === 'system'" @click="store.setColorMode('system')">
+                {{ t("settings.themeAuto") }}
+              </button>
+              <button :class="{ on: store.colorMode === 'light' }" :aria-pressed="store.colorMode === 'light'" @click="store.setColorMode('light')">
+                <AppIcon name="sun" :size="14" />{{ t("settings.themeLight") }}
+              </button>
+              <button :class="{ on: store.colorMode === 'dark' }" :aria-pressed="store.colorMode === 'dark'" @click="store.setColorMode('dark')">
+                <AppIcon name="moon" :size="14" />{{ t("settings.themeDark") }}
+              </button>
+            </div>
+            <small class="row-hint">{{ t("settings.colorModeHint") }}</small>
+          </span>
         </div>
         <div class="row">
           <span class="label">{{ t("settings.language") }}</span>
@@ -221,6 +296,53 @@ function changeLocale(event: Event) {
 .theme-switch button.on:hover { background: var(--text); color: var(--on-text); }
 .theme-switch button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .theme-switch :deep(svg) { stroke: currentColor; fill: none; stroke-width: 1.6; }
+
+/* 主题色板与色模式。
+   色板卡是一张纯 CSS 画的迷你界面：颜色取自该色板在当前明暗下的 --pv-* 内联变量（见 previewStyle），
+   所以切换 浅色/深色 时四张卡会一起变；选中卡描强调色边框并在右上角盖一枚对勾。
+   两个选择器都写到 .grid-card .row > … 的强度，才能覆盖通用的右对齐值列布局。 */
+.grid-card .row > .palette-grid {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 10px; text-align: left;
+}
+.palette-card {
+  position: relative; display: flex; align-items: center; gap: 12px; min-width: 0;
+  padding: 10px; text-align: left;
+  border: 1px solid var(--line); border-radius: var(--radius); background: var(--panel);
+  cursor: pointer; transition: border-color 120ms ease, background-color 120ms ease;
+}
+.palette-card:hover { border-color: var(--line-strong); }
+.palette-card.on { border-color: var(--accent); }
+.palette-card:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.palette-preview {
+  display: flex; gap: 6px; flex: none; width: 96px; height: 58px; padding: 5px;
+  border-radius: var(--radius-sm); background: var(--pv-bg);
+}
+.pv-rail { width: 8px; border-radius: 3px; background: var(--pv-surface); }
+.pv-body { display: flex; flex-direction: column; gap: 4px; flex: 1; min-width: 0; }
+.pv-bar { height: 5px; border-radius: 3px; }
+.pv-bar.b1 { width: 42%; background: var(--pv-accent); }
+.pv-bar.b2 { width: 55%; background: var(--pv-line); }
+.pv-bar.b3 { width: 33%; background: var(--pv-line); }
+.pv-dot { width: 23px; height: 4px; margin-top: auto; border-radius: 2px; background: var(--pv-accent); }
+.pv-page {
+  width: 26px; align-self: stretch; margin-block: 2px; border-radius: 3px;
+  background:
+    linear-gradient(var(--pv-line), var(--pv-line)) 4px 7px / 18px 2px no-repeat,
+    linear-gradient(var(--pv-line), var(--pv-line)) 4px 13px / 12px 2px no-repeat,
+    var(--pv-panel);
+}
+.palette-text { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.palette-name { font-size: 12.5px; font-weight: 600; color: var(--text); }
+.palette-desc { font-size: 11px; line-height: 1.45; color: var(--faint); }
+.pv-check {
+  position: absolute; top: 8px; right: 8px; display: grid; place-items: center;
+  width: 16px; height: 16px; border-radius: 50%;
+  background: var(--accent); color: var(--on-text); font-size: 10px;
+}
+.grid-card .row > .mode-cell {
+  display: flex; flex-direction: column; align-items: flex-end; gap: 4px;
+}
+.row-hint { font-size: 11px; color: var(--faint); text-align: right; }
 
 /* A native <select> keeps its own 32px box; 30px matches the 30px buttons beside it so both centre
    on one line. Its text is drawn by the engine at the control's own height, so the control must not

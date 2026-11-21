@@ -47,33 +47,37 @@
   },
   "overview": {
     "title": "概览",
-    "skills": "已纳管 Skill",
-    "unmanaged": "未纳管",
-    "upgradable": "可升级",
-    "issues": "体检问题",
     "lastScan": "上次扫描",
-    "never": "从未",
     "quickScan": "扫描本机",
     "quickDoctor": "运行体检",
-    "hint": "先扫描，再挑出要收拢的 Skill。",
     "lead": "收拢 → 分发 → 升级：下面只列现在真正需要你决定的事。",
-    "next": {
-      "title": "接下来",
+    "queue": {
+      "title": "决定队列",
       "count": "{n} 项",
-      "clear": "没有待处理事项",
-      "broken": "{n} 处投影是坏链，客户端不会加载",
+      "clear": "一切干净——现在没有需要你决定的事。",
+      "chipBroken": "坏链",
+      "chipUnmanaged": "待纳管",
+      "chipConflict": "冲突",
+      "chipUpgrade": "可升级",
+      "chipFrontmatter": "元数据",
+      "brokenMain": "{client} · {slug} 投影断链",
+      "brokenMissing": "{path} → 目标不存在",
+      "brokenMore": "{path} → 目标不存在 · 另有 {n} 处",
+      "unmanaged": "{n} 处 Skill 尚未纳管",
       "conflict": "{n} 个 Skill 本地与上游都改过，需要逐文件合并",
       "upgrade": "{n} 个 Skill 上游有新版本",
-      "unmanaged": "{n} 处 Skill 尚未纳管",
-      "frontmatter": "{n} 处 frontmatter 有问题",
-      "tone": {
-        "broken": "需修复",
-        "shadowed": "待处理"
-      }
+      "frontmatter": "{n} 处 frontmatter 有问题"
+    },
+    "readout": {
+      "title": "系统读数",
+      "pending": "待决定",
+      "targets": "启用落点",
+      "managed": "已纳管",
+      "gaugeCap": "扫描根 · root",
+      "gaugeScanning": "{root} 正在扫描",
+      "gaugeNone": "尚未扫描过，root 未知"
     },
     "pipeline": {
-      "title": "流水线",
-      "targets": "启用落点",
       "live": "生效中的投影",
       "hidden": "被压制 / 坏链",
       "outOf": "共 {n} 处投影"
@@ -81,7 +85,11 @@
     "targets": {
       "title": "落点状态",
       "hint": "每个客户端真正读取的目录",
-      "state": "状态"
+      "chipLive": "生效 {n}",
+      "chipBroken": "坏链 {n}",
+      "enabled": "已启用",
+      "disabled": "已停用",
+      "skillCount": "{n} 个 Skill 生效"
     }
   },
   "library": {
@@ -121,7 +129,6 @@
     "nestedCount": "{n} 处",
     "previewTitle": "收拢预览（dry-run）",
     "previewHint": "先预览：这一步只读，确认后才会移动文件，并先备份。",
-    "fromStore": "来自存储",
     "collecting": "正在检查",
     "sameContent": "与 {slug} 内容相同",
     "adoptFailed": "{n} 处收拢失败：{detail}",
@@ -140,6 +147,28 @@
     "noMatch": "没有匹配「{q}」的 Skill",
     "clearSearch": "清除搜索",
     "clearSelection": "清空选择",
+    "filterClient": "按来源筛选",
+    "allClients": "全部",
+    "clients": {
+      "agents": "通用",
+      "claude": "Claude",
+      "codex": "Codex",
+      "cursor": "Cursor",
+      "opencode": "opencode",
+      "workbuddy": "Workbuddy",
+      "antigravity": "Antigravity",
+      "trae": "Trae",
+      "qoder": "Qoder",
+      "grok": "Grok",
+      "cline": "Cline",
+      "copilot": "Copilot",
+      "heron": "本机收纳"
+    },
+    "otherClient": "其他",
+    "scopes": {
+      "global": "全局",
+      "project": "项目"
+    },
     "noDescription": "这个 Skill 没有写描述",
     "copyPath": "复制地址",
     "copied": "已复制",
@@ -236,6 +265,21 @@
     "lead": "主题、语言、应用更新与客户端能力，改动立即生效。",
     "themeDark": "深色",
     "themeLight": "浅色",
+    "themeAuto": "自动",
+    "colorMode": "色模式",
+    "colorModeHint": "跟随系统，或固定浅色 / 深色。",
+    "palette": {
+      "default": "默认",
+      "dusk": "暮色",
+      "forest-ink": "林墨",
+      "wanqing": "晚晴"
+    },
+    "paletteDesc": {
+      "default": "节气暖纸底 + 墨绿强调",
+      "dusk": "暖褐纸底 + 赭棕强调，深色为深橄榄",
+      "forest-ink": "冷绿纸底 + 墨绿强调，深色为林间夜色",
+      "wanqing": "暖纸底 + 靛蓝强调，深色为夜蓝"
+    },
     "platform": "平台",
     "system": "系统",
     "appearance": "外观与语言",
@@ -245,6 +289,7 @@
     },
     "themeNote": "主题立即生效，下次启动沿用上次选择。",
     "themeStatus": {
+      "system": "自动",
       "dark": "深色",
       "light": "浅色"
     }
@@ -281,6 +326,46 @@
     "saveAndRetry": "保存并重试升级",
     "resolved": "冲突已解决，已重新升级",
     "hint": "{n} 个文件：每个文件都要你决定，「保存并重试」会提交选择并重新跑一次升级。"
+  },
+  "scan": {
+    "running": "扫描中",
+    "cancelHint": "点击取消",
+    "canceling": "正在取消",
+    "cancel": "取消",
+    "rescanHint": "可随时重新扫描",
+    "canceledShort": "已取消",
+    "found": "{n} 发现",
+    "incomplete": "结果不完整",
+    "incompleteHint": "已达目录遍历上限，结果不完整",
+    "newCount": "+{n} 新发现",
+    "phasePrepare": "准备中",
+    "phaseWalk": "遍历中",
+    "phaseParse": "解析中",
+    "phasePersist": "入库中",
+    "phaseSummary": "汇总中",
+    "phaseDone": "完成",
+    "phaseCanceled": "已取消",
+    "statusStage": "阶段",
+    "statusRoot": "root",
+    "statusFound": "已发现",
+    "statusLast": "上次扫描 {ago}",
+    "statusRoots": "遍历 {n} 个根",
+    "statusFoundTotal": "发现 {n} 处",
+    "agoNow": "刚刚",
+    "agoSec": "{n} 秒前",
+    "agoMin": "{n} 分前",
+    "agoHour": "{n} 时前",
+    "agoDay": "{n} 天前",
+    "toastDone": "扫描完成 · {n} 个新发现",
+    "toastDoneEmpty": "扫描完成 · 没有新发现",
+    "toastTruncated": "结果不完整 · 已达 {limit} 目录上限",
+    "toastCanceled": "扫描已取消 · 已发现 {n} 处保留",
+    "toastView": "查看",
+    "toastExclusions": "排除设置",
+    "ariaCancel": "扫描中 {i}/{n} · 点击取消",
+    "ariaCanceling": "正在取消扫描 {i}/{n}",
+    "ariaDone": "扫描完成 · {n} 个发现",
+    "ariaCanceled": "扫描已取消 · {n} 个发现"
   },
   "shell": {
     "scan": "扫描本机",

@@ -5,7 +5,7 @@ use std::io::Read;
 use std::path::PathBuf;
 
 use heron_scan::classify::{Classifier, HitKind};
-use heron_scan::walker::{scan, ScanOptions, ScanResult};
+use heron_scan::walker::{collect_roots, scan_monitored, ScanMonitor, ScanOptions, ScanResult};
 use heron_store::models::DetectedUpsert;
 use heron_store::repos::{detected, target};
 
@@ -50,8 +50,25 @@ impl ScanReport {
     }
 }
 
-/// Run a scan and write the results into the index.
-pub fn run(ctx: &mut Ctx, home: &std::path::Path, req: &ScanRequest) -> Result<ScanReport> {
+/// A scan that is ready to run: configuration snapshot, plus the roots it will descend into.
+///
+/// It deliberately holds no lock. The GUI builds one on the IPC thread, then walks it on a worker
+/// thread, so the database mutex is free for everything else the window asks for.
+pub struct ScanPlan {
+    classifier: Classifier,
+    options: ScanOptions,
+    roots: Vec<PathBuf>,
+}
+
+impl ScanPlan {
+    /// The roots the walk will visit, in visit order.
+    pub fn roots(&self) -> &[PathBuf] {
+        &self.roots
+    }
+}
+
+/// Stage 1: read the configuration. This is the only stage that touches the database up front.
+pub fn prepare(ctx: &mut Ctx, home: &std::path::Path, req: &ScanRequest) -> Result<ScanPlan> {
     clients::bootstrap(&mut ctx.db, home)?;
 
     let specs = clients::loaded_specs(&ctx.db)?;
@@ -73,13 +90,25 @@ pub fn run(ctx: &mut Ctx, home: &std::path::Path, req: &ScanRequest) -> Result<S
     if let Some(limit) = req.max_dirs {
         options.max_dirs = limit;
     }
-
-    let result = scan(&classifier, &options)?;
-    persist(ctx, &result)?;
-    Ok(ScanReport::from_result(&result))
+    let roots = collect_roots(&classifier, &options);
+    Ok(ScanPlan {
+        classifier,
+        options,
+        roots,
+    })
 }
 
-fn persist(ctx: &mut Ctx, result: &ScanResult) -> Result<()> {
+/// Stage 2: traverse and parse. Never touches the database or any lock, and stops early when the
+/// monitor's cancel flag is raised.
+pub fn walk(plan: &ScanPlan, monitor: &mut ScanMonitor<'_>) -> Result<ScanResult> {
+    scan_monitored(&plan.classifier, &plan.options, monitor)
+}
+
+/// Stage 3: write what the walk found.
+///
+/// `prune` also drops the `detected` rows this scan did not see. A cancelled scan must pass
+/// `false`: pruning against a partial hit list would delete rows for directories it never reached.
+pub fn persist(ctx: &mut Ctx, result: &ScanResult, prune: bool) -> Result<()> {
     let mut seen: HashSet<String> = HashSet::new();
     ctx.db.write(|tx| {
         for hit in &result.hits {
@@ -91,10 +120,7 @@ fn persist(ctx: &mut Ctx, result: &ScanResult) -> Result<()> {
                     path,
                     real_path: Some(hit.real_path.to_string_lossy().to_string()),
                     client_id: hit.client.clone(),
-                    scope: hit.scope.map(|s| match s {
-                        heron_scan::classify::Scope::Global => "global".to_owned(),
-                        heron_scan::classify::Scope::Project => "project".to_owned(),
-                    }),
+                    scope: hit.scope.map(|s| s.as_str().to_owned()),
                     project_path: hit
                         .project
                         .as_ref()
@@ -102,23 +128,34 @@ fn persist(ctx: &mut Ctx, result: &ScanResult) -> Result<()> {
                     observed_slug: hit.slug.clone(),
                     content_hash: None,
                     frontmatter_ok: Some(hit.frontmatter_ok()),
-                    kind: match hit.kind {
-                        HitKind::Skill => "skill",
-                        HitKind::LegacyCommand => "legacy-command",
-                        HitKind::NestedSuspect => "nested-suspect",
-                    }
-                    .to_owned(),
+                    kind: hit.kind.as_str().to_owned(),
                     mtime_ns: file_mtime_ns(&hit.path),
                     size_bytes: file_size(&hit.path),
                 },
             )?;
         }
-        detected::prune_not_in(tx, &seen)?;
+        if prune {
+            detected::prune_not_in(tx, &seen)?;
+        }
         Ok(())
     })?;
     ctx.db
         .kv_set("last_scan_at", &heron_platform::time::now_rfc3339())?;
     Ok(())
+}
+
+/// Stage 4: turn a finished walk into the numbers the report shows.
+pub fn summarize(result: &ScanResult) -> ScanReport {
+    ScanReport::from_result(result)
+}
+
+/// Run a scan and write the results into the index, every stage back to back. This is what the
+/// CLI calls; the GUI runs the stages itself so it can report progress between them.
+pub fn run(ctx: &mut Ctx, home: &std::path::Path, req: &ScanRequest) -> Result<ScanReport> {
+    let plan = prepare(ctx, home, req)?;
+    let result = walk(&plan, &mut ScanMonitor::quiet())?;
+    persist(ctx, &result, true)?;
+    Ok(summarize(&result))
 }
 
 fn project_roots(ctx: &Ctx) -> Result<Vec<PathBuf>> {

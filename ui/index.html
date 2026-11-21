@@ -4,6 +4,28 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Heron</title>
+    <script>
+      // Pre-paint appearance: write <html data-theme> / <html data-color-mode> before the first
+      // frame so the token blocks in style.css match from the very start. Must agree with
+      // initialPrefs() in src/stores/app.ts, including the legacy heron.theme "light"/"dark" value.
+      (function () {
+        var ids = ["default", "dusk", "forest-ink", "wanqing"];
+        var palette = localStorage.getItem("heron.theme");
+        var mode = localStorage.getItem("heron.colorMode");
+        if (palette === "light" || palette === "dark") {
+          if (!mode) mode = palette;
+          palette = null;
+        }
+        var root = document.documentElement;
+        root.setAttribute("data-theme", palette && ids.indexOf(palette) > -1 ? palette : "default");
+        var dark =
+          mode === "dark" ||
+          ((mode === null || mode === "system") &&
+            window.matchMedia &&
+            window.matchMedia("(prefers-color-scheme: dark)").matches);
+        root.setAttribute("data-color-mode", dark ? "dark" : "light");
+      })();
+    </script>
   </head>
   <body>
     <div id="app"></div>

@@ -6,17 +6,22 @@ import { useI18n } from "vue-i18n";
 import AppIcon from "../components/AppIcon.vue";
 import AppOverlay from "../components/AppOverlay.vue";
 import PageHeader from "../components/PageHeader.vue";
+import { clientColor, clientIcon } from "../utils/clients";
 import type { AdoptPlan, DetectedMeta, DetectedRow } from "../api/types";
 import { useAppStore } from "../stores/app";
 
 const store = useAppStore();
-const { t } = useI18n();
+const { t, te } = useI18n();
 const selected = ref<string[]>([]);
 const keepOriginal = ref(true);
 const dialog = ref(false);
 const preview = ref<AdoptPlan[] | null>(null);
 const busy = ref(false);
 const query = ref("");
+/** `"all"`, one of the common client ids below, or `"other"` for ids the app does not know. */
+const clientFilter = ref("all");
+const filterOpen = ref(false);
+const filterBox = ref<HTMLElement | null>(null);
 /** Frontmatter name/description per path. Display only: the card falls back when it is missing. */
 const meta = ref<Record<string, DetectedMeta>>({});
 let metaRequest = 0;
@@ -24,23 +29,76 @@ let metaRequest = 0;
 // A page visit must not re-walk the whole disk: load the index (which every page shares) once, and
 // leave the rescan to the explicit "扫描本机" action in the toolbar.
 onMounted(() => {
+  document.addEventListener("mousedown", closeFilterOnOutside);
   if (!store.ready) void store.init();
   else void store.loadDetected();
 });
 
+function closeFilterOnOutside(event: MouseEvent) {
+  if (filterBox.value && !filterBox.value.contains(event.target as Node)) filterOpen.value = false;
+}
+
 const rows = computed(() => store.unmanaged);
 const nested = computed(() => store.nested);
-/** Cards the current search matches; an empty query keeps every row. */
+
+/** What the running walk surfaced and nobody has persisted yet: the rows that flow in. */
+const news = computed(() => new Set(store.scan.newPaths));
+
+/** The stagger the stream asked for — each row waits its turn in arrival order. */
+function flowIn(path: string): Record<string, string> {
+  return { "--sd": `${store.scan.newDelays[path] ?? 0}ms` };
+}
+/** Cards the current search and source filter match. */
 const visible = computed(() => {
   const needle = query.value.trim().toLowerCase();
-  if (!needle) return rows.value;
-  return rows.value.filter((row) =>
-    [nameOf(row), descriptionOf(row), row.path, row.observed_slug ?? "", row.client_id ?? ""]
+  const client = clientFilter.value;
+  return rows.value.filter((row) => {
+    if (client === "other") {
+      if (!row.client_id || COMMON_CLIENTS.includes(row.client_id)) return false;
+    } else if (client !== "all" && row.client_id !== client) return false;
+    if (!needle) return true;
+    return [nameOf(row), descriptionOf(row), row.path, row.observed_slug ?? "", row.client_id ?? ""]
       .join(" ")
       .toLowerCase()
-      .includes(needle),
-  );
+      .includes(needle);
+  });
 });
+
+// Agent tools that create their own directory to install skills. The dropdown lists the common ones
+// whether or not the scanner produced rows yet; unknown ids are grouped under "other".
+const COMMON_CLIENTS = [
+  "agents", "claude", "codex", "cursor", "opencode",
+  "workbuddy", "antigravity", "trae", "qoder", "grok", "cline", "copilot",
+];
+/** Static option list: all + common clients + the unknown bucket. */
+const clientOptions = ["all", ...COMMON_CLIENTS, "other"];
+
+function clientOptionLabel(id: string): string {
+  if (id === "all") return t("discover.allClients");
+  if (id === "other") return t("discover.otherClient");
+  return clientLabel(id);
+}
+
+function pickClient(id: string) {
+  clientFilter.value = id;
+  filterOpen.value = false;
+}
+
+/** Locale label when we know the id; the raw id is still truthful for anything new. */
+function clientLabel(id: string) {
+  const key = `discover.clients.${id}`;
+  return te(key) ? t(key) : id;
+}
+
+/** Full text behind the card's source mark: client and scope, both readable on hover. */
+function clientTitle(row: DetectedRow) {
+  if (!row.client_id) return "";
+  const label = clientLabel(row.client_id);
+  if (!row.scope) return label;
+  const key = `discover.scopes.${row.scope}`;
+  return `${label} · ${te(key) ? t(key) : row.scope}`;
+}
+
 const allSelected = computed(
   () => visible.value.length > 0 && visible.value.every((row) => selected.value.includes(row.path)),
 );
@@ -121,7 +179,10 @@ async function copyAddress(row: DetectedRow) {
   copyTimer = setTimeout(() => (copiedPath.value = null), 1600);
 }
 
-onBeforeUnmount(() => clearTimeout(copyTimer));
+onBeforeUnmount(() => {
+  clearTimeout(copyTimer);
+  document.removeEventListener("mousedown", closeFilterOnOutside);
+});
 
 /** WKWebView can refuse the async clipboard API; keep the selection-based command as a fallback. */
 async function writeClipboard(text: string) {
@@ -195,9 +256,14 @@ async function adopt() {
           {{ t("discover.keepOriginal") }}
         </span>
         <span class="actions-divider" aria-hidden="true" />
+        <!-- Only this walk's additions, and only until you have acknowledged them: the rows stay
+             where they are either way, since they are already in the list. -->
+        <button v-if="store.scan.newCount" type="button" class="new-chip" @click="store.clearScanNews()">
+          {{ t("scan.newCount", { n: store.scan.newCount }) }}
+        </button>
         <span class="list-count">
           {{
-            query.trim()
+            query.trim() || clientFilter !== "all"
               ? t("discover.rowsFiltered", { n: visible.length, total: rows.length })
               : t("discover.rows", { n: rows.length })
           }}
@@ -209,6 +275,39 @@ async function adopt() {
     </PageHeader>
 
     <div class="toolbar">
+      <div ref="filterBox" class="client-select" :class="{ open: filterOpen }" @keydown.esc="filterOpen = false">
+        <button
+          type="button"
+          class="client-select-btn"
+          :aria-label="t('discover.filterClient')"
+          :aria-expanded="filterOpen"
+          @click="filterOpen = !filterOpen"
+        >
+          <span class="cs-icon" :style="clientFilter === 'all' ? undefined : { color: clientColor(clientFilter) }">
+            <AppIcon :name="clientIcon(clientFilter)" :size="14" />
+          </span>
+          <span class="cs-label">{{ clientOptionLabel(clientFilter) }}</span>
+          <AppIcon name="chevron" :size="11" class="cs-caret" />
+        </button>
+        <div v-if="filterOpen" class="client-menu" role="listbox" :aria-label="t('discover.filterClient')">
+          <button
+            v-for="id in clientOptions"
+            :key="id"
+            type="button"
+            role="option"
+            :aria-selected="clientFilter === id"
+            class="client-option"
+            :class="{ on: clientFilter === id }"
+            @click="pickClient(id)"
+          >
+            <span class="cs-icon" :style="id === 'all' ? undefined : { color: clientColor(id) }">
+              <AppIcon :name="clientIcon(id)" :size="14" />
+            </span>
+            <span class="cs-label">{{ clientOptionLabel(id) }}</span>
+            <AppIcon v-if="clientFilter === id" name="check" :size="12" class="cs-check" />
+          </button>
+        </div>
+      </div>
       <label class="search">
         <AppIcon name="search" :size="14" />
         <input
@@ -238,7 +337,8 @@ async function adopt() {
         v-for="row in visible"
         :key="row.path"
         class="skill-card"
-        :class="{ selected: selected.includes(row.path) }"
+        :class="{ selected: selected.includes(row.path), 'flow-in': news.has(row.path) }"
+        :style="flowIn(row.path)"
         role="checkbox"
         :aria-checked="selected.includes(row.path)"
         :aria-label="nameOf(row)"
@@ -250,10 +350,14 @@ async function adopt() {
         <header class="card-top">
           <span class="glyph" :style="{ '--h': hueOf(nameOf(row)) }" aria-hidden="true">{{ initialOf(nameOf(row)) }}</span>
           <div class="card-id">
-            <span class="card-name" :title="nameOf(row)">{{ nameOf(row) }}</span>
+            <div class="card-title">
+              <span class="card-name" :title="nameOf(row)">{{ nameOf(row) }}</span>
+              <span v-if="row.client_id" class="src" :style="{ color: clientColor(row.client_id) }" :title="clientTitle(row)" :aria-label="clientTitle(row)">
+                <AppIcon :name="clientIcon(row.client_id)" :size="14" />
+              </span>
+            </div>
             <span class="card-sub">
               <span class="chip neutral plain">{{ t(`discover.kinds.${row.kind}`) }}</span>
-              <span class="client">{{ row.client_id ?? t("discover.fromStore") }}</span>
             </span>
           </div>
           <span class="tick" :class="{ on: selected.includes(row.path) }" aria-hidden="true" />
@@ -280,8 +384,11 @@ async function adopt() {
     </div>
     <p v-else-if="!rows.length" class="empty">{{ t("common.empty") }}</p>
     <div v-else class="empty no-match">
-      <p>{{ t("discover.noMatch", { q: query.trim() }) }}</p>
-      <button class="btn sm" @click="query = ''">{{ t("discover.clearSearch") }}</button>
+      <p>{{ query.trim() ? t("discover.noMatch", { q: query.trim() }) : t("common.empty") }}</p>
+      <button v-if="query.trim()" class="btn sm" @click="query = ''">{{ t("discover.clearSearch") }}</button>
+      <button v-else-if="clientFilter !== 'all'" class="btn sm" @click="clientFilter = 'all'">
+        {{ t("discover.allClients") }}
+      </button>
     </div>
 
     <p v-if="nested.length" class="note muted">
@@ -323,7 +430,7 @@ async function adopt() {
             <li v-for="item in planned" :key="item.detail.path">
               <div class="pv-title">
                 <span class="pv-slug">{{ item.slug }}</span>
-                <span v-if="item.detail.client_id" class="chip neutral plain">{{ item.detail.client_id }}</span>
+                <span v-if="item.detail.client_id" class="chip neutral plain">{{ clientLabel(item.detail.client_id) }}</span>
                 <span v-if="item.duplicate_of" class="chip neutral plain">{{ t("discover.sameContent", { slug: item.duplicate_of }) }}</span>
                 <span v-if="item.issues.length" class="chip warn">{{ t("discover.needsAttention") }}</span>
               </div>
@@ -371,6 +478,16 @@ async function adopt() {
 .note { margin-top: 14px; font-size: 12px; }
 /* A count, not a control: tabular digits so it does not jitter. */
 .list-count { font-size: 12px; color: var(--dim); white-space: nowrap; font-variant-numeric: tabular-nums; }
+/* A count of what this walk added, not a status: mono digits, dismissible, and it does not colour
+   itself differently when the scan is still running — the number is the whole message. */
+.new-chip {
+  display: inline-flex; align-items: center; height: 22px; padding: 0 9px;
+  border: 1px solid color-mix(in srgb, var(--accent) 35%, transparent);
+  border-radius: 999px; font-family: var(--font-mono); font-size: 12px;
+  font-variant-numeric: tabular-nums; color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, transparent); white-space: nowrap;
+}
+.new-chip:hover { background: color-mix(in srgb, var(--accent) 20%, transparent); }
 .actions-divider { width: 1px; height: 16px; background: var(--line-strong); }
 .spacer { flex: 1; }
 
@@ -387,6 +504,32 @@ async function adopt() {
 .search input::-webkit-search-cancel-button { display: none; }
 .search-clear { width: 20px; height: 20px; border-radius: 5px; display: grid; place-items: center; color: var(--faint); flex: none; }
 .search-clear:hover { background: var(--raised); color: var(--text); }
+/* A dropdown ahead of the search: colorful icon + name per client, "other" catches unknown ids. */
+.client-select { position: relative; flex: none; }
+.client-select-btn {
+  display: inline-flex; align-items: center; gap: 7px; height: 30px; padding: 0 8px 0 10px;
+  border: 1px solid var(--line-strong); border-radius: var(--radius-sm);
+  background: var(--panel); font-size: 12px; color: var(--text); white-space: nowrap;
+}
+.client-select-btn:hover { background: var(--raised); }
+.client-select.open .client-select-btn { border-color: var(--text); }
+.cs-icon { display: inline-grid; place-items: center; flex: none; color: var(--dim); }
+.client-select svg { fill: none; stroke: currentColor; stroke-width: 1.6; flex: none; }
+.cs-caret { color: var(--faint); transform: rotate(90deg); transition: transform 0.15s; }
+.client-select.open .cs-caret { transform: rotate(-90deg); }
+.client-menu {
+  position: absolute; z-index: 30; top: calc(100% + 4px); left: 0; min-width: 100%;
+  display: flex; flex-direction: column; gap: 2px; padding: 4px;
+  border: 1px solid var(--line-strong); border-radius: var(--radius-sm);
+  background: var(--panel); box-shadow: 0 10px 28px rgb(0 0 0 / 30%);
+}
+.client-option {
+  display: flex; align-items: center; gap: 8px; height: 28px; padding: 0 8px;
+  border-radius: 5px; font-size: 12px; color: var(--dim); white-space: nowrap; text-align: left;
+}
+.client-option:hover { background: var(--raised); color: var(--text); }
+.client-option.on { background: var(--accent-weak); color: var(--text); }
+.cs-check { margin-left: auto; color: var(--accent); }
 .select-all { display: inline-flex; align-items: center; gap: 7px; height: 30px; padding: 0 8px; border-radius: var(--radius-sm); font-size: 12px; color: var(--dim); }
 .select-all:hover { color: var(--text); }
 .box {
@@ -413,12 +556,15 @@ async function adopt() {
   font-size: 15px; font-weight: 650;
   background: hsl(var(--h) 32% 19%); color: hsl(var(--h) 48% 78%);
 }
-:root[data-theme="light"] .glyph { background: hsl(var(--h) 42% 92%); color: hsl(var(--h) 42% 32%); }
+:root[data-color-mode="light"] .glyph { background: hsl(var(--h) 42% 92%); color: hsl(var(--h) 42% 32%); }
 .card-id { display: flex; flex-direction: column; gap: 5px; flex: 1; min-width: 0; }
+.card-title { display: flex; align-items: center; gap: 6px; min-width: 0; }
 .card-name { font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* The source mark sits after the name, colored per client; the tooltip carries client + scope. */
+.src { display: inline-grid; place-items: center; flex: none; }
+.src svg { fill: none; stroke: currentColor; stroke-width: 1.6; }
 .card-sub { display: flex; align-items: center; gap: 7px; min-width: 0; }
 .card-sub .chip, .card-foot .chip { height: 19px; padding: 0 7px; font-size: 11px; flex: none; }
-.client { font-family: var(--font-mono); font-size: 11px; color: var(--dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* Same 16px grammar as the table checkboxes, but the checked state stays in accent ink instead of
    an ink-filled block: the card already carries the accent border/tint, so the tick only needs to
    agree with it, not compete. */

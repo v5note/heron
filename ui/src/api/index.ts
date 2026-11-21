@@ -4,6 +4,7 @@
 // render a localised message instead of a raw error string.
 
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import type {
   AdoptPlan, ConflictPayload, DetectedMeta, DetectedRow, DiffReport, DoctorReport, Drift, InstallPlan,
   InstallPreview, LockFile, MarketInfo, MarketItem, NativeScanStatus, ScanReport, SkillRow,
@@ -40,8 +41,14 @@ async function call<T>(command: string, args?: Record<string, unknown>): Promise
 }
 
 export const api = {
-  preflight: () => call<{ git: { version: string } | null; platform: string }>("preflight"),
+  preflight: () =>
+    call<{ git: { version: string } | null; platform: string; home: string }>("preflight"),
   scan: (roots?: string[]) => call<ScanReport>("scan", { roots: roots ?? null }),
+  /**
+   * Stops the walk `scan` started. `scan` returns as soon as the walk is running, so this is the
+   * only way back to the idle pill; the run ends with a `phase: "canceled"` progress push.
+   */
+  scanCancel: () => call<null>("scan_cancel"),
   detected: (state = "candidate") => call<DetectedRow[]>("detected_list", { state }),
   /** Frontmatter name/description for the discovered files, for the card grid. Read-only. */
   detectedMeta: (paths: string[]) => call<DetectedMeta[]>("detected_meta", { paths }),
@@ -77,3 +84,16 @@ export const api = {
   nativeScanStatus: () => call<NativeScanStatus[]>("native_scan_status"),
   nativeScanPlan: (client: string) => call<{ client: string; config_path: string; diff: string }>("native_scan_plan", { client }),
 };
+
+/**
+ * Subscribe to a backend event for as long as the app lives (the scan pushes over it). Outside a
+ * Tauri window there is no event bus — `vite dev` in a browser gives a rejected `listen`, which is
+ * swallowed here so the page still renders instead of failing at boot.
+ */
+export async function onEvent<T>(event: string, handler: (payload: T) => void): Promise<void> {
+  try {
+    await listen<T>(event, (message) => handler(message.payload));
+  } catch (err) {
+    console.warn(`[heron] no event bus, not subscribed to "${event}"`, err);
+  }
+}
