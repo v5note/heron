@@ -13,6 +13,11 @@ const MIGRATIONS: &[(&str, &str)] = &[
         "0002_client_commands",
         include_str!("migrations/0002_client_commands.sql"),
     ),
+    (
+        "0003_skill_storage",
+        include_str!("migrations/0003_skill_storage.sql"),
+    ),
+    ("0004_favorite", include_str!("migrations/0004_favorite.sql")),
 ];
 
 pub const SCHEMA_VERSION: i64 = MIGRATIONS.len() as i64;

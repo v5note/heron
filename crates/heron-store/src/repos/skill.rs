@@ -7,7 +7,7 @@ use crate::repos::{json_list, parse_list};
 use crate::sql_err;
 
 const COLUMNS: &str =
-    "slug, display_name, description, tags, status, origin, created_at, updated_at";
+    "slug, display_name, description, tags, status, origin, storage_path, created_at, updated_at";
 
 fn row_from(r: &rusqlite::Row<'_>) -> rusqlite::Result<SkillRow> {
     Ok(SkillRow {
@@ -17,8 +17,9 @@ fn row_from(r: &rusqlite::Row<'_>) -> rusqlite::Result<SkillRow> {
         tags: parse_list(Some(r.get(3)?)),
         status: r.get(4)?,
         origin: r.get(5)?,
-        created_at: r.get(6)?,
-        updated_at: r.get(7)?,
+        storage_path: r.get(6)?,
+        created_at: r.get(7)?,
+        updated_at: r.get(8)?,
     })
 }
 
@@ -26,8 +27,8 @@ pub fn insert(tx: &WriteTx<'_>, row: &SkillRow) -> Result<()> {
     let now = now_iso();
     tx.conn()
         .execute(
-            "INSERT INTO skill (slug, display_name, description, tags, status, origin, created_at, updated_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+            "INSERT INTO skill (slug, display_name, description, tags, status, origin, storage_path, created_at, updated_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
             params![
                 row.slug,
                 row.display_name,
@@ -35,9 +36,21 @@ pub fn insert(tx: &WriteTx<'_>, row: &SkillRow) -> Result<()> {
                 json_list(&row.tags),
                 row.status,
                 row.origin,
+                row.storage_path,
                 if row.created_at.is_empty() { &now } else { &row.created_at },
                 if row.updated_at.is_empty() { &now } else { &row.updated_at },
             ],
+        )
+        .map_err(sql_err)?;
+    Ok(())
+}
+
+/// Point a skill at its authoritative directory. `None` restores the store default.
+pub fn set_storage_path(tx: &WriteTx<'_>, slug: &str, path: Option<&str>) -> Result<()> {
+    tx.conn()
+        .execute(
+            "UPDATE skill SET storage_path = ?2, updated_at = ?3 WHERE slug = ?1",
+            params![slug, path, now_iso()],
         )
         .map_err(sql_err)?;
     Ok(())

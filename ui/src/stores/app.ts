@@ -539,11 +539,18 @@ export const useAppStore = defineStore("app", {
      * e.g. E_PERMISSION on the original, or no path matched a candidate row) must not look like a
      * success. Callers decide how loudly to say so.
      */
-    async adopt(paths: string[], keepOriginal: boolean) {
+    async adopt(paths: string[], placement: "auto" | "replace" | "liveBind" | "keepOriginal") {
       this.busy = true;
       let result: AdoptResult = { adopted: [], skipped: [], errors: [] };
       try {
-        result = await api.adopt(paths, false, keepOriginal);
+        // `auto` sends no placement at all: each entry then follows its own plan, which is what
+        // keeps a link the user made elsewhere pointing where they aimed it.
+        result = await api.adopt(
+          paths,
+          false,
+          placement === "keepOriginal",
+          placement === "auto" ? null : placement,
+        );
         if (result.adopted.length) this.toast("ok", messageFor("common.done", { n: result.adopted.length }));
         await this.refreshAll();
         if (result.adopted.length) await this.loadTargets();

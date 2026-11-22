@@ -1,0 +1,957 @@
+<!doctype html><html lang="zh-CN" data-theme="default" data-color-mode="light"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Heron · 来源与市场 · 方向 B 统一搜索流</title>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&family=EB+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+<style>
+/* ---------- Heron 真实 token（ui/src/style.css · default/light = 节气暖纸底 + 墨绿强调） ---------- */
+:root{
+  --h-bg:#f3efe4;--h-panel:#fbf7ee;--h-raised:#ebe4d4;--h-line:#e3dbcc;--h-line2:#d3c9b8;
+  --h-text:#2a2924;--h-dim:#5d574c;--h-faint:#7a7368;--h-ink:#fbf7ee;
+  --h-good:#5c7a2e;--h-warn:#8a6216;--h-bad:#a8452f;--h-accent:#2f5b48;--h-accent-weak:rgba(47,91,72,.1);
+  --h-sans:"Manrope",-apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB","Microsoft YaHei",system-ui,sans-serif;
+  --h-mono:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+  --h-serif:"EB Garamond","Songti SC",Georgia,serif;
+  --h-lift:0 1px 4px rgba(42,41,36,.06),0 6px 18px -8px rgba(42,41,36,.18);
+  --h-shadow:0 12px 32px rgba(42,41,36,.12);
+  --h-radius:10px;--h-radius-sm:7px;
+  color-scheme:light;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0;height:100%}
+body{background:var(--h-bg);color:var(--h-text);font-family:var(--h-sans);font-size:14px;-webkit-font-smoothing:antialiased;overflow:hidden}
+h1,h2,h3,p,dl,dd{margin:0}
+button{font:inherit;color:inherit;background:none;border:0;padding:0;cursor:pointer;line-height:normal}
+button:disabled{opacity:.45;cursor:default}
+input{font:inherit;color:var(--h-text)}
+a{color:var(--h-accent)}
+[v-cloak]{display:none}
+*{scrollbar-width:thin;scrollbar-color:var(--h-line2) transparent}
+::-webkit-scrollbar{width:10px;height:10px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background-color:var(--h-line2);border:3px solid transparent;border-radius:999px;background-clip:padding-box;min-height:36px}
+::-webkit-scrollbar-thumb:hover{background-color:var(--h-faint)}
+
+/* ---------- 外壳：左栏分组导航 + 顶栏（同 scan-overview-v2 骨架，换暖纸浅色 token） ---------- */
+.h-shell{display:grid;grid-template-columns:212px minmax(0,1fr);height:100vh;overflow:hidden}
+.h-rail{display:flex;flex-direction:column;min-height:0;background:var(--h-panel);border-right:1px solid var(--h-line);padding:0 10px 10px}
+.h-rail-head{display:flex;align-items:center;gap:9px;padding:15px 6px 12px}
+.h-seal{width:25px;height:25px;border-radius:5px;background:var(--h-text);color:var(--h-ink);display:grid;place-items:center;flex:none}
+.h-seal svg{width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
+.h-wordmark{display:flex;flex-direction:column;line-height:1.12}
+.h-wordmark b{font-family:var(--h-serif);font-size:16px;font-weight:600;letter-spacing:.01em}
+.h-wordmark small{font-size:12px;color:var(--h-dim);letter-spacing:.08em}
+.h-rail-search{display:flex;align-items:center;gap:8px;height:32px;padding:0 9px;margin:2px 0 10px;border:1px solid var(--h-line);border-radius:7px;color:var(--h-dim);font-size:12.5px;background:var(--h-raised);white-space:nowrap;cursor:pointer}
+.h-rail-search svg{width:14px;height:14px;flex:none}
+.h-rail-search kbd{margin-left:auto;font-family:var(--h-mono);font-size:12px;color:var(--h-dim);border:1px solid var(--h-line2);border-radius:4px;padding:1px 4px;flex:none}
+.h-rail-scroll{flex:1;min-height:0;overflow:auto;display:flex;flex-direction:column;gap:1px}
+.h-group{font-size:12.5px;font-weight:600;letter-spacing:.02em;color:var(--h-dim);padding:14px 8px 6px}
+.h-nav{display:flex;align-items:center;gap:9px;height:31px;padding:0 8px;border-radius:6px;font-size:12.5px;color:var(--h-dim);position:relative;text-align:left;width:100%}
+.h-nav svg{width:14px;height:14px;flex:none;stroke:currentColor;fill:none;stroke-width:1.5}
+.h-nav:hover{background:var(--h-raised);color:var(--h-text)}
+.h-nav.is-active{background:var(--h-raised);color:var(--h-text);font-weight:600}
+.h-nav.is-active::before{content:"";position:absolute;left:0;top:7px;bottom:7px;width:2px;border-radius:2px;background:var(--h-accent)}
+.h-count{margin-left:auto;font-family:var(--h-mono);font-size:12px;color:var(--h-dim);min-width:16px;text-align:right}
+.h-rail-foot{display:flex;flex-direction:column;gap:8px;padding-top:10px;border-top:1px solid var(--h-line)}
+.h-health{display:flex;gap:7px;flex-wrap:wrap;padding:0 4px;align-items:center}
+.h-dot{display:inline-flex;align-items:center;gap:5px;font-size:12px;color:var(--h-dim)}
+.h-dot::before{content:"";width:6px;height:6px;border-radius:50%;background:var(--h-faint)}
+.h-dot.good::before{background:var(--h-good)} .h-dot.warn::before{background:var(--h-warn)}
+.h-main{display:flex;flex-direction:column;min-width:0;min-height:0}
+.h-topbar{display:flex;align-items:center;gap:10px;height:48px;padding:0 24px;border-bottom:1px solid var(--h-line);flex:none;background:var(--h-bg);position:relative;z-index:5}
+.h-crumbs{display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--h-dim);white-space:nowrap}
+.h-crumbs b{color:var(--h-text);font-weight:600}
+.h-topbar .sp{flex:1}
+
+/* ---------- 基础控件（对齐 style.css 的 .btn/.chip/.card/.seg/.toast 形态） ---------- */
+.h-btn{display:inline-flex;align-items:center;gap:7px;height:30px;padding:0 11px;border-radius:var(--h-radius-sm);
+  border:1px solid var(--h-line2);font-size:12.5px;font-weight:500;white-space:nowrap;color:var(--h-text)}
+.h-btn svg{width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:1.6;flex:none}
+.h-btn:hover{background:var(--h-raised)}
+.h-btn.primary{background:var(--h-text);border-color:var(--h-text);color:var(--h-ink)}
+.h-btn.primary:hover{opacity:.88}
+.h-btn.ghost{border-color:transparent;color:var(--h-dim)}
+.h-btn.ghost:hover{background:var(--h-raised);color:var(--h-text)}
+.h-btn.sm{height:26px;padding:0 9px;font-size:12px}
+.h-chip{display:inline-flex;align-items:center;gap:6px;height:22px;padding:0 8px;border-radius:999px;
+  font-size:12px;font-weight:500;white-space:nowrap;border:1px solid transparent}
+.h-chip::before{content:"";width:5px;height:5px;border-radius:50%;background:currentColor;flex:none}
+.h-chip.good{color:var(--h-good);background:color-mix(in srgb,var(--h-good) 14%,transparent)}
+.h-chip.warn{color:var(--h-warn);background:color-mix(in srgb,var(--h-warn) 14%,transparent)}
+.h-chip.neutral{color:var(--h-dim);background:var(--h-raised);border-color:var(--h-line)}
+.h-chip.accent{color:var(--h-accent);background:var(--h-accent-weak)}
+.h-chip.bad{color:var(--h-bad);background:color-mix(in srgb,var(--h-bad) 14%,transparent)}
+.h-chip.plain::before{display:none}
+.h-card{background:var(--h-panel);border:1px solid var(--h-line);border-radius:var(--h-radius)}
+.h-sec{display:flex;align-items:center;gap:10px;margin:22px 0 12px}
+.h-sec h2{font-size:13px;font-weight:600;letter-spacing:.02em}
+.h-sec .line{flex:1;height:1px;background:var(--h-line)}
+.h-sec .hint{font-family:var(--h-mono);font-size:12px;color:var(--h-dim)}
+.h-seg{display:inline-flex;border:1px solid var(--h-line2);border-radius:var(--h-radius-sm);overflow:hidden;background:var(--h-panel)}
+.h-seg button{height:30px;padding:0 14px;font-size:12.5px;font-weight:500;color:var(--h-dim);display:inline-flex;align-items:center;gap:6px}
+.h-seg button + button{border-left:1px solid var(--h-line)}
+.h-seg button.is-active{background:var(--h-text);color:var(--h-ink);font-weight:600}
+.h-seg button .n{font-family:var(--h-mono);font-size:12px;opacity:.8}
+.h-iconbtn{width:26px;height:26px;border-radius:6px;display:grid;place-items:center;color:var(--h-dim);flex:none}
+.h-iconbtn svg{width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:1.7}
+.h-iconbtn:hover{background:var(--h-raised);color:var(--h-text)}
+.h-view{padding:20px 26px 56px;overflow:auto;flex:1;min-height:0;position:relative}
+.h-view-head{display:flex;align-items:flex-end;gap:14px;margin-bottom:14px;flex-wrap:wrap}
+.h-h1{font-size:22px;font-weight:700;letter-spacing:-.01em}
+.h-lead{margin-top:6px;color:var(--h-dim);font-size:14px;max-width:80ch}
+.h-actions{margin-left:auto;display:flex;gap:8px;flex-wrap:wrap}
+.h-muted{color:var(--h-dim)}
+.h-mono{font-family:var(--h-mono);font-size:12.5px;color:var(--h-dim)}
+.h-path{font-family:var(--h-mono);font-size:12px;color:var(--h-dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;direction:ltr}
+.h-num{font-family:var(--h-mono);font-variant-numeric:tabular-nums}
+.h-empty{padding:30px 16px;text-align:center;color:var(--h-dim);font-size:14px}
+.h-flow{animation:h-in .26s cubic-bezier(.2,.7,.2,1) both;animation-delay:var(--sd,0ms)}
+@keyframes h-in{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+@media (prefers-reduced-motion:reduce){.h-flow{animation:none}}
+</style>
+<style>
+/* ---------- 主角：统一搜索框（一次查遍所有启用来源，没有「先选市场」） ---------- */
+.h-uq{display:flex;gap:10px;align-items:stretch;margin:2px 0 0}
+.h-uq .box{flex:1;min-width:0;display:flex;align-items:center;gap:10px;height:46px;padding:0 13px;
+  background:var(--h-panel);border:1px solid var(--h-line2);border-radius:var(--h-radius);box-shadow:var(--h-lift)}
+.h-uq .box:focus-within{border-color:var(--h-text);box-shadow:0 0 0 3px var(--h-accent-weak)}
+.h-uq .box>svg{width:18px;height:18px;stroke:var(--h-dim);fill:none;stroke-width:1.7;flex:none}
+.h-uq .box input{flex:1;min-width:0;height:auto;border:0;background:none;padding:0;font-size:15px;color:var(--h-text)}
+.h-uq .box input::placeholder{color:var(--h-dim)}
+.h-uq .kbd{font-family:var(--h-mono);font-size:12px;color:var(--h-dim);border:1px solid var(--h-line);
+  border-radius:4px;padding:2px 5px;flex:none}
+.h-uq>.h-btn{height:46px;padding:0 16px;font-size:13px}
+
+/* ---------- 来源过滤 chip：勾选本次查询要打的来源 ---------- */
+.h-srow{display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin:12px 0 0}
+.h-srow .cap{font-size:12px;color:var(--h-dim);letter-spacing:.02em;margin-right:2px}
+.h-fchip{display:inline-flex;align-items:center;gap:7px;height:28px;padding:0 10px;border-radius:999px;
+  border:1px solid var(--h-line2);background:var(--h-panel);font-size:12.5px;font-weight:500;color:var(--h-dim);
+  white-space:nowrap;transition:border-color .12s,background .12s,color .12s}
+.h-fchip .tick{width:13px;height:13px;flex:none;stroke:currentColor;fill:none;stroke-width:2.2;opacity:0}
+.h-fchip .nm{font-family:var(--h-mono);color:inherit}
+.h-fchip .cap2{font-size:12px;opacity:.85}
+.h-fchip .cnt{font-family:var(--h-mono);font-size:12px;font-variant-numeric:tabular-nums;opacity:.8}
+.h-fchip.on{border-color:var(--h-accent);background:var(--h-accent-weak);color:var(--h-accent)}
+.h-fchip.on .tick{opacity:1}
+.h-fchip.on .nm{color:var(--h-accent)}
+.h-fchip:not(.on):hover{background:var(--h-raised);color:var(--h-text)}
+.h-fchip.off{opacity:.72;border-style:dashed}
+
+/* ---------- 汇总行：共 N 条来自 M 个来源 ---------- */
+.h-sumline{display:flex;align-items:center;gap:9px;flex-wrap:wrap;margin:14px 2px 0;padding-bottom:12px;
+  border-bottom:1px solid var(--h-line);font-family:var(--h-mono);font-size:12.5px;color:var(--h-dim);
+  font-variant-numeric:tabular-nums}
+.h-sumline b{color:var(--h-text);font-weight:600}
+.h-sumline .sep{color:color-mix(in srgb,var(--h-faint) 60%,transparent)}
+.h-sumline .live{color:var(--h-accent)}
+.h-sumline .r{margin-left:auto;display:flex;align-items:center;gap:8px}
+
+/* ---------- 分组结果流 ---------- */
+.h-bar{display:flex;align-items:center;gap:12px;margin:16px 0 14px;flex-wrap:wrap}
+.h-bar .tail{margin-left:auto;display:flex;align-items:center;gap:9px}
+.h-grp{margin-bottom:14px;overflow:hidden}
+.h-grp-h{display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid var(--h-line);
+  background:var(--h-raised);flex-wrap:wrap}
+.h-src{display:inline-flex;align-items:center;gap:7px;height:26px;padding:0 10px;border-radius:999px;
+  background:var(--h-panel);border:1px solid var(--h-line2);font-family:var(--h-mono);font-size:12.5px;
+  font-weight:600;color:var(--h-text);white-space:nowrap}
+.h-src .mark{width:16px;height:16px;border-radius:4px;display:grid;place-items:center;flex:none;
+  font-family:var(--h-mono);font-size:11px;font-weight:700;color:var(--h-ink);background:var(--h-accent)}
+.h-grp-h .hits{font-family:var(--h-mono);font-size:12.5px;color:var(--h-dim);font-variant-numeric:tabular-nums}
+.h-grp-h .hits b{color:var(--h-text);font-weight:600}
+.h-grp-h .r{margin-left:auto;display:flex;align-items:center;gap:8px}
+.h-res{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:6px 16px;align-items:center;
+  padding:12px 14px;border-bottom:1px solid var(--h-line)}
+.h-res:last-child{border-bottom:0}
+.h-res:hover{background:color-mix(in srgb,var(--h-raised) 55%,transparent)}
+.h-res .nm{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;min-width:0;grid-column:1}
+.h-res .nm .k{font-family:var(--h-mono);font-size:14px;font-weight:600;color:var(--h-text)}
+.h-res .nm .own,.h-res .nm .ver{font-family:var(--h-mono);font-size:12.5px;color:var(--h-dim)}
+.h-res .sum{grid-column:1;font-size:14px;color:var(--h-dim);line-height:1.5;max-width:88ch}
+.h-res .stat{display:flex;align-items:center;gap:13px;font-family:var(--h-mono);font-size:12.5px;
+  color:var(--h-dim);font-variant-numeric:tabular-nums;white-space:nowrap}
+.h-res .stat i{display:inline-flex;align-items:center;gap:5px;font-style:normal}
+.h-res .stat svg{width:13px;height:13px;stroke:currentColor;fill:none;stroke-width:1.6;flex:none}
+.h-res .stat b{color:var(--h-text);font-weight:500}
+.h-res .acts{display:flex;align-items:center;gap:7px}
+.h-plan{grid-column:1 / -1;margin-top:8px;padding:11px 13px;border-radius:8px;background:var(--h-raised);
+  border:1px solid var(--h-line);font-family:var(--h-mono);font-size:12.5px;line-height:1.7;color:var(--h-dim);
+  white-space:pre-wrap;overflow-wrap:anywhere}
+.h-plan .hl{color:var(--h-text)} .h-plan .to{color:var(--h-accent)}
+
+/* ---------- 仅浏览器来源分组：打开深链 ---------- */
+.h-brow{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0}
+.h-brow>div{padding:12px 14px;border-bottom:1px solid var(--h-line)}
+.h-brow>div:nth-child(1){border-right:1px solid var(--h-line)}
+.h-brow .th{display:flex;align-items:center;gap:9px;flex-wrap:wrap}
+.h-brow .dp{font-size:14px;color:var(--h-dim);margin-top:7px;line-height:1.5}
+.h-brow .dl{font-family:var(--h-mono);font-size:12px;color:var(--h-dim);background:var(--h-raised);
+  border:1px solid var(--h-line);border-radius:6px;padding:6px 9px;margin-top:8px;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;direction:ltr}
+.h-brow .acts{display:flex;gap:7px;margin-top:9px;flex-wrap:wrap;align-items:center}
+.h-brow .off{font-family:var(--h-mono);font-size:12px;color:var(--h-warn);margin-top:7px}
+@media (max-width:1120px){.h-brow{grid-template-columns:minmax(0,1fr)} .h-brow>div:nth-child(1){border-right:0}}
+
+/* ---------- 我的收藏 ---------- */
+.h-fav{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:6px 16px;align-items:center;
+  padding:13px 14px;border-bottom:1px solid var(--h-line)}
+.h-fav:last-child{border-bottom:0}
+.h-fav:hover{background:color-mix(in srgb,var(--h-raised) 55%,transparent)}
+.h-fav .fk{grid-column:1;display:flex;align-items:baseline;gap:9px;flex-wrap:wrap}
+.h-fav .fk b{font-size:14px;font-weight:600}
+.h-fav .fd{grid-column:1;font-size:14px;color:var(--h-dim);line-height:1.5;max-width:88ch}
+.h-fav .fu{grid-column:1;display:flex;align-items:center;gap:9px;margin-top:5px}
+.h-fav .fm{font-family:var(--h-mono);font-size:12px;color:var(--h-faint);white-space:nowrap}
+.h-fav .acts{display:flex;align-items:center;gap:7px}
+
+/* ---------- 粘贴 Git 地址安装（紧凑条） ---------- */
+.h-paste{display:flex;gap:9px;align-items:center;flex-wrap:wrap;margin-top:4px}
+.h-paste .fi{flex:1;min-width:300px;display:flex;align-items:center;gap:9px;height:36px;padding:0 11px;
+  border:1px solid var(--h-line2);border-radius:var(--h-radius-sm);background:var(--h-raised)}
+.h-paste .fi>svg{width:14px;height:14px;stroke:var(--h-dim);fill:none;stroke-width:1.7;flex:none}
+.h-paste .fi input{flex:1;min-width:0;height:auto;border:0;background:none;font-family:var(--h-mono);font-size:12.5px;outline:none}
+.h-paste .fi:focus-within{border-color:var(--h-text)}
+
+/* ---------- toast（右下内联） ---------- */
+.h-toasts{position:fixed;right:22px;bottom:22px;z-index:50;display:flex;flex-direction:column;align-items:flex-end;gap:8px;pointer-events:none}
+.h-toast{pointer-events:auto;display:flex;align-items:flex-start;gap:10px;max-width:min(430px,calc(100vw - 44px));
+  padding:10px 8px 10px 11px;border-radius:10px;font-size:12.5px;line-height:1.5;background:var(--h-panel);
+  border:1px solid var(--h-line2);border-left:3px solid var(--h-good);box-shadow:var(--h-shadow)}
+.h-toast.warn{border-left-color:var(--h-warn)} .h-toast.error{border-left-color:var(--h-bad)}
+.h-toast .ti{width:20px;height:20px;border-radius:6px;flex:none;display:grid;place-items:center;
+  background:color-mix(in srgb,var(--h-good) 15%,transparent);color:var(--h-good)}
+.h-toast.warn .ti{background:color-mix(in srgb,var(--h-warn) 15%,transparent);color:var(--h-warn)}
+.h-toast .ti svg{width:13px;height:13px;stroke:currentColor;fill:none;stroke-width:2}
+.h-toast .tx{flex:1;min-width:0;overflow-wrap:anywhere;padding-top:1px}
+.h-toast .tx b{font-family:var(--h-mono);font-weight:500;color:var(--h-text)}
+.h-toast .tact{flex:none;align-self:center;height:24px;padding:0 9px;border:1px solid var(--h-line2);
+  border-radius:6px;font-size:12px;font-weight:500;color:var(--h-text);white-space:nowrap}
+.h-toast .tact:hover{background:var(--h-raised)}
+.h-toast .x{width:22px;height:22px;border-radius:6px;flex:none;display:grid;place-items:center;color:var(--h-faint)}
+.h-toast .x:hover{background:var(--h-raised);color:var(--h-text)}
+.h-toast .x svg{width:12px;height:12px;stroke:currentColor;fill:none;stroke-width:1.8}
+.h-t-enter-active,.h-t-leave-active{transition:opacity .18s ease,transform .18s ease}
+.h-t-enter-from,.h-t-leave-to{opacity:0;transform:translateY(6px) scale(.98)}
+
+/* ---------- 抽屉：添加收藏（名称 / 地址 / 描述 三字段） ---------- */
+.h-scrim{position:fixed;inset:0;background:rgba(243,239,228,.66);backdrop-filter:blur(2px);z-index:30}
+/* 对齐 ui/src/style.css 的 .drawer：右侧锚定、panel 底、左细边、阴影、遮罩 */
+.h-drawer{position:fixed;top:0;right:0;bottom:0;width:min(620px,92vw);z-index:31;background:var(--h-panel);
+  border-left:1px solid var(--h-line2);box-shadow:var(--h-shadow);display:flex;flex-direction:column}
+.h-drawer-h{display:flex;align-items:flex-start;gap:12px;padding:18px 20px 16px;border-bottom:1px solid var(--h-line);flex:none}
+.h-drawer-h h3{font-size:15px;font-weight:600}
+.h-drawer-h p{margin-top:6px;color:var(--h-dim);font-size:12.5px;line-height:1.55}
+.h-drawer-h .h-iconbtn{margin-left:auto;flex:none}
+.h-drawer-b{flex:0 1 auto;min-height:0;overflow:auto;padding:16px 20px;display:flex;flex-direction:column;gap:14px}
+.h-drawer-f{display:flex;align-items:center;gap:8px;padding:14px 20px;border-top:1px solid var(--h-line);flex:none}
+.h-drawer-f .r{margin-left:auto;display:flex;gap:8px}
+.h-field{display:flex;flex-direction:column;gap:6px}
+.h-field label{font-size:12.5px;font-weight:600;color:var(--h-dim);letter-spacing:.01em}
+.h-field .hint{font-size:12px;color:var(--h-dim)}
+.h-field input{height:34px;padding:0 10px;border:1px solid var(--h-line2);border-radius:var(--h-radius-sm);
+  background:var(--h-raised);color:var(--h-text);font-size:14px;outline:none}
+.h-field input:focus{border-color:var(--h-text)}
+.h-field textarea{font:inherit;font-size:14px;line-height:1.55;padding:9px 10px;border-radius:var(--h-radius-sm);
+  border:1px solid var(--h-line2);background:var(--h-raised);color:var(--h-text);resize:vertical;min-height:78px;outline:none}
+.h-field textarea:focus{border-color:var(--h-text)}
+.h-field.bad input,.h-field.bad textarea{border-color:var(--h-bad)}
+.h-err{font-size:12px;color:var(--h-bad)}
+
+/* ---------- 来源健康点 / 探测（吸收 dir-A 来源管理细节） ---------- */
+.hdot{width:8px;height:8px;border-radius:50%;background:var(--h-faint);flex:none}
+.hdot.visible{background:var(--h-good)}
+.hdot.shadowed{background:var(--h-warn)}
+.hdot.broken{background:var(--h-bad)}
+.hdot.not_scanned{background:transparent;box-shadow:inset 0 0 0 1.5px var(--h-line2)}
+.h-fchip .hdot{width:7px;height:7px}
+.h-chip .hdot{width:6px;height:6px}
+.h-probe{margin-left:auto;display:inline-flex;align-items:center;gap:8px;font-family:var(--h-mono);font-size:12px;color:var(--h-dim)}
+
+/* ---------- 加载 / 空 / 失败 三态 ---------- */
+.h-load{padding:13px 14px}
+.h-loadcap{display:flex;align-items:center;gap:9px;font-size:13px;color:var(--h-dim);padding-bottom:10px}
+.h-spin{width:14px;height:14px;stroke:var(--h-accent);fill:none;stroke-width:2;stroke-linecap:round;animation:h-spin .85s linear infinite;flex:none}
+@keyframes h-spin{to{transform:rotate(360deg)}}
+.h-lrow{display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--h-line)}
+.h-lrow:last-child{border-bottom:0}
+.h-sk{height:10px;border-radius:4px;flex:none;background:linear-gradient(90deg,var(--h-raised) 0%,color-mix(in srgb,var(--h-line2) 60%,var(--h-raised)) 45%,var(--h-raised) 90%);background-size:240% 100%;animation:h-sk 1.15s linear infinite}
+.h-sk.grow{flex:1}
+@keyframes h-sk{from{background-position:130% 0}to{background-position:-130% 0}}
+.h-fail{display:flex;align-items:flex-start;gap:11px;padding:13px 14px;font-size:13px;color:var(--h-dim);line-height:1.55}
+.h-fail .fi{width:22px;height:22px;border-radius:6px;flex:none;display:grid;place-items:center;background:color-mix(in srgb,var(--h-bad) 14%,transparent);color:var(--h-bad)}
+.h-fail .fi svg{width:13px;height:13px;stroke:currentColor;fill:none;stroke-width:1.9}
+.h-fail b{color:var(--h-text);font-weight:600}
+.h-fail .acts{margin-left:auto;display:flex;gap:7px;flex:none;align-items:center}
+.h-emp-acts{display:flex;gap:8px;justify-content:center;margin-top:12px}
+
+/* ---------- 已装状态 ---------- */
+.h-done{display:inline-flex;align-items:center;gap:5px;height:22px;padding:0 8px;border-radius:999px;
+  font-size:12px;font-weight:500;color:var(--h-good);background:color-mix(in srgb,var(--h-good) 14%,transparent);white-space:nowrap}
+.h-done svg{width:12px;height:12px;stroke:currentColor;fill:none;stroke-width:2.2;flex:none}
+.h-btn.done{border-color:var(--h-line);background:var(--h-raised);color:var(--h-dim)}
+
+/* ---------- 抽屉：实时校验解析块 + 右滑动效 ---------- */
+.h-parse{margin-top:2px;border:1px solid var(--h-line);border-radius:8px;background:var(--h-raised);
+  padding:10px 12px;font-family:var(--h-mono);font-size:12px;line-height:1.8;color:var(--h-dim);
+  overflow-wrap:anywhere;white-space:pre-wrap}
+.h-parse .k{color:var(--h-faint);display:inline-block;min-width:9ch}
+.h-parse .v{color:var(--h-text)} .h-parse .to{color:var(--h-accent)}
+.h-parse.bad{border-color:var(--h-bad);background:color-mix(in srgb,var(--h-bad) 8%,var(--h-raised))}
+.h-parse.bad .v{color:var(--h-bad)}
+.h-parse.link{border-color:var(--h-warn);background:color-mix(in srgb,var(--h-warn) 9%,var(--h-raised))}
+.h-parse.link .v{color:var(--h-warn)}
+.h-parse.paste{margin-top:10px}
+.h-ex{display:inline-flex;align-items:center;height:22px;padding:0 8px;border:1px solid var(--h-line2);
+  border-radius:6px;font-family:var(--h-mono);font-size:12px;color:var(--h-dim);background:var(--h-panel)}
+.h-ex:hover{background:var(--h-raised);color:var(--h-text)}
+.h-dr-enter-active,.h-dr-leave-active{transition:transform .22s cubic-bezier(.2,.7,.2,1),opacity .2s}
+.h-dr-enter-from,.h-dr-leave-to{transform:translateX(26px);opacity:0}
+.h-sc-enter-active,.h-sc-leave-active{transition:opacity .22s ease}
+.h-sc-enter-from,.h-sc-leave-to{opacity:0}
+@media (prefers-reduced-motion:reduce){
+  .h-sk,.h-spin{animation:none}
+  .h-dr-enter-active,.h-dr-leave-active,.h-sc-enter-active,.h-sc-leave-active{transition:none}
+}
+</style>
+</head>
+<body><div id="app" v-cloak>
+<div class="h-shell">
+  <!-- ================= 左栏 ================= -->
+  <aside class="h-rail">
+    <div class="h-rail-head">
+      <span class="h-seal"><svg viewBox="0 0 24 24"><path d="M4 19c1.5-7.5 5-11.5 9.6-13.2"/><path d="M9.4 21c.4-4.7 2.3-8.4 5.6-10.6"/><path d="M14 21.6c.2-2.6 1.2-4.8 3-6.2"/><circle cx="18.4" cy="5.4" r="1.7"/></svg></span>
+      <span class="h-wordmark"><b>苍鹭 Heron</b><small>SKILL CONTROL</small></span>
+    </div>
+    <div class="h-rail-search" @click="say('全局模糊搜索（⌘K）覆盖本机 Skill 与收藏')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="11" cy="11" r="6"/><path d="M15.5 15.5 20 20"/></svg>搜索 Skill<kbd>⌘K</kbd></div>
+    <nav class="h-rail-scroll">
+      <div class="h-group">工作台</div>
+      <button class="h-nav" @click="other('概览')"><svg viewBox="0 0 24 24"><path d="M3 12h4l2.5-6 4 12 2.5-6H21"/></svg>概览</button>
+      <div class="h-group">收集·分发</div>
+      <button class="h-nav" @click="other('我的 Skill')"><svg viewBox="0 0 24 24"><rect x="3.5" y="4" width="4" height="16" rx="1"/><rect x="9.5" y="4" width="4" height="16" rx="1"/><path d="M15.5 5.2l3.6 14.6"/></svg>我的 Skill<span class="h-count">17</span></button>
+      <button class="h-nav" @click="other('发现')"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></svg>发现<span class="h-count">6</span></button>
+      <button class="h-nav is-active"><svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h10M4 17h13"/><circle cx="18.5" cy="16.5" r="2.5"/></svg>来源与市场</button>
+      <div class="h-group">维护</div>
+      <button class="h-nav" @click="other('更新')"><svg viewBox="0 0 24 24"><path d="M12 20V4"/><path d="M6.5 9.5 12 4l5.5 5.5"/></svg>更新<span class="h-count">3</span></button>
+      <button class="h-nav" @click="other('体检')"><svg viewBox="0 0 24 24"><path d="M3.5 12h4l1.5-4 3 8 2-4h6.5"/></svg>体检<span class="h-count">1</span></button>
+      <button class="h-nav" @click="other('项目')"><svg viewBox="0 0 24 24"><path d="M3.5 7.5A1.5 1.5 0 0 1 5 6h4l2 2h8a1.5 1.5 0 0 1 1.5 1.5V18A1.5 1.5 0 0 1 19 19.5H5A1.5 1.5 0 0 1 3.5 18z"/></svg>项目</button>
+      <button class="h-nav" @click="other('设置')"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 3.5v2M12 18.5v2M3.5 12h2M18.5 12h2M6 6l1.4 1.4M16.6 16.6 18 18M6 18l1.4-1.4M16.6 7.4 18 6"/></svg>设置</button>
+    </nav>
+    <div class="h-rail-foot">
+      <div class="h-health"><span class="h-dot good">Git 2.50.1</span><span class="h-muted" style="font-size:12px;margin-left:auto">本应用 v0.1.0</span></div>
+      <div class="h-health"><span class="h-dot good">{{ enabledSearch.length }} / {{ searchSources.length }} 来源已启用</span><span class="h-muted" style="font-size:12px;margin-left:auto">暖纸 · 浅色</span></div>
+    </div>
+  </aside>
+
+  <!-- ================= 右区 ================= -->
+  <div class="h-main">
+    <header class="h-topbar">
+      <div class="h-crumbs"><span>苍鹭</span><span>/</span><span>收集·分发</span><span>/</span><b>来源与市场</b></div>
+      <span class="sp"></span>
+      <button class="h-btn" @click="say('扫描已在后台完成：52 处发现','ok')"><svg viewBox="0 0 24 24"><path d="M19.5 12a7.5 7.5 0 1 1-2.2-5.3"/><path d="M19.5 4v4h-4"/></svg>扫描本机</button>
+      <button class="h-btn primary" @click="say('校验完成：40 通过 · 1 坏链','warn')"><svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7"/></svg>校验</button>
+    </header>
+
+    <div class="h-view">
+      <div class="h-view-head">
+        <div>
+          <h1 class="h-h1">来源与市场</h1>
+          <p class="h-lead">一个搜索框打到所有已启用来源，结果按来源分组、逐行直接安装。</p>
+        </div>
+        <div class="h-actions">
+          <span class="h-chip neutral plain">示例数据 · 原型，未接入后端</span>
+          <button class="h-btn" @click="openFav()"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>添加收藏</button>
+        </div>
+      </div>
+
+      <!-- ============ 统一搜索框：取消「先选市场」这一步 ============ -->
+      <div class="h-uq">
+        <div class="box">
+          <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="6"/><path d="M15.5 15.5 20 20"/></svg>
+          <input ref="q" v-model="query" @keyup.enter="run()" placeholder="搜索所有来源：skill 名称、作者、描述" aria-label="搜索所有来源">
+          <button v-if="query" class="h-iconbtn" @click="query=''; focusQ()" title="清空" aria-label="清空搜索词" style="width:22px;height:22px"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+          <kbd class="kbd">⏎</kbd>
+        </div>
+        <button class="h-btn primary" @click="run()">搜索全部来源</button>
+      </div>
+
+      <!-- ============ 来源勾选：健康点 + 启停，这一排就是本次查询打到的来源 ============ -->
+      <div class="h-srow">
+        <span class="cap">本次查询打到</span>
+        <button v-for="s in searchSources" :key="s.id" class="h-fchip" :class="{on:s.on,off:!s.on}"
+                @click="toggle(s)" :aria-pressed="s.on" :title="s.name+' · '+healthText(s)">
+          <span class="hdot" :class="s.health"></span>
+          <svg class="tick" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7"/></svg>
+          <span class="nm">{{ s.name }}</span>
+          <span class="cap2" v-if="s.note">{{ s.note }}</span>
+          <span class="cnt" v-if="s.on">{{ hits(s) }}</span>
+        </button>
+        <button v-for="s in browserSources" :key="s.id" class="h-fchip" :class="{on:s.on,off:!s.on}"
+                @click="toggle(s)" :aria-pressed="s.on" :title="s.name+' · 仅浏览器 · '+healthText(s)">
+          <span class="hdot" :class="s.health"></span>
+          <svg class="tick" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7"/></svg>
+          <span class="nm">{{ s.name }}</span>
+          <span class="cap2">仅浏览器</span>
+        </button>
+        <span class="h-probe">上次探测 {{ probeAge }}
+          <button class="h-btn sm ghost" :disabled="probing" @click="reprobe"><svg viewBox="0 0 24 24"><path d="M19.5 12a7.5 7.5 0 1 1-2.2-5.3"/><path d="M19.5 4v4h-4"/></svg>{{ probing ? '探测中' : '重新探测' }}</button>
+        </span>
+      </div>
+
+      <!-- ============ 汇总行 ============ -->
+      <div class="h-sumline">
+        <span v-if="busy">正在 <b>{{ enabledSearch.length }}</b> 个来源搜索 «{{ query }}»…</span>
+        <span v-else>共 <b>{{ totalHits }}</b> 条来自 <b>{{ activeGroups }}</b> 个来源<template v-if="installedCount"> · 已装 <b>{{ installedCount }}</b> 条</template></span>
+        <span class="sep">·</span>
+        <span>关键词 <b>{{ query || '—' }}</b></span>
+        <span class="sep">·</span>
+        <span class="live">用时 {{ elapsed }} ms</span>
+        <span class="r">
+          <button class="h-btn sm ghost" @click="fail=!fail" :aria-pressed="fail">{{ fail ? '清除失败态' : '模拟一个来源失败' }}</button>
+          <span class="h-muted" style="font-size:12px">每来源最多 {{ perCap }} 条</span>
+          <button class="h-btn sm ghost" @click="run()"><svg viewBox="0 0 24 24"><path d="M19.5 12a7.5 7.5 0 1 1-2.2-5.3"/><path d="M19.5 4v4h-4"/></svg>重新搜索</button>
+        </span>
+      </div>
+
+      <div class="h-bar">
+        <div class="h-seg">
+          <button :class="{'is-active':tab==='all'}" @click="tab='all'">全部来源<span class="n">{{ totalHits }}</span></button>
+          <button :class="{'is-active':tab==='fav'}" @click="tab='fav'">我的收藏<span class="n">{{ favorites.length }}</span></button>
+        </div>
+        <div class="tail"><span class="h-mono">{{ enabledSearch.length }} 个可搜索来源在线 · 结果按来源相关性排序</span></div>
+      </div>
+
+      <!-- ================= TAB · 全部来源 ================= -->
+      <template v-if="tab==='all'">
+        <!-- 加载态：并发打每个已启用来源 -->
+        <div v-if="busy" class="h-card h-load">
+          <div class="h-loadcap"><svg class="h-spin" viewBox="0 0 24 24"><path d="M12 3.6a8.4 8.4 0 1 0 8.4 8.4"/></svg>
+            搜索中 · 并发打 {{ enabledSearch.length }} 个来源：{{ enabledSearch.map(s=>s.name).join(' · ') || '（没有已启用来源）' }}</div>
+          <div class="h-lrow" v-for="n in 5" :key="n">
+            <span class="h-sk" :style="{width:(112+n*46)+'px'}"></span><span class="h-sk grow"></span>
+            <span class="h-sk" style="width:70px"></span><span class="h-sk" style="width:56px"></span>
+          </div>
+        </div>
+
+        <template v-else>
+        <section v-for="(s,i) in groupResults" :key="s.id" class="h-card h-grp h-flow" :style="{'--sd':(i*40)+'ms'}">
+          <header class="h-grp-h">
+            <span class="h-src"><span class="mark">{{ s.mark }}</span>{{ s.name }}<span class="hdot" :class="s.health" :title="healthText(s)"></span></span>
+            <span class="h-chip plain" :class="s.error?'bad':(s.health==='shadowed'?'warn':'good')">{{ s.error ? '本次请求失败' : '可搜索 · 可安装' }}</span>
+            <span class="hits"><template v-if="s.error">本组已跳过</template><template v-else>命中 <b>{{ s.rows.length }}</b> / {{ s.total }} 条<template v-if="doneIn(s)"> · 已装 <b>{{ doneIn(s) }}</b></template></template></span>
+            <span class="r">
+              <span class="h-path">{{ s.host }} · 探测 {{ s.probe }}</span>
+              <button class="h-btn sm ghost" @click="openUrl(s.name+' 首页', s.base)"><svg viewBox="0 0 24 24"><path d="M14 4h6v6"/><path d="M20 4 11 13"/><path d="M18 14v5.5H4.5V6H10"/></svg>打开来源</button>
+            </span>
+          </header>
+          <!-- 失败态：只让一个来源挂掉，说清其余来源不受影响 -->
+          <div v-if="s.error" class="h-fail">
+            <span class="fi"><svg viewBox="0 0 24 24"><path d="M12 5.5 20 19H4z"/><path d="M12 10v4"/><path d="M12 16.6v.4"/></svg></span>
+            <div><b>请求超时 {{ s.probe }}</b><br>已重试 2 次仍失败，本组没有结果；其余 {{ activeGroups }} 个来源的结果照常在上方。要装这个来源的 skill，重试或改用「粘贴 Git 地址安装」。</div>
+            <span class="acts"><button class="h-btn sm" @click="retry(s)">重试该来源</button><button class="h-btn sm ghost" @click="toggle(s)">停用</button></span>
+          </div>
+          <div v-for="r in s.rows" :key="s.id + '/' + r.key" class="h-res">
+            <div class="nm">
+              <span class="k">{{ r.key }}</span>
+              <span class="own">{{ r.owner }}</span>
+              <span class="ver">v{{ r.ver }}</span>
+              <span v-if="done(s,r)" class="h-done"><svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7"/></svg>已装</span>
+            </div>
+            <div class="stat">
+              <i title="下载量"><svg viewBox="0 0 24 24"><path d="M12 4v11"/><path d="M7.5 10.5 12 15l4.5-4.5"/><path d="M5 19h14"/></svg><b>{{ r.dl }}</b> 下载</i>
+              <i title="Stars"><svg viewBox="0 0 24 24"><path d="M12 4.5l2.3 4.7 5.2.8-3.8 3.7.9 5.2-4.6-2.4-4.6 2.4.9-5.2L5.5 10l5.2-.8z"/></svg><b>{{ r.stars }}</b></i>
+            </div>
+            <div class="acts">
+              <button v-if="r.installable" class="h-btn sm" @click="plan = plan === s.id+'/'+r.key ? '' : s.id+'/'+r.key">{{ plan === s.id+'/'+r.key ? '收起' : '预览' }}</button>
+              <button v-if="r.installable" class="h-btn sm" :class="done(s,r) ? 'done' : 'primary'" @click="install(s,r)">
+                <svg v-if="done(s,r)" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7"/></svg>
+                <svg v-else viewBox="0 0 24 24"><path d="M12 4v11"/><path d="M7.5 10.5 12 15l4.5-4.5"/><path d="M5 19h14"/></svg>
+                {{ done(s,r) ? '已装' : '安装' }}
+              </button>
+              <button v-else class="h-btn sm" @click="openUrl(r.key + ' 详情页', r.url)">打开深链</button>
+            </div>
+            <div class="sum">{{ r.sum }}<template v-if="!r.installable"> — 来源未提供可克隆仓库，仅可浏览。</template></div>
+            <div v-if="plan === s.id+'/'+r.key" class="h-plan" v-html="planHtml(r)"></div>
+          </div>
+        </section>
+
+        <!-- 空态 -->
+        <div v-if="!totalHits" class="h-card"><div class="h-empty">
+          {{ enabledSearch.length ? '已启用来源里没有匹配 «' + query + '» 的结果。' : '请先在上方勾选至少一个来源。' }}
+          <div class="h-emp-acts">
+            <button class="h-btn sm" @click="query='pdf';run()">换成 «pdf» 试试</button>
+            <button class="h-btn sm ghost" @click="allOn()">全部来源启用</button>
+            <button class="h-btn sm ghost" @click="tab='fav'">去我的收藏</button>
+          </div>
+        </div></div>
+        </template>
+
+        <!-- ============ 仅浏览器来源：不进入聚合结果，只给带关键词深链 ============ -->
+        <div class="h-sec"><h2>仅浏览器来源</h2><span class="line"></span><span class="hint">无搜索索引 · 不出结果 · 只出深链</span></div>
+        <div class="h-card h-brow">
+          <div v-for="s in browserSources" :key="s.id">
+            <div class="th">
+              <span class="h-src"><span class="mark" :style="s.on?'':'background:var(--h-faint)'">{{ s.mark }}</span>{{ s.name }}<span class="hdot" :class="s.health" :title="healthText(s)"></span></span>
+              <span class="h-chip" :class="s.on?'warn':'neutral'">{{ s.on ? '仅浏览器 · 不可安装' : '默认关闭' }}</span>
+            </div>
+            <div class="dp">{{ s.brief }}</div>
+            <div class="dl">深链 {{ deepLink(s) }}</div>
+            <div class="acts">
+              <button class="h-btn sm primary" :disabled="!s.on" @click="openUrl(s.name+' 搜索结果', deepLink(s))"><svg viewBox="0 0 24 24"><path d="M14 4h6v6"/><path d="M20 4 11 13"/><path d="M18 14v5.5H4.5V6H10"/></svg>打开深链</button>
+              <button class="h-btn sm" @click="favFromLink(s)">收进收藏</button>
+              <button class="h-btn sm ghost" @click="toggle(s)">{{ s.on ? '停用' : '启用' }}</button>
+            </div>
+            <div class="off" v-if="!s.on">启用后仍只补深链，不会出现在上面的聚合结果里。</div>
+          </div>
+        </div>
+      </template>
+      <!-- ================= TAB · 我的收藏（开源 skill 沉淀，一键安装） ================= -->
+      <template v-else>
+        <div class="h-sec" style="margin-top:2px">
+          <h2>我的收藏</h2><span class="line"></span>
+          <span class="hint">{{ favorites.length }} 条 · {{ repoFavs.length }} 条可安装仓库 · {{ linkFavs.length }} 条仅链接</span>
+          <button class="h-btn sm" @click="openFav()"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>添加收藏</button>
+        </div>
+        <section class="h-card h-flow">
+          <div v-for="f in favorites" :key="f.url" class="h-fav">
+            <div class="fk">
+              <b>{{ f.name }}</b>
+              <span class="h-chip accent plain">{{ host(f.url) }}</span>
+              <span v-if="f.kind==='link'" class="h-chip warn plain">仅链接 · 不可安装</span>
+              <span v-else-if="doneKey(f.slug)" class="h-done"><svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7"/></svg>已装</span>
+            </div>
+            <div class="fd">{{ f.desc }}</div>
+            <div class="fu">
+              <span class="h-path" style="max-width:52ch">{{ f.url }}</span>
+              <span class="fm" v-if="f.kind!=='link'">{{ f.owner }} / {{ f.repo }}<template v-if="f.sub && f.sub!=='.'"> · {{ f.sub }}</template></span>
+              <span class="fm">收藏于 {{ f.addedAt }}</span>
+            </div>
+            <div class="acts">
+              <button class="h-btn sm" @click="openUrl(f.name, f.url)"><svg viewBox="0 0 24 24"><path d="M14 4h6v6"/><path d="M20 4 11 13"/><path d="M18 14v5.5H4.5V6H10"/></svg>打开</button>
+              <button class="h-btn sm" @click="removeFav(f)"><svg viewBox="0 0 24 24"><path d="M6 7h12"/><path d="M9 7V5.5h6V7"/><path d="M7.5 7l.8 12h7.4l.8-12"/></svg>移除</button>
+              <button class="h-btn sm" :class="f.kind==='link'?'':(doneKey(f.slug)?'done':'primary')" :disabled="f.kind==='link'"
+                      :title="f.kind==='link' ? '这条不是 github / gitee 仓库，只能打开' : ''" @click="installFav(f)">
+                <svg v-if="doneKey(f.slug)" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7"/></svg>
+                <svg v-else viewBox="0 0 24 24"><path d="M12 4v11"/><path d="M7.5 10.5 12 15l4.5-4.5"/><path d="M5 19h14"/></svg>
+                {{ f.kind==='link' ? '不可安装' : (doneKey(f.slug) ? '已装' : '一键安装') }}
+              </button>
+            </div>
+          </div>
+          <div v-if="!favorites.length" class="h-empty">还没有收藏。用「+ 添加收藏」记下 github / gitee 上的开源 Skill，之后一键安装。
+            <div class="h-emp-acts"><button class="h-btn sm primary" @click="openFav()">添加收藏</button></div>
+          </div>
+        </section>
+      </template>
+
+      <!-- ============ 粘贴 Git 地址安装（两个分段都可用） ============ -->
+      <div class="h-sec"><h2>粘贴 Git 地址安装</h2><span class="line"></span><span class="hint">github / gitee · 仓库或 tree 子路径 · 回车即装</span></div>
+      <div class="h-paste">
+        <span class="fi"><svg viewBox="0 0 24 24"><path d="M9.5 14.5 14.5 9.5"/><path d="M8 12.5 6.2 14.3a3.2 3.2 0 0 0 4.5 4.5L12.5 17"/><path d="M16 11.5l1.8-1.8a3.2 3.2 0 0 0-4.5-4.5L11.5 7"/></svg>
+          <input v-model="paste" aria-label="粘贴 Git 仓库地址" @keyup.enter="installUrl"
+                 placeholder="https://github.com/anthropics/skills/tree/main/skills/pdf"></span>
+        <button class="h-btn" @click="previewPaste">预览</button>
+        <button class="h-btn primary" @click="installUrl"><svg viewBox="0 0 24 24"><path d="M12 4v11"/><path d="M7.5 10.5 12 15l4.5-4.5"/><path d="M5 19h14"/></svg>安装</button>
+        <button class="h-btn ghost" @click="favFromPaste">存为收藏</button>
+      </div>
+      <div v-if="paste.trim()" class="h-parse paste" :class="pasteState==='bad'?'bad':(pasteState==='link'?'link':'')" v-html="parseBlock(pasteState,pasteParse,paste.trim())"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ================= toast（右下内联） ================= -->
+<div class="h-toasts">
+  <transition-group name="h-t">
+    <div v-for="t in toasts" :key="t.id" class="h-toast" :class="t.kind">
+      <span class="ti"><svg v-if="t.kind!=='warn'" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7"/></svg><svg v-else viewBox="0 0 24 24"><path d="M12 5.5 20 19H4z"/><path d="M12 10v4"/><path d="M12 16.6v.4"/></svg></span>
+      <span class="tx" v-html="t.text"></span>
+      <button v-if="t.action" class="tact" @click="t.action()">{{ t.actionLabel }}</button>
+      <button class="x" @click="drop(t.id)" aria-label="关闭提示"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+    </div>
+  </transition-group>
+</div>
+
+<!-- ================= 抽屉 · 添加收藏（右侧滑入 · 实时校验 URL） ================= -->
+<transition name="h-sc"><div v-if="drawer==='fav'" class="h-scrim" @click="closeDrawer"></div></transition>
+<transition name="h-dr">
+<aside v-if="drawer==='fav'" class="h-drawer" role="dialog" aria-modal="true" aria-label="添加收藏">
+  <header class="h-drawer-h">
+    <div>
+      <h3>添加收藏</h3>
+      <p>记下 github / gitee 上的开源 Skill，之后在「我的收藏」里一键安装，不必重新搜索。地址一填就解析 owner / repo / 子路径，Esc 关闭。</p>
+    </div>
+    <button class="h-iconbtn" @click="closeDrawer" aria-label="关闭"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+  </header>
+  <div class="h-drawer-b">
+    <div class="h-field" :class="{bad:err.name}">
+      <label for="fv-name">名称</label>
+      <input id="fv-name" v-model.trim="fv.name" placeholder="pdf-form-fill">
+      <span class="hint">收藏列表与安装计划里显示的名字；留空时按解析结果自动补。</span>
+      <span class="h-err" v-if="err.name">请填写名称。</span>
+    </div>
+    <div class="h-field" :class="{bad:err.url}">
+      <label for="fv-url">仓库地址</label>
+      <input id="fv-url" v-model.trim="fv.url" @input="onUrl" placeholder="https://github.com/owner/repo/tree/main/skills/pdf">
+      <span class="hint">支持 github.com 与 gitee.com，可带 /tree/分支/子路径。</span>
+      <span style="display:flex;gap:7px;flex-wrap:wrap;margin-top:2px">
+        <button class="h-ex" @click="fillEx('github')">github 示例</button>
+        <button class="h-ex" @click="fillEx('gitee')">gitee 示例</button>
+      </span>
+      <span class="h-err" v-if="err.url">这个地址解析不出 owner / repo，请填写完整仓库 URL。</span>
+    </div>
+    <div class="h-field">
+      <label>校验</label>
+      <div class="h-parse" :class="fvState==='bad'?'bad':(fvState==='link'?'link':'')" v-html="parseBlock(fvState,fvParse,fv.url)"></div>
+    </div>
+    <div class="h-field">
+      <label for="fv-desc">描述</label>
+      <textarea id="fv-desc" v-model="fv.desc" placeholder="这个 Skill 做什么、为什么留着它。"></textarea>
+    </div>
+  </div>
+  <footer class="h-drawer-f">
+    <span class="h-mono">收藏只写在本机列表，不上传。</span>
+    <span class="r">
+      <button class="h-btn" @click="closeDrawer">取消</button>
+      <button class="h-btn" @click="saveFav('save')">保存</button>
+      <button class="h-btn primary" :disabled="fvState!=='repo'" :title="fvState==='link' ? '非 github / gitee 仓库，只能作为链接收藏' : ''" @click="saveFav('install')">保存并安装</button>
+    </span>
+  </footer>
+</aside>
+</transition>
+<script>
+const { createApp } = Vue;
+
+/* 来源能力（已核实）：search = 可搜索·可安装；browser = 仅浏览器（只出深链） */
+const SOURCES = [
+  {id:'skills_sh',   name:'skills.sh',         mark:'S', cap:'search',  on:true,  health:'visible',     probe:'1.1s', base:'https://www.skills.sh',            host:'www.skills.sh',        total:'42',     brief:''},
+  {id:'clawhub',     name:'ClawHub',           mark:'C', cap:'search',  on:true,  health:'visible',     probe:'0.8s', base:'https://clawhub.ai',               host:'clawhub.ai',           total:'118',    brief:''},
+  {id:'skillhub_cn', name:'SkillHub 中文',      mark:'H', cap:'search',  on:true,  health:'shadowed',    probe:'3.6s', base:'https://skillhub.cn',              host:'skillhub.cn',          total:'26',     note:'新升级', brief:''},
+  {id:'modelscope',  name:'ModelScope Skills',  mark:'M', cap:'search',  on:true,  health:'shadowed',    probe:'4.2s', base:'https://www.modelscope.cn/skills', host:'modelscope.cn/skills', total:'89,028', note:'新来源', brief:''},
+  {id:'qoder',       name:'Qoder',             mark:'Q', cap:'browser', on:true,  health:'visible',     probe:'1.4s', base:'https://qoder.com/zh/marketplace', host:'qoder.com',            brief:'有浏览页与关键词参数，但没有可枚举索引，也没有可克隆仓库。'},
+  {id:'skillsmp',    name:'SkillsMP',          mark:'K', cap:'browser', on:false, health:'not_scanned', probe:'未探测', base:'https://skillsmp.com',             host:'skillsmp.com',         brief:'默认关闭（抓取不稳定）。启用后同样只补一条带关键词的深链。'}
+];
+const HEALTH_TEXT = {visible:'正常', shadowed:'偏慢：上次探测超过 3s，本次仍会查询', not_scanned:'未探测：来源已停用，未发起请求', broken:'不可达：连续 3 次请求失败'};
+
+/* 示例结果（字段对齐后端：name / owner / summary / version / downloads / stars / url / installable） */
+const RESULTS = {
+  skills_sh: [
+    {key:'pdf',           owner:'anthropics', ver:'1.4.0', dl:'12.4k', stars:'3.1k', installable:true,
+     repo:'github.com/anthropics/skills', sub:'skills/pdf', size:'38 KB',
+     url:'https://www.skills.sh/anthropics/pdf', sum:'生成与审阅 PDF：分页约定、模板填充、表单字段与页眉页脚。'},
+    {key:'pdf-extract',   owner:'docsmith',   ver:'2.0.3', dl:'5.8k',  stars:'1.2k', installable:true,
+     repo:'github.com/docsmith/skills', sub:'pdf-extract', size:'22 KB',
+     url:'https://www.skills.sh/docsmith/pdf-extract', sum:'抽取正文与表格为结构化 JSON，保留阅读顺序与标题层级。'},
+    {key:'pdf-check',     owner:'toolness',   ver:'0.6.1', dl:'2.1k',  stars:'418',  installable:true,
+     repo:'github.com/toolness/pdf-skills', sub:'check', size:'14 KB',
+     url:'https://www.skills.sh/toolness/pdf-check', sum:'校验 PDF 结构：字体嵌入、可访问性标签、页码与书签完整性。'},
+    {key:'invoice-pdf',   owner:'skillforge', ver:'1.1.0', dl:'940',   stars:'122',  installable:true,
+     repo:'github.com/skillforge/invoice-skills', sub:'pdf', size:'31 KB',
+     url:'https://www.skills.sh/skillforge/invoice-pdf', sum:'从仓库里的 CSV 渲染发票 PDF，含币种、税号与合计校验。'}
+  ],
+  clawhub: [
+    {key:'pdf-merge',       owner:'clawlabs',    ver:'3.2.0', dl:'8.6k', stars:'2.0k', installable:true,
+     repo:'github.com/clawlabs/pdf-merge', sub:'.', size:'46 KB',
+     url:'https://clawhub.ai/clawlabs/pdf-merge', sum:'合并、拆分与重排页面：书签继承、页面尺寸归一与元数据保留。'},
+    {key:'pdf-ocr',         owner:'visionworks', ver:'1.0.4', dl:'4.3k', stars:'902',  installable:true,
+     repo:'github.com/visionworks/ocr-skills', sub:'pdf-ocr', size:'58 KB',
+     url:'https://clawhub.ai/visionworks/pdf-ocr', sum:'扫描页转可搜索 PDF：本地 tesseract 后端，中英混排识别。'},
+    {key:'pdf-redact',      owner:'privax',      ver:'0.8.0', dl:'1.7k', stars:'265',  installable:true,
+     repo:'github.com/privax/redact', sub:'.', size:'19 KB',
+     url:'https://clawhub.ai/privax/pdf-redact', sum:'按规则批量涂抹证件号、邮箱等敏感串，并导出涂抹审计日志。'},
+    {key:'pdf-annotate-cloud', owner:'clawlabs', ver:'1.2.1', dl:'3.0k', stars:'611',  installable:false,
+     repo:'—（来源未公开仓库）', sub:'—', size:'—',
+     url:'https://clawhub.ai/clawlabs/pdf-annotate-cloud', sum:'云端批注与协同审阅，只提供网页端下载包。'}
+  ],
+  skillhub_cn: [
+    {key:'cn-contract-pdf', owner:'hanlab',     ver:'1.2.1', dl:'6.1k', stars:'1.4k', installable:true,
+     repo:'github.com/hanlab/cn-doc-skills', sub:'contract-pdf', size:'27 KB',
+     url:'https://skillhub.cn/hanlab/cn-contract-pdf', sum:'中文合同排版：宋黑混排、条款编号、骑缝章位置与页眉水印。'},
+    {key:'pdf-translate',   owner:'lingvault',  ver:'0.9.7', dl:'3.4k', stars:'613',  installable:true,
+     repo:'github.com/lingvault/pdf-translate', sub:'.', size:'35 KB',
+     url:'https://skillhub.cn/lingvault/pdf-translate', sum:'整篇 PDF 中英互译并回排版，保留图表与脚注位置。'},
+    {key:'pdf-slides-cn',   owner:'slidecraft', ver:'2.3.0', dl:'2.2k', stars:'402',  installable:true,
+     repo:'github.com/slidecraft/md-to-pdf', sub:'slides-cn', size:'21 KB',
+     url:'https://skillhub.cn/slidecraft/pdf-slides-cn', sum:'把 Markdown 大纲渲染成 16:9 PDF 讲义，含中文字体子集。'}
+  ],
+  modelscope: [
+    {key:'pdf-parse-ms',    owner:'openxlab', ver:'1.6.2', dl:'15.3k', stars:'4.2k', installable:true,
+     repo:'github.com/modelscope/pdf-parse-skills', sub:'parse', size:'64 KB',
+     url:'https://www.modelscope.cn/skills/openxlab/pdf-parse-ms', sum:'多模态版面解析：布局还原、公式转 LaTeX、表格转 Markdown。'},
+    {key:'pdf-summarize-cn',owner:'xlm-team', ver:'0.5.0', dl:'2.9k',  stars:'377',  installable:true,
+     repo:'github.com/xlm-team/doc-skills', sub:'summarize-cn', size:'18 KB',
+     url:'https://www.modelscope.cn/skills/xlm-team/pdf-summarize-cn', sum:'长文档分段摘要与要点抽取，支持 128k 上下文。'},
+    {key:'doc2pdf',         owner:'stampylab', ver:'1.0.1', dl:'1.1k',  stars:'154',  installable:true,
+     repo:'github.com/stampylab/office2pdf', sub:'.', size:'42 KB',
+     url:'https://www.modelscope.cn/skills/stampylab/doc2pdf', sum:'Office 文档批量转 PDF，保留页边距、脚注与目录域。'}
+  ]
+};
+
+createApp({
+  data(){return{
+    query:'pdf', paste:'', tab:'all', plan:'', drawer:'', elapsed:0, perCap:5,
+    busy:false, probing:false, fail:false, probeAge:'3 分钟前', sug:'',
+    sources:SOURCES, results:RESULTS, installed:{},
+    err:{name:false,url:false},
+    fv:{name:'',url:'',desc:''},
+    favorites:[
+      {name:'pdf · anthropics/skills', url:'https://github.com/anthropics/skills/tree/main/skills/pdf', kind:'repo',
+       owner:'anthropics', repo:'skills', branch:'main', sub:'skills/pdf', slug:'pdf',
+       desc:'官方 PDF Skill：分页、模板与表单字段约定，随上游仓库更新。', addedAt:'2026-11-18'},
+      {name:'cn-doc-skills · hanlab', url:'https://github.com/hanlab/cn-doc-skills', kind:'repo',
+       owner:'hanlab', repo:'cn-doc-skills', branch:'默认分支', sub:'.', slug:'cn-doc-skills',
+       desc:'中文文档排版合集：合同、发票、公文页眉与骑缝章规范。', addedAt:'2026-11-15'},
+      {name:'doc-skills · 观星阁', url:'https://gitee.com/guanxingge/doc-skills', kind:'repo',
+       owner:'guanxingge', repo:'doc-skills', branch:'默认分支', sub:'.', slug:'doc-skills',
+       desc:'gitee 上的中文文档 Skill：报告模板、目录与图表编号。', addedAt:'2026-11-09'},
+      {name:'pdf-extract · docsmith', url:'https://github.com/docsmith/skills/tree/main/pdf-extract', kind:'repo',
+       owner:'docsmith', repo:'skills', branch:'main', sub:'pdf-extract', slug:'pdf-extract',
+       desc:'正文与表格抽取为 JSON，含 CLI 与 Skill 两种形态。', addedAt:'2026-10-30'}
+    ],
+    toasts:[], seq:0
+  }},
+  computed:{
+    searchSources(){return this.sources.filter(s=>s.cap==='search')},
+    browserSources(){return this.sources.filter(s=>s.cap==='browser')},
+    enabledSearch(){return this.searchSources.filter(s=>s.on)},
+    groupResults(){
+      return this.enabledSearch
+        .map(s=>{const error=this.fail&&s.id==='modelscope';
+          return {...s, error, rows:error?[]:(this.results[s.id]||[]).filter(r=>this.match(r)).slice(0,this.perCap)}})
+        .filter(g=>g.rows.length||g.error);
+    },
+    totalHits(){return this.groupResults.reduce((n,g)=>n+g.rows.length,0)},
+    activeGroups(){return this.groupResults.filter(g=>g.rows.length).length},
+    installedCount(){return Object.keys(this.installed).filter(k=>this.installed[k]).length},
+    repoFavs(){return this.favorites.filter(f=>f.kind!=='link')},
+    linkFavs(){return this.favorites.filter(f=>f.kind==='link')},
+    fvParse(){return this.parseUrl(this.fv.url)},
+    fvState(){return this.urlState(this.fv.url)},
+    pasteParse(){return this.parseUrl(this.paste)},
+    pasteState(){return this.urlState(this.paste)}
+  },
+  methods:{
+    esc(s){return String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]))},
+    match(r){const q=this.query.trim().toLowerCase();
+      if(!q)return true;return (r.key+' '+r.owner+' '+r.sum).toLowerCase().includes(q)},
+    hits(s){return (this.results[s.id]||[]).filter(r=>this.match(r)).slice(0,this.perCap).length},
+    host(u){const m=/^https?:\/\/([^/]+)/.exec(u||'');return m?m[1]:'—'},
+    planHtml(r){
+      const k=this.esc(r.key);
+      return '安装计划（dry-run · 未写入任何文件）\n'
+        +'仓库   <span class="hl">'+this.esc(r.repo)+'</span>\n'
+        +'子路径 <span class="hl">'+this.esc(r.sub)+'</span>\n'
+        +'→ 存储 <span class="to">~/.heron/store/'+k+'</span>   新建副本 '+this.esc(r.size)+'\n'
+        +'→ 链接 ~/.claude/skills/'+k+' → store/'+k+'\n'
+        +'→ 链接 ~/.trae/skills/'+k+'   → store/'+k+'\n'
+        +'完成 3 处 · 跳过 0 处 · 0 错误';
+    },
+    deepLink(s){const q=encodeURIComponent(this.query.trim());
+      return s.id==='qoder' ? s.base+'?q='+q : s.base+'/search?q='+q},
+    focusQ(){this.$nextTick(()=>this.$refs.q && this.$refs.q.focus())},
+    toggle(s){
+      s.on=!s.on; this.plan='';
+      this.say(s.cap==='search'
+        ? (s.on?('已把 <b>'+this.esc(s.name)+'</b> 加入本次查询'):('本次查询不再打 <b>'+this.esc(s.name)+'</b>'))
+        : (s.on?('已启用 <b>'+this.esc(s.name)+'</b> · 仍只补深链'):('已停用 <b>'+this.esc(s.name)+'</b>')),
+        s.on?'ok':'warn');
+    },
+    healthText(s){return (HEALTH_TEXT[s.health]||'未知')+(s.probe?' · 探测 '+s.probe:'')},
+    /* 地址解析：host / owner / repo / 分支 / 子路径 / 落点 slug（github 与 gitee 同构） */
+    parseUrl(u){
+      u=String(u||'').trim();
+      const m=/^https?:\/\/([^/?#\s]+)\/([^/?#\s]+)\/([^/?#\s]+)(?:\/(?:tree|blob)\/([^/?#\s]+)\/([^?#\s]*))?\/?$/i.exec(u);
+      if(!m)return null;
+      const host=m[1].toLowerCase().replace(/^www\./,'');
+      if(!/(^|\.)github\.com$/.test(host)&&!/(^|\.)gitee\.com$/.test(host))return null;
+      const sub=(m[5]||'').replace(/\/+$/,'');
+      return {host:host,owner:m[2],repo:m[3],branch:m[4]||'默认分支',sub:sub||'.',
+              slug:(sub?sub.split('/').pop():m[3]).toLowerCase()};
+    },
+    urlState(u){const s=String(u||'').trim();
+      if(!s)return 'idle';
+      if(this.parseUrl(s))return 'repo';
+      return /^https?:\/\/[^\s]+\.[^\s]{2,}$/i.test(s)?'link':'bad';
+    },
+    parseBlock(state,p,url){
+      const R=(k,v,c)=>'<span class="k">'+k+'</span><span class="'+(c||'v')+'">'+this.esc(v)+'</span>';
+      if(state==='idle')return '待解析 · 输入地址后自动出 host / owner / repo / 子路径与落点。';
+      if(state==='bad')return '地址解析失败\n'
+        +R('需要 ','https://github.com/owner/repo 或 https://gitee.com/owner/repo，可带 /tree/分支/子路径')+'\n'
+        +R('当前 ',String(url||'').slice(0,140));
+      if(state==='link')return '只能作链接收藏\n'
+        +R('host ',this.host(url))+'\n'
+        +R('原因 ','不是 github.com / gitee.com 的仓库，无法克隆安装')+'\n'
+        +R('之后 ','收藏里只能「打开」，「一键安装」不可用');
+      return '校验通过 · 可安装\n'
+        +R('host ',p.host)+'\n'
+        +R('owner ',p.owner)+'\n'
+        +R('repo ',p.repo)+'\n'
+        +R('分支 ',p.branch)+'\n'
+        +R('子路径 ',p.sub)+'\n'
+        +R('落点 ','~/.heron/store/'+p.slug,'to')+'\n'
+        +(this.doneKey(p.slug)?R('状态 ','已在存储区，重复安装会跳过'):R('动作 ','新建副本 + 投影 3 处客户端链接'));
+    },
+    doneKey(k){return !!k&&!!this.installed[k]},
+    done(s,r){return this.doneKey(r.key)},
+    doneIn(s){return s.rows.filter(r=>this.done(s,r)).length},
+    mark(k){this.installed[k]=true},
+    run(){
+      this.plan='';
+      if(!this.enabledSearch.length){this.busy=false;
+        this.say('没有已启用的可搜索来源：先在上方勾选一个。','warn');return}
+      this.busy=true; clearTimeout(this._rt);
+      this._rt=setTimeout(()=>{
+        this.busy=false;
+        this.elapsed = 96 + this.query.trim().length*7 + this.enabledSearch.length*31;
+        if(!this.query.trim()){this.say('搜索词为空 · 显示各来源默认排序的前 '+this.perCap+' 条');return}
+        if(!this.totalHits){this.say('已在 '+this.enabledSearch.length+' 个来源搜索 «'+this.esc(this.query.trim())+'» · 没有命中','warn');return}
+        this.say('已在 <b>'+this.enabledSearch.length+'</b> 个来源搜索 «'+this.esc(this.query.trim())+'» · 命中 <b>'+this.totalHits+'</b> 条 · '+this.activeGroups+' 个分组');
+      },520);
+    },
+    reprobe(){
+      if(this.probing)return;
+      this.probing=true;
+      setTimeout(()=>{
+        this.probing=false; this.probeAge='刚刚';
+        const FRESH={skills_sh:'1.0s',clawhub:'0.9s',skillhub_cn:'3.4s',modelscope:'4.5s',qoder:'1.3s',skillsmp:'未探测'};
+        this.sources.forEach(s=>{
+          if(!s.on){s.health='not_scanned';s.probe='未探测';return}
+          s.probe=FRESH[s.id]||s.probe;
+          s.health=parseFloat(s.probe)>=3?'shadowed':'visible';
+        });
+        const v=this.sources.filter(s=>s.on&&s.health==='visible').length;
+        const w=this.sources.filter(s=>s.on&&s.health==='shadowed').length;
+        this.say('探测完成：'+v+' 个正常 · '+w+' 个偏慢（仍会查询）· 已停用的来源不探测',w?'warn':'ok');
+      },700);
+    },
+    allOn(){
+      this.sources.forEach(s=>{s.on=true;if(s.health==='not_scanned')s.health='visible'});
+      this.run();
+      this.say('已启用全部 '+this.sources.length+' 个来源 · 其中 '+this.browserSources.length+' 个仍只出深链','ok');
+    },
+    retry(s){
+      this.fail=false;
+      this.say('重试 '+this.esc(s.name)+' 成功 · 该组结果已恢复（探测 '+this.esc(s.probe)+'）','ok');
+    },
+    say(html,kind,action,label){
+      const id=++this.seq;
+      this.toasts.push({id,text:html,kind:kind||'ok',action:typeof action==='function'?action:null,actionLabel:label||'查看'});
+      if(this.toasts.length>3)this.toasts.shift();
+      setTimeout(()=>this.drop(id),6200);
+    },
+    drop(id){const i=this.toasts.findIndex(t=>t.id===id);if(i>-1)this.toasts.splice(i,1)},
+    install(s,r){
+      const p='~/.heron/store/'+r.key;
+      this.mark(r.key);
+      this.say('已安装到存储区 <b>'+this.esc(p)+'</b><br>来源 '+this.esc(s.name)+' · 版本 v'+this.esc(r.ver)+' · 投影 3 处客户端链接',
+        'ok',()=>this.say('已在系统文件管理器打开 '+this.esc(p)),'在存储区查看');
+    },
+    installFav(f){
+      const slug=f.slug||((f.url.split('/').filter(Boolean).pop()||f.name).toLowerCase());
+      const p='~/.heron/store/'+slug;
+      this.mark(slug);
+      this.say('已安装到存储区 <b>'+this.esc(p)+'</b><br>来源：收藏条目 '+this.esc(f.name)+' · 投影 3 处客户端链接',
+        'ok',()=>this.say('已在系统文件管理器打开 '+this.esc(p)),'在存储区查看');
+    },
+    installUrl(){
+      const u=this.paste.trim(), st=this.pasteState, p=this.pasteParse;
+      if(st==='idle'){this.say('先粘贴一个 github / gitee 仓库地址。','warn');return}
+      if(st==='bad'){this.say('这个地址解析不出 owner / repo，请填 https://github.com/owner/repo 或 https://gitee.com/owner/repo。','warn');return}
+      if(st==='link'){this.say('<b>'+this.esc(this.host(u))+'</b> 不是 github / gitee 仓库，无法克隆安装 · 只能「打开」或存为链接收藏。','warn');return}
+      const path='~/.heron/store/'+p.slug;
+      this.mark(p.slug);
+      this.say('已安装到存储区 <b>'+this.esc(path)+'</b><br>'+this.esc(p.host)+' · '+this.esc(p.owner)+'/'+this.esc(p.repo)
+        +' · 子路径 '+this.esc(p.sub)+' · 投影 3 处客户端链接',
+        'ok',()=>this.say('已在系统文件管理器打开 '+this.esc(path)),'在存储区查看');
+      this.paste='';
+    },
+    previewPaste(){
+      const st=this.pasteState, p=this.pasteParse, u=this.paste.trim();
+      if(st==='idle'){this.say('先在上面的输入框粘贴一个仓库地址。','warn');return}
+      if(st==='bad'){this.say('解析失败 · 需要 https://github.com/owner/repo 或 https://gitee.com/owner/repo，可带 /tree/分支/子路径。','warn');return}
+      if(st==='link'){this.say('<b>'+this.esc(this.host(u))+'</b> 不是 github / gitee 仓库 · 没有安装计划可预览，只能打开。','warn');return}
+      const path='~/.heron/store/'+p.slug;
+      this.say('预览（dry-run · 未写入任何文件）<br>'+this.esc(p.host+' / '+p.owner+' / '+p.repo)
+        +'<br>'+this.esc('分支 '+p.branch+' · 子路径 '+p.sub)
+        +'<br>→ 存储 <b>'+this.esc(path)+'</b><br>→ 链接 3 处客户端 · 跳过 0 处 · 0 错误',
+        'ok',()=>this.installUrl(),'直接安装');
+    },
+    openFav(pre){
+      this.fv=pre?{name:pre.name||'',url:pre.url||'',desc:pre.desc||''}:{name:'',url:'',desc:''};
+      this.sug=''; this.err={name:false,url:false}; this.drawer='fav';
+      this.$nextTick(()=>{const el=document.getElementById(pre?'fv-desc':'fv-url'); if(el)el.focus();});
+    },
+    closeDrawer(){this.drawer=''},
+    fillEx(k){
+      this.fv.url = k==='github'
+        ? 'https://github.com/anthropics/skills/tree/main/skills/pdf-form-fill'
+        : 'https://gitee.com/guanxingge/doc-skills/tree/master/report-cn';
+      if(!this.fv.desc.trim())this.fv.desc = k==='github'
+        ? '官方 skills 仓库里的 PDF 表单填写子路径，随上游更新。'
+        : 'gitee 上的中文报告模板 Skill，含目录与图表编号。';
+      this.onUrl();
+    },
+    onUrl(){
+      const p=this.fvParse;
+      if(p&&(!this.fv.name.trim()||this.fv.name===this.sug)){this.sug=p.slug;this.fv.name=p.slug}
+      this.err.url=false;
+    },
+    favFromPaste(){
+      const u=this.paste.trim(), p=this.parseUrl(u);
+      this.openFav({name:p?p.slug:(u.split('/').filter(Boolean).pop()||''),
+                    url:this.urlState(u)==='bad'?'':u, desc:''});
+    },
+    favFromLink(s){
+      const q=this.query.trim();
+      this.openFav({name:s.name+' · '+(q||'目录'),url:this.deepLink(s),
+                    desc:'仅浏览器来源：'+s.brief});
+      this.say('已把 <b>'+this.esc(s.name)+'</b> 的搜索深链放进收藏表单 · 这类地址只能「打开」，不能安装','warn');
+    },
+    openUrl(label,url){this.say('已在浏览器打开 '+this.esc(label)+'<br>'+this.esc(url),'ok')},
+    saveFav(mode){
+      const st=this.fvState, p=this.fvParse;
+      this.err={name:!this.fv.name.trim(),url:st==='bad'||st==='idle'};
+      if(this.err.name||this.err.url)return;
+      const name=this.fv.name.trim();
+      const f={name:name,url:this.fv.url,desc:this.fv.desc.trim()||'（未填写描述）',
+               kind:st==='repo'?'repo':'link',addedAt:'2026-11-22',
+               owner:p?p.owner:'—',repo:p?p.repo:'—',branch:p?p.branch:'—',sub:p?p.sub:'—',
+               slug:p?p.slug:name.toLowerCase().replace(/\s+/g,'-')};
+      this.favorites.unshift(f); this.drawer=''; this.tab='fav';
+      if(mode==='install'&&f.kind==='repo'){
+        const path='~/.heron/store/'+f.slug;
+        this.mark(f.slug);
+        this.say('已收藏并安装 <b>'+this.esc(f.name)+'</b> → 存储区 <b>'+this.esc(path)+'</b><br>投影 3 处客户端链接',
+          'ok',()=>this.say('已在系统文件管理器打开 '+this.esc(path)),'在存储区查看');
+      }else{
+        this.say('已收藏 <b>'+this.esc(f.name)+'</b>'
+          +(f.kind==='link'?'（仅链接 · 只能打开，不能安装）':'')+' · 现在在「我的收藏」里');
+      }
+      this.fv={name:'',url:'',desc:''}; this.sug='';
+    },
+    removeFav(f){
+      const i=this.favorites.indexOf(f);
+      this.favorites.splice(i,1);
+      const copy={...f};
+      this.say('已移除收藏 <b>'+this.esc(copy.name)+'</b>（本机列表，未删除仓库）','warn',
+        ()=>{this.favorites.splice(i,0,copy);this.say('已恢复收藏 <b>'+this.esc(copy.name)+'</b>')},'恢复');
+    },
+    other(name){this.say('「'+this.esc(name)+'」页不在本次原型范围 · 外壳占位','ok')}
+  },
+  mounted(){
+    this.elapsed = 96 + this.query.length*7 + this.enabledSearch.length*31;
+    const q=new URLSearchParams(location.search);
+    /* 深链：?drawer=1 打开空表单；?drawer=filled 打开并预填 github 示例；两者都便于截图与走查 */
+    const d=q.get('drawer');
+    if(d==='filled'){this.openFav();this.fillEx('github');}
+    else if(d==='1'||/#(drawer|fav-drawer|fav|抽屉)$/.test(location.hash))this.openFav();
+    window.addEventListener('keydown',e=>{
+      if(e.key!=='Escape')return;
+      if(this.drawer==='fav')this.closeDrawer();
+      else if(this.plan)this.plan='';
+    });
+  }
+}).mount('#app');
+</script>
+<style>.h-fav .acts{grid-column:2;grid-row:1 / -1;align-self:center}</style>
+</div></body>
+</html>

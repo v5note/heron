@@ -58,6 +58,11 @@ pub enum Command {
         /// Keep the original where it is instead of replacing it with a projection.
         #[arg(long)]
         keep_original: bool,
+        /// How to place the content: `replace` (copy into the store and link the original),
+        /// `live-bind` (register the directory a foreign link already points at, touching nothing)
+        /// or `keep-original`. Defaults to what the plan suggests for each entry.
+        #[arg(long, value_name = "PLACEMENT")]
+        placement: Option<String>,
     },
     /// Materialize a managed skill into a target directory.
     Project {
@@ -218,7 +223,16 @@ pub fn run() -> Result<ExitCode> {
             all,
             dry_run,
             keep_original,
-        } => cmd_adopt(&mut ctx, &targets, all, dry_run, keep_original, cli.json),
+            placement,
+        } => cmd_adopt(
+            &mut ctx,
+            &targets,
+            all,
+            dry_run,
+            keep_original,
+            placement.as_deref(),
+            cli.json,
+        ),
         Command::Project {
             slug,
             on,
@@ -404,8 +418,20 @@ fn cmd_adopt(
     all: bool,
     dry_run: bool,
     keep_original: bool,
+    placement: Option<&str>,
     json: bool,
 ) -> Result<ExitCode> {
+    let forced = match (keep_original, placement) {
+        (_, Some(value)) => Some(AdoptPlacement::parse(value).ok_or_else(|| {
+            HeronError::from(
+                ErrorCode::SlugInvalid
+                    .msg()
+                    .with("detail", format!("unknown --placement {value}")),
+            )
+        })?),
+        (true, None) => Some(AdoptPlacement::KeepOriginal),
+        (false, None) => None,
+    };
     let candidates = detected::list_by_state(ctx.db.conn(), "candidate")?;
     let selected: Vec<_> = if all {
         candidates
@@ -458,7 +484,8 @@ fn cmd_adopt(
                 .as_ref()
                 .map(|d| format!(" (same content as {d}: no second copy)"))
                 .unwrap_or_default();
-            println!("would adopt {slug}{dup}");
+            let how = forced.unwrap_or(plan.suggested).as_str();
+            println!("would adopt {slug} [{how}]{dup}");
             if duplicate.is_none() {
                 for step in &plan.steps {
                     println!("  - {}", serde_json::to_string(step).unwrap());
@@ -468,16 +495,11 @@ fn cmd_adopt(
         return Ok(ExitCode::SUCCESS);
     }
 
-    let placement = if keep_original {
-        AdoptPlacement::KeepOriginal
-    } else {
-        AdoptPlacement::Replace
-    };
     let mut adopted = Vec::new();
     // Re-plan per item so dedup sees what earlier iterations adopted.
     for row in &selected {
         let plan = adopt::plan(ctx, row)?;
-        let report = adopt::execute(ctx, &plan, placement)?;
+        let report = adopt::execute(ctx, &plan, forced.unwrap_or(plan.suggested))?;
         adopted.extend(report.adopted);
         for skipped in report.skipped {
             println!("skipped: {skipped}");

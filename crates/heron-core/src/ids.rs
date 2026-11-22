@@ -166,6 +166,7 @@ pub const BUILTIN_MARKETS: &[(&str, &str, bool)] = &[
     ("clawhub", "ClawHub", true),
     ("qoder", "Qoder", true),
     ("skillhub_cn", "SkillHub", true),
+    ("modelscope", "ModelScope", true),
     ("skillsmp", "SkillsMP", false),
 ];
 
@@ -232,7 +233,7 @@ mod tests {
 
     #[test]
     fn builtin_market_table_is_consistent() {
-        assert_eq!(BUILTIN_MARKETS.len(), 5);
+        assert_eq!(BUILTIN_MARKETS.len(), 6);
         let disabled: Vec<_> = BUILTIN_MARKETS
             .iter()
             .filter(|m| !m.2)

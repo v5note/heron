@@ -31,7 +31,7 @@ pub struct ProjectOutcome {
 /// Build the plan for one projection request.
 pub fn plan(ctx: &Ctx, req: &ProjectRequest) -> Result<(ProjectPlan, ProjectionRequest)> {
     let target = load_target(ctx, &req.target_id)?;
-    let source = ctx.skill_path(&req.slug);
+    let source = ctx.content_path_of(&req.slug);
     let link_name = req.link_name.clone().unwrap_or_else(|| req.slug.clone());
     let dest = PathBuf::from(&target.path).join(&link_name);
     let mode = req.mode.unwrap_or_else(default_mode);

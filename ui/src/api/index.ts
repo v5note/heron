@@ -6,7 +6,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import type {
-  AdoptPlan, ConflictPayload, DetectedMeta, DetectedRow, DiffReport, DoctorReport, Drift, InstallPlan,
+  AdoptPlan, ConflictPayload, DetectedMeta, DetectedRow, DiffReport, DoctorReport, Drift, FavoriteRow, InstallPlan,
   InstallPreview, LockFile, MarketInfo, MarketItem, NativeScanStatus, ScanReport, SkillRow,
   TargetRow, UpgradeCandidate, UpgradeOutcome, VisibilityReport,
 } from "./types";
@@ -53,8 +53,12 @@ export const api = {
   /** Frontmatter name/description for the discovered files, for the card grid. Read-only. */
   detectedMeta: (paths: string[]) => call<DetectedMeta[]>("detected_meta", { paths }),
   /** `dryRun` returns the plans (what would move); otherwise the report of what moved. */
-  adopt: <T = AdoptResult>(paths: string[], dryRun: boolean, keepOriginal: boolean) =>
-    call<T>("adopt_paths", { paths, dryRun, keepOriginal }),
+  adopt: <T = AdoptResult>(
+    paths: string[],
+    dryRun: boolean,
+    keepOriginal: boolean,
+    placement?: string | null,
+  ) => call<T>("adopt_paths", { paths, dryRun, keepOriginal, placement: placement ?? null }),
   skills: () => call<SkillRow[]>("skills_list"),
   targets: () => call<TargetRow[]>("targets_list"),
   project: (slug: string, targetId: string | null, mode: string | null, dryRun: boolean) =>
@@ -67,8 +71,17 @@ export const api = {
   rollback: (slug: string, to: string) => call<void>("rollback_skill", { slug, to }),
   doctor: () => call<DoctorReport>("doctor_run"),
   markets: () => call<MarketInfo[]>("markets_list"),
+  marketSetEnabled: (market: string, enabled: boolean) =>
+    call<void>("market_set_enabled", { market, enabled }),
   marketSearch: (market: string, query: string) => call<MarketItem[]>("market_search", { market, query }),
   marketPlan: (market: string, key: string) => call<InstallPlan>("market_plan", { market, key }),
+  favorites: () => call<FavoriteRow[]>("favorite_list"),
+  favoriteAdd: (input: { name: string; url: string; description: string; market?: string | null }) =>
+    call<FavoriteRow>("favorite_add", {
+      name: input.name, url: input.url, description: input.description,
+      market: input.market ?? null,
+    }),
+  favoriteRemove: (id: number) => call<void>("favorite_remove", { id }),
   install: (input: string, opts: { ref?: string; subpath?: string; asSlug?: string; dryRun: boolean }) =>
     call<InstallPreview | { slug: string; path: string; version: string }>("install_skill", {
       input, refOverride: opts.ref ?? null, subpath: opts.subpath ?? null,

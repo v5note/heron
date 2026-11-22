@@ -320,6 +320,7 @@ pub fn install(ctx: &mut Ctx, req: &InstallRequest) -> Result<InstallReport> {
                 tags: vec![],
                 status: "active".to_owned(),
                 origin: "store".to_owned(),
+                storage_path: None,
                 created_at: String::new(),
                 updated_at: String::new(),
             },

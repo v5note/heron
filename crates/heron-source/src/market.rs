@@ -17,7 +17,7 @@ use serde::{Deserialize, Serialize};
 
 /// Cache time-to-live for market responses.
 pub const CACHE_TTL: Duration = Duration::from_secs(10 * 60);
-const HTTP_TIMEOUT: Duration = Duration::from_secs(30);
+const HTTP_TIMEOUT: Duration = Duration::from_secs(10);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -101,6 +101,15 @@ pub const MARKETS: &[MarketInfo] = &[
         name: "SkillHub",
         capability: Capability::Guided,
         base_url: "https://skillhub.cn",
+        enabled_by_default: true,
+    },
+    MarketInfo {
+        id: "modelscope",
+        name: "ModelScope",
+        // Browsable through a search deep-link, and every skill is a cloneable git repository,
+        // so a pasted skill URL turns straight into an install plan.
+        capability: Capability::Guided,
+        base_url: "https://www.modelscope.cn",
         enabled_by_default: true,
     },
     MarketInfo {
@@ -411,11 +420,91 @@ impl MarketAdapter for Guided {
     }
 }
 
+/// ModelScope skills are hosted as git repositories at `modelscope.cn/skills/<owner>/<repo>`.
+/// There is no stable public search API, so browsing is a `?q=` deep-link, but a skill page URL
+/// resolves straight to a clone — which makes ModelScope installable from a paste or a favourite.
+pub struct ModelScope {
+    base: String,
+}
+
+impl Default for ModelScope {
+    fn default() -> Self {
+        Self {
+            base: "https://www.modelscope.cn".to_owned(),
+        }
+    }
+}
+
+impl ModelScope {
+    pub fn new(base: impl Into<String>) -> Self {
+        Self { base: base.into() }
+    }
+
+    /// `<owner>/<repo>` (optionally followed by `/skills/...`) or a full page URL.
+    fn owner_repo(&self, key: &str) -> Option<(String, String)> {
+        let raw = key.trim();
+        let path = raw
+            .trim_start_matches("https://")
+            .trim_start_matches("http://")
+            .strip_prefix("www.modelscope.cn")
+            .or_else(|| raw.strip_prefix("modelscope.cn"))
+            .unwrap_or(raw);
+        let segments: Vec<&str> = path
+            .trim_start_matches('/')
+            .split('/')
+            .filter(|s| !s.is_empty() && *s != "skills" && !s.ends_with(".git"))
+            .collect();
+        if segments.len() < 2 {
+            return None;
+        }
+        Some((segments[0].to_owned(), segments[1].to_owned()))
+    }
+}
+
+impl MarketAdapter for ModelScope {
+    fn id(&self) -> &'static str {
+        "modelscope"
+    }
+
+    fn capability(&self) -> Capability {
+        Capability::Guided
+    }
+
+    fn search(&self, query: &str, _limit: usize) -> Result<Vec<MarketItem>> {
+        let url = format!("{}/skills?q={}", self.base, urlencode(query));
+        Ok(vec![MarketItem {
+            market: "modelscope".to_owned(),
+            key: query.trim().to_owned(),
+            name: query.trim().to_owned(),
+            owner: None,
+            summary: String::new(),
+            version: None,
+            downloads: None,
+            url,
+        }])
+    }
+
+    fn install_plan(&self, key: &str) -> Result<InstallPlan> {
+        match self.owner_repo(key) {
+            Some((owner, repo)) => Ok(InstallPlan::Git {
+                url: format!("https://www.modelscope.cn/{owner}/{repo}.git"),
+                ref_name: None,
+                subpath: String::new(),
+            }),
+            None => Ok(InstallPlan::Guided {
+                open_url: format!("{}/skills?q={}", self.base, urlencode(key)),
+                reason: "modelscope_browse".to_owned(),
+            }),
+        }
+    }
+}
+
 /// Resolve an adapter by id.
 pub fn adapter(id: &str) -> Result<Box<dyn MarketAdapter>> {
     match id {
         "skills_sh" => Ok(Box::new(SkillsSh::default())),
         "clawhub" => Ok(Box::new(ClawHub::default())),
+        "modelscope" => Ok(Box::new(ModelScope::default())),
         "qoder" => Ok(Box::new(Guided::new(
             "qoder",
             "https://qoder.com/zh/marketplace",
@@ -573,8 +662,36 @@ mod tests {
     }
 
     #[test]
+    fn modelscope_page_url_resolves_to_a_git_clone() {
+        let m = ModelScope::default();
+        assert_eq!(
+            m.install_plan("https://www.modelscope.cn/skills/alibaba/dashscope").unwrap(),
+            InstallPlan::Git {
+                url: "https://www.modelscope.cn/alibaba/dashscope.git".into(),
+                ref_name: None,
+                subpath: String::new()
+            }
+        );
+        assert_eq!(
+            m.install_plan("iic/my-skill").unwrap(),
+            InstallPlan::Git {
+                url: "https://www.modelscope.cn/iic/my-skill.git".into(),
+                ref_name: None,
+                subpath: String::new()
+            }
+        );
+        // A free-text query is not a repo: fall back to the browse deep-link.
+        match m.install_plan("原型 设计").unwrap() {
+            InstallPlan::Guided { open_url, .. } => {
+                assert!(open_url.starts_with("https://www.modelscope.cn/skills?q="));
+            }
+            other => panic!("unexpected {other:?}"),
+        }
+    }
+
+    #[test]
     fn market_table_matches_design_decisions() {
-        assert_eq!(MARKETS.len(), 5);
+        assert_eq!(MARKETS.len(), 6);
         let indexed: Vec<_> = MARKETS
             .iter()
             .filter(|m| m.capability == Capability::Indexed)

@@ -26,6 +26,9 @@ pub struct SkillRow {
     pub tags: Vec<String>,
     pub status: String,
     pub origin: String,
+    /// Authoritative content directory when it lives outside the store: a skill adopted from a link
+    /// the user maintains elsewhere (adopt · 就地引用). `None` means `store/<slug>`.
+    pub storage_path: Option<String>,
     pub created_at: String,
     pub updated_at: String,
 }
@@ -40,6 +43,21 @@ pub struct TargetRow {
     pub enabled: bool,
     pub is_default: bool,
     pub discover: String,
+}
+
+/// Where a skill came from. Only `git` bindings can be serviced automatically.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct SourceBindingRow {
+    pub slug: String,
+    pub kind: String,
+    pub url: Option<String>,
+    #[serde(rename = "ref")]
+    pub ref_name: Option<String>,
+    pub subpath: Option<String>,
+    pub pinned_commit: Option<String>,
+    pub remote_version: Option<String>,
+    pub content_hash: Option<String>,
+    pub is_primary: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -148,4 +166,16 @@ pub struct EventRow {
     pub subject: Option<String>,
     pub detail: Option<String>,
     pub undoable: bool,
+}
+
+/// A user-favourited open-source skill (「来源与市场 → 我的收藏」). The `url` is what one-click
+/// install feeds to the installer; `market` is an optional provenance tag for display only.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct FavoriteRow {
+    pub id: i64,
+    pub name: String,
+    pub url: String,
+    pub description: String,
+    pub market: Option<String>,
+    pub created_at: String,
 }

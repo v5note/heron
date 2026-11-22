@@ -40,7 +40,7 @@ pub struct UpgradeCandidate {
 pub fn outdated(ctx: &Ctx, pin: PinPolicy) -> Result<Vec<UpgradeCandidate>> {
     let mut out = Vec::new();
     for row in skill::list(ctx.db.conn(), false)? {
-        let dir = ctx.skill_path(&row.slug);
+        let dir = ctx.content_path(&row);
         if !dir.is_dir() {
             continue;
         }
@@ -125,7 +125,7 @@ pub fn refresh_sources(ctx: &Ctx) -> Result<usize> {
     }
     // Remotes referenced only by a skill's metadata also need refreshing.
     for row in skill::list(ctx.db.conn(), false)? {
-        let dir = ctx.skill_path(&row.slug);
+        let dir = ctx.content_path(&row);
         if !dir.is_dir() {
             continue;
         }
@@ -172,7 +172,7 @@ pub enum UpgradeOutcome {
 /// - `false`: hard overwrite — every local edit (uncommitted *and* already-committed) is discarded
 ///   in favour of the upstream snapshot, so nothing ever reports a conflict.
 pub fn upgrade(ctx: &mut Ctx, slug: &str, keep_local: bool) -> Result<UpgradeOutcome> {
-    let dir = ctx.skill_path(slug);
+    let dir = ctx.content_path_of(slug);
     if !dir.is_dir() {
         return Err(ErrorCode::NotManaged
             .msg()
@@ -282,7 +282,7 @@ pub fn upgrade(ctx: &mut Ctx, slug: &str, keep_local: bool) -> Result<UpgradeOut
 
 /// Roll back to a previously landed version tag.
 pub fn rollback(ctx: &mut Ctx, slug: &str, to: &str) -> Result<String> {
-    let dir = ctx.skill_path(slug);
+    let dir = ctx.content_path_of(slug);
     let repo = heron_vcs::SkillRepo::open(&dir);
     if !repo.is_repo() {
         return Err(ErrorCode::NotManaged

@@ -68,7 +68,10 @@ fn migration_creates_schema_at_expected_version() {
         .pragma_query_value(None, "user_version", |r| r.get(0))
         .unwrap();
     assert_eq!(version, SCHEMA_VERSION);
-    assert_eq!(version, 2, "0001_init + 0002_client_commands");
+    assert_eq!(
+        version, 4,
+        "0001_init + 0002_client_commands + 0003_skill_storage + 0004_favorite"
+    );
     assert!(db.integrity_ok());
 }
 
@@ -206,6 +209,7 @@ fn projections_require_existing_target_and_cascade() {
                 tags: vec![],
                 status: "active".into(),
                 origin: "store".into(),
+                storage_path: None,
                 created_at: String::new(),
                 updated_at: String::new(),
             },
@@ -366,7 +370,7 @@ fn builtin_market_rows_survive_a_real_file_db() {
     let (_dir, mut db) = temp_db();
     db.write(|tx| {
         for (index, (id, name, enabled)) in BUILTIN_MARKETS.iter().enumerate() {
-            let guided = matches!(*id, "qoder" | "skillhub_cn" | "skillsmp");
+            let guided = matches!(*id, "qoder" | "skillhub_cn" | "modelscope" | "skillsmp");
             source::upsert(
                 tx,
                 &SourceRow {
@@ -397,7 +401,7 @@ fn builtin_market_rows_survive_a_real_file_db() {
     .unwrap();
 
     let rows = source::list(db.conn()).unwrap();
-    assert_eq!(rows.len(), 5);
+    assert_eq!(rows.len(), 6);
     assert_eq!(
         rows.iter()
             .filter(|r| r.capability.as_deref() == Some("indexed"))
@@ -408,6 +412,6 @@ fn builtin_market_rows_survive_a_real_file_db() {
         rows.iter()
             .filter(|r| r.capability.as_deref() == Some("guided"))
             .count(),
-        3
+        4
     );
 }

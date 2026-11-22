@@ -24,7 +24,7 @@ pub struct DiffReport {
 
 /// Diff a managed skill against its upstream baseline or a specific version tag.
 pub fn diff_skill(ctx: &Ctx, slug: &str, against: Option<&str>) -> Result<DiffReport> {
-    let dir = ctx.skill_path(slug);
+    let dir = ctx.content_path_of(slug);
     if !dir.is_dir() {
         return Err(ErrorCode::NotManaged
             .msg()
@@ -76,7 +76,7 @@ pub struct ConflictPayload {
 /// This never touches the working tree: it asks git which files would conflict, then reads both
 /// sides out of the object database.
 pub fn conflict_payload(ctx: &Ctx, slug: &str) -> Result<ConflictPayload> {
-    let dir = ctx.skill_path(slug);
+    let dir = ctx.content_path_of(slug);
     let repo = heron_vcs::SkillRepo::open(&dir);
     let meta = repo
         .read_metadata()?
@@ -141,7 +141,7 @@ pub fn conflict_payload(ctx: &Ctx, slug: &str) -> Result<ConflictPayload> {
 
 /// Write the user's resolutions, commit them, and retry the upgrade.
 pub fn resolve(ctx: &mut Ctx, slug: &str, resolved: &[(String, String)]) -> Result<UpgradeOutcome> {
-    let dir = ctx.skill_path(slug);
+    let dir = ctx.content_path_of(slug);
     let repo = heron_vcs::SkillRepo::open(&dir);
     if !repo.is_repo() {
         return Err(ErrorCode::NotManaged

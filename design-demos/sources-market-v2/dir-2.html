@@ -1,0 +1,422 @@
+<!doctype html><html lang="zh-CN" data-theme="default" data-color-mode="light"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Heron · 来源与市场 v2 · 方向 B 统一搜索流</title>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&family=EB+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+<style>
+/* ---------- Heron 真实 token（ui/src/style.css · default / light = 节气暖纸底 + 墨绿强调） ---------- */
+:root{
+  --h-bg:#f3efe4;--h-panel:#fbf7ee;--h-raised:#ebe4d4;--h-line:#e3dbcc;--h-line2:#d3c9b8;
+  --h-text:#2a2924;--h-dim:#5d574c;--h-faint:#7a7368;--h-ink:#fbf7ee;
+  --h-good:#5c7a2e;--h-warn:#8a6216;--h-bad:#a8452f;--h-accent:#2f5b48;--h-accent-weak:rgba(47,91,72,.1);
+  --h-good-ink:#4a6325;
+  --h-sans:"Manrope",-apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB","Microsoft YaHei",system-ui,sans-serif;
+  --h-mono:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+  --h-serif:"EB Garamond","Songti SC",Georgia,serif;
+  --h-lift:0 1px 4px rgba(42,41,36,.06),0 6px 18px -8px rgba(42,41,36,.18);
+  --h-shadow:0 12px 32px rgba(42,41,36,.12);
+  --h-radius:10px;--h-radius-sm:7px;
+  color-scheme:light;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0;height:100%}
+body{background:var(--h-bg);color:var(--h-text);font-family:var(--h-sans);font-size:14px;-webkit-font-smoothing:antialiased;overflow:hidden}
+h1,h2,h3,p,dl,dd{margin:0}
+button{font:inherit;color:inherit;background:none;border:0;padding:0;cursor:pointer;line-height:normal}
+button:disabled{opacity:.45;cursor:default}
+input,select{font:inherit;height:32px;padding:0 10px;border-radius:var(--h-radius-sm);border:1px solid var(--h-line2);background:var(--h-raised);color:var(--h-text);outline:none}
+input:focus{border-color:var(--h-text)}
+code,.h-mono{font-family:var(--h-mono);font-size:12.5px;color:var(--h-dim)}
+*{scrollbar-width:thin;scrollbar-color:var(--h-line2) transparent}
+::-webkit-scrollbar{width:10px;height:10px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background-color:var(--h-line2);border:3px solid transparent;border-radius:999px;background-clip:padding-box;min-height:36px}
+::-webkit-scrollbar-thumb:hover{background-color:var(--h-faint)}
+
+/* ---------- 外壳：左栏 + 顶栏（同 scan-overview-v2 骨架，换暖纸浅色 token） ---------- */
+.h-shell{display:grid;grid-template-columns:212px minmax(0,1fr);height:100vh;overflow:hidden}
+.h-rail{display:flex;flex-direction:column;min-height:0;background:var(--h-panel);border-right:1px solid var(--h-line);padding:0 10px 10px}
+.h-rail-head{display:flex;align-items:center;gap:9px;padding:15px 6px 12px}
+.h-seal{width:25px;height:25px;border-radius:5px;background:var(--h-text);color:var(--h-ink);display:grid;place-items:center;flex:none}
+.h-seal svg{width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
+.h-wordmark{display:flex;flex-direction:column;line-height:1.12}
+.h-wordmark b{font-family:var(--h-serif);font-size:16px;font-weight:600;letter-spacing:.01em}
+.h-wordmark small{font-size:12px;color:var(--h-dim);letter-spacing:.08em}
+.h-rail-search{display:flex;align-items:center;gap:8px;height:32px;padding:0 9px;margin:2px 0 10px;border:1px solid var(--h-line);border-radius:7px;color:var(--h-dim);font-size:12.5px;background:var(--h-raised)}
+.h-rail-search kbd{margin-left:auto;font-family:var(--h-mono);font-size:12px;color:var(--h-dim);border:1px solid var(--h-line2);border-radius:4px;padding:1px 4px}
+.h-rail-scroll{flex:1;min-height:0;overflow:auto;display:flex;flex-direction:column;gap:1px}
+.h-group{font-size:12.5px;font-weight:600;letter-spacing:.02em;color:var(--h-dim);padding:14px 8px 6px}
+.h-nav{display:flex;align-items:center;gap:9px;height:31px;padding:0 8px;border-radius:6px;font-size:12.5px;color:var(--h-dim);position:relative;text-align:left;width:100%}
+.h-nav svg{width:14px;height:14px;flex:none;stroke:currentColor;fill:none;stroke-width:1.5}
+.h-nav:hover{background:var(--h-raised);color:var(--h-text)}
+.h-nav.is-active{background:var(--h-raised);color:var(--h-text);font-weight:600}
+.h-nav.is-active::before{content:"";position:absolute;left:0;top:7px;bottom:7px;width:2px;border-radius:2px;background:var(--h-accent)}
+.h-count{margin-left:auto;font-family:var(--h-mono);font-size:12px;color:var(--h-dim);min-width:16px;text-align:right}
+.h-rail-foot{display:flex;flex-direction:column;gap:8px;padding-top:10px;border-top:1px solid var(--h-line)}
+.h-health{display:flex;gap:7px;flex-wrap:wrap;padding:0 4px;align-items:center}
+.h-dot{display:inline-flex;align-items:center;gap:5px;font-size:12px;color:var(--h-dim)}
+.h-dot::before{content:"";width:6px;height:6px;border-radius:50%;background:var(--h-faint)}
+.h-dot.good::before{background:var(--h-good)} .h-dot.warn::before{background:var(--h-warn)}
+.h-main{display:flex;flex-direction:column;min-width:0;min-height:0}
+.h-topbar{display:flex;align-items:center;gap:10px;height:48px;padding:0 24px;border-bottom:1px solid var(--h-line);flex:none;background:var(--h-bg);position:relative;z-index:5}
+.h-crumbs{display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--h-dim);white-space:nowrap}
+.h-crumbs b{color:var(--h-text);font-weight:600}
+.h-topbar .sp{flex:1}
+
+/* ---------- 基础控件（复用 .btn/.chip/.card/.table/.drawer/.toast 的形态） ---------- */
+.h-btn{display:inline-flex;align-items:center;gap:7px;height:30px;padding:0 11px;border-radius:var(--h-radius-sm);
+  border:1px solid var(--h-line2);font-size:12.5px;font-weight:500;white-space:nowrap;color:var(--h-text)}
+.h-btn svg{width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:1.6;flex:none}
+.h-btn:hover{background:var(--h-raised)}
+.h-btn.primary{background:var(--h-text);border-color:var(--h-text);color:var(--h-ink)}
+.h-btn.primary:hover{opacity:.88}
+.h-btn.ghost{border-color:transparent;color:var(--h-dim)}
+.h-btn.ghost:hover{background:var(--h-raised);color:var(--h-text)}
+.h-btn.sm{height:26px;padding:0 9px;font-size:12px}
+.h-btn.acc{background:var(--h-accent);border-color:var(--h-accent);color:var(--h-ink)}
+.h-btn.acc:hover{opacity:.9}
+.h-chip{display:inline-flex;align-items:center;gap:6px;height:22px;padding:0 8px;border-radius:999px;
+  font-size:12px;font-weight:500;white-space:nowrap;border:1px solid transparent}
+.h-chip::before{content:"";width:5px;height:5px;border-radius:50%;background:currentColor;flex:none}
+.h-chip.good{color:var(--h-good-ink);background:color-mix(in srgb,var(--h-good) 12%,transparent)}
+.h-chip.warn{color:var(--h-warn);background:color-mix(in srgb,var(--h-warn) 12%,transparent)}
+.h-chip.bad{color:var(--h-bad);background:color-mix(in srgb,var(--h-bad) 12%,transparent)}
+.h-chip.neutral{color:var(--h-dim);background:var(--h-raised);border-color:var(--h-line)}
+.h-chip.accent{color:var(--h-accent);background:var(--h-accent-weak)}
+.h-chip.plain::before{display:none}
+.h-card{background:var(--h-panel);border:1px solid var(--h-line);border-radius:var(--h-radius)}
+.h-card-h{display:flex;align-items:center;gap:8px;padding:12px 15px;border-bottom:1px solid var(--h-line)}
+.h-card-h h3{font-size:12.5px;font-weight:600;letter-spacing:.02em}
+.h-card-h .r{margin-left:auto;display:flex;align-items:center;gap:8px;color:var(--h-dim)}
+.h-card-b{padding:14px 15px}
+.h-sec{display:flex;align-items:center;gap:10px;margin:24px 0 12px}
+.h-sec h2{font-size:13px;font-weight:600;letter-spacing:.02em}
+.h-sec .line{flex:1;height:1px;background:var(--h-line)}
+.h-seg{display:inline-flex;border:1px solid var(--h-line2);border-radius:var(--h-radius-sm);overflow:hidden;background:var(--h-panel)}
+.h-seg button{height:30px;padding:0 14px;font-size:12.5px;font-weight:500;color:var(--h-dim);display:inline-flex;align-items:center;gap:6px}
+.h-seg button + button{border-left:1px solid var(--h-line)}
+.h-seg button.is-active{background:var(--h-text);color:var(--h-ink);font-weight:600}
+.h-seg button .n{font-family:var(--h-mono);font-size:12px;opacity:.8}
+.h-view{padding:22px 28px 60px;overflow:auto;flex:1;min-height:0;position:relative}
+.h-view-head{display:flex;align-items:flex-end;gap:14px;margin-bottom:16px;flex-wrap:wrap}
+.h-h1{font-size:22px;font-weight:700;letter-spacing:-.01em}
+.h-lead{margin-top:6px;color:var(--h-dim);font-size:14px;max-width:82ch}
+.h-actions{margin-left:auto;display:flex;gap:8px;flex-wrap:wrap}
+.h-muted{color:var(--h-dim)}
+.h-path{font-family:var(--h-mono);font-size:12.5px;color:var(--h-dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;direction:ltr}
+.h-num{font-family:var(--h-mono);font-variant-numeric:tabular-nums}
+
+/* ---------- 统一搜索框（本页主角：一个框查所有可搜索来源） ---------- */
+.h-unified{display:flex;gap:10px;align-items:stretch;margin:18px 0 0}
+.h-unified .box{flex:1;display:flex;align-items:center;gap:10px;height:44px;padding:0 14px;
+  background:var(--h-panel);border:1px solid var(--h-line2);border-radius:var(--h-radius);box-shadow:var(--h-lift)}
+.h-unified .box:focus-within{border-color:var(--h-text)}
+.h-unified .box svg{width:17px;height:17px;stroke:var(--h-dim);fill:none;stroke-width:1.7;flex:none}
+.h-unified .box input{flex:1;min-width:0;height:auto;border:0;background:none;padding:0;font-size:15px;color:var(--h-text)}
+.h-unified .box input::placeholder{color:var(--h-dim)}
+.h-unified .kbd{font-family:var(--h-mono);font-size:12px;color:var(--h-dim);border:1px solid var(--h-line);border-radius:4px;padding:2px 5px;flex:none}
+.h-unified .h-btn{height:44px;padding:0 16px;font-size:13px}
+/* 覆盖来源读数：一条 mono 仪表行，代替「先选市场」 */
+.h-coverage{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:10px 2px 0;
+  padding-bottom:12px;border-bottom:1px solid var(--h-line);font-family:var(--h-mono);font-size:12.5px;color:var(--h-dim)}
+.h-coverage b{color:var(--h-text);font-weight:500}
+.h-coverage .sep{color:color-mix(in srgb,var(--h-faint) 60%,transparent)}
+.h-coverage .live{color:var(--h-accent)}
+
+/* ---------- 分段控制条 ---------- */
+.h-bar{display:flex;align-items:center;gap:12px;margin:16px 0 14px;flex-wrap:wrap}
+.h-bar .tail{margin-left:auto;display:flex;align-items:center;gap:8px}
+/* ---------- 分组结果流：每个可搜索来源一段 ---------- */
+.h-sgroup{margin-bottom:14px;overflow:hidden}
+.h-sgroup-h{display:flex;align-items:center;gap:10px;padding:11px 15px;border-bottom:1px solid var(--h-line);background:var(--h-raised);flex-wrap:wrap}
+.h-srcbadge{display:inline-flex;align-items:center;gap:7px;height:26px;padding:0 10px;border-radius:999px;
+  background:var(--h-panel);border:1px solid var(--h-line2);font-family:var(--h-mono);font-size:12.5px;color:var(--h-text);white-space:nowrap}
+.h-srcbadge svg{width:13px;height:13px;stroke:var(--h-accent);fill:none;stroke-width:1.7;flex:none}
+.h-hitcount{font-family:var(--h-mono);font-size:12.5px;color:var(--h-dim);font-variant-numeric:tabular-nums}
+.h-hitcount b{color:var(--h-text);font-weight:500}
+.h-sgroup-h .r{margin-left:auto;display:flex;align-items:center;gap:8px}
+/* 结果行：三列呼吸 —— 名称块 / 指标块 / 动作块 */
+.h-res{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:8px 18px;align-items:center;
+  padding:13px 15px;border-bottom:1px solid var(--h-line)}
+.h-res:last-child{border-bottom:0}
+.h-res:hover{background:color-mix(in srgb,var(--h-raised) 55%,transparent)}
+.h-res .nm{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;min-width:0}
+.h-res .nm .k{font-family:var(--h-mono);font-size:14px;font-weight:600;color:var(--h-text)}
+.h-res .nm .own{font-family:var(--h-mono);font-size:12.5px;color:var(--h-dim)}
+.h-res .nm .ver{font-family:var(--h-mono);font-size:12.5px;color:var(--h-dim)}
+.h-res .sum{grid-column:1;font-size:13px;color:var(--h-dim);margin-top:4px;max-width:88ch;line-height:1.5}
+.h-res .stat{display:flex;align-items:center;gap:14px;font-family:var(--h-mono);font-size:12.5px;color:var(--h-dim);font-variant-numeric:tabular-nums;white-space:nowrap}
+.h-res .stat i{display:inline-flex;align-items:center;gap:5px;font-style:normal}
+.h-res .stat svg{width:13px;height:13px;stroke:currentColor;fill:none;stroke-width:1.6}
+.h-res .stat b{color:var(--h-text);font-weight:500}
+.h-res .acts{display:flex;align-items:center;gap:7px}
+.h-res .acts .h-btn{height:28px}
+.h-inst-note{font-size:12px;color:var(--h-dim);margin-top:5px;grid-column:1}
+/* 干跑预览：行内展开的落点计划（mono，hairline 上边） */
+.h-plan{grid-column:1 / -1;margin-top:8px;padding:11px 13px;border-radius:8px;background:var(--h-raised);
+  border:1px solid var(--h-line);font-family:var(--h-mono);font-size:12.5px;line-height:1.7;color:var(--h-dim);white-space:pre-wrap}
+.h-plan .to{color:var(--h-accent)}
+.h-plan .hl{color:var(--h-text)}
+
+/* ---------- 仅浏览器来源 ---------- */
+.h-browser{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.h-brow-card{padding:13px 15px;display:flex;flex-direction:column;gap:9px}
+.h-brow-card .th{display:flex;align-items:center;gap:9px}
+.h-brow-card .th b{font-family:var(--h-mono);font-size:14px;font-weight:600}
+.h-brow-card .th .h-chip{margin-left:auto}
+.h-brow-card .dp{font-size:13px;color:var(--h-dim);line-height:1.5}
+.h-brow-card .dl{font-family:var(--h-mono);font-size:12.5px;color:var(--h-dim);
+  background:var(--h-raised);border:1px solid var(--h-line);border-radius:6px;padding:6px 9px;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;direction:ltr}
+.h-brow-card .acts{display:flex;gap:7px;flex-wrap:wrap;align-items:center}
+.h-brow-card.is-off{opacity:.72}
+@media (max-width:1120px){ .h-browser{grid-template-columns:minmax(0,1fr)} }
+
+/* ---------- 收藏 ---------- */
+.h-fav-head{display:flex;align-items:center;gap:10px;margin:2px 0 14px;flex-wrap:wrap}
+.h-fav-head .h-mono{color:var(--h-dim)}
+.h-fav{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px 18px;align-items:center;
+  padding:14px 15px;border-bottom:1px solid var(--h-line)}
+.h-fav:last-child{border-bottom:0}
+.h-fav:hover{background:color-mix(in srgb,var(--h-raised) 55%,transparent)}
+.h-fav .fk{display:flex;align-items:baseline;gap:9px;flex-wrap:wrap}
+.h-fav .fk b{font-size:14px;font-weight:600}
+.h-fav .fu{margin-top:5px;display:flex;align-items:center;gap:8px}
+.h-fav .fu .h-path{max-width:52ch}
+.h-fav .fd{grid-column:1;font-size:13px;color:var(--h-dim);margin-top:6px;line-height:1.5;max-width:88ch}
+.h-fav .fm{grid-column:1;margin-top:7px;display:flex;align-items:center;gap:10px;font-family:var(--h-mono);font-size:12.5px;color:var(--h-dim)}
+.h-fav .acts{display:flex;align-items:center;gap:7px}
+.h-iconbtn{width:28px;height:28px;border-radius:6px;display:grid;place-items:center;color:var(--h-dim);flex:none}
+.h-iconbtn svg{width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:1.7}
+.h-iconbtn:hover{background:var(--h-raised);color:var(--h-text)}
+
+/* ---------- 粘贴安装 ---------- */
+.h-paste{display:flex;gap:9px;align-items:center;flex-wrap:wrap}
+.h-paste input{flex:1;min-width:280px;height:34px}
+
+/* ---------- 抽屉 / 对话框 / 浮层 ---------- */
+.h-scrim{position:fixed;inset:0;background:rgba(243,239,228,.66);backdrop-filter:blur(2px);z-index:30}
+.h-drawer{position:fixed;top:0;right:0;bottom:0;width:min(620px,92vw);z-index:31;background:var(--h-panel);
+  border-left:1px solid var(--h-line2);box-shadow:var(--h-shadow);display:flex;flex-direction:column}
+.h-drawer-h{display:flex;align-items:flex-start;gap:12px;padding:18px 20px 16px;border-bottom:1px solid var(--h-line);flex:none}
+.h-drawer-h h3{font-size:15px;font-weight:600}
+.h-drawer-h p{margin-top:6px;color:var(--h-dim);font-size:12.5px;line-height:1.55}
+.h-drawer-h .h-iconbtn{margin-left:auto}
+.h-drawer-b{flex:0 1 auto;min-height:0;overflow:auto;padding:16px 20px;display:flex;flex-direction:column;gap:16px}
+.h-drawer-f{display:flex;align-items:center;gap:8px;padding:14px 20px;border-top:1px solid var(--h-line);flex:none}
+.h-drawer-f .r{margin-left:auto;display:flex;gap:8px}
+.h-field{display:flex;flex-direction:column;gap:6px}
+.h-field label{font-size:12.5px;font-weight:600;color:var(--h-dim);letter-spacing:.01em}
+.h-field .hint{font-size:12px;color:var(--h-dim)}
+.h-field input{height:34px;font-size:14px}
+.h-field textarea{font:inherit;font-size:14px;height:auto;padding:9px 10px;border-radius:var(--h-radius-sm);
+  border:1px solid var(--h-line2);background:var(--h-raised);color:var(--h-text);resize:vertical;min-height:76px;outline:none}
+.h-field textarea:focus{border-color:var(--h-text)}
+.h-field.has-err input,.h-field.has-err textarea{border-color:var(--h-bad)}
+.h-err{font-size:12px;color:var(--h-bad)}
+.h-dialog{position:fixed;inset:0;margin:auto;width:min(560px,calc(100vw - 48px));height:max-content;max-height:calc(100vh - 48px);
+  z-index:31;background:var(--h-panel);border:1px solid var(--h-line2);border-radius:14px;box-shadow:var(--h-shadow);
+  display:flex;flex-direction:column;overflow:hidden}
+.h-dialog.wide{width:min(900px,calc(100vw - 48px))}
+.h-dialog-h{padding:18px 20px 14px;border-bottom:1px solid var(--h-line)}
+.h-dialog-h h3{font-size:15px;font-weight:600}
+.h-dialog-h p{margin-top:6px;color:var(--h-dim);font-size:12.5px;line-height:1.55}
+.h-dialog-b{padding:16px 20px;overflow:auto;display:flex;flex-direction:column;gap:12px}
+.h-dialog-f{display:flex;align-items:center;gap:8px;padding:14px 20px;border-top:1px solid var(--h-line)}
+.h-dialog-f .r{margin-left:auto;display:flex;gap:8px}
+.h-kv{display:grid;grid-template-columns:96px minmax(0,1fr);gap:8px 12px;font-size:13px}
+.h-kv dt{color:var(--h-dim)} .h-kv dd{font-family:var(--h-mono);font-size:12.5px;overflow-wrap:anywhere}
+
+/* ---------- toast ---------- */
+.h-toasts{position:fixed;right:22px;bottom:22px;z-index:50;display:flex;flex-direction:column;align-items:flex-end;gap:8px;pointer-events:none}
+.h-toast{pointer-events:auto;display:flex;align-items:flex-start;gap:10px;max-width:min(440px,calc(100vw - 44px));
+  padding:10px 8px 10px 11px;border-radius:10px;font-size:12.5px;line-height:1.5;
+  background:var(--h-panel);border:1px solid var(--h-line2);border-left:3px solid var(--h-good);box-shadow:var(--h-shadow)}
+.h-toast.warn{border-left-color:var(--h-warn)} .h-toast.error{border-left-color:var(--h-bad)}
+.h-toast .ti{width:20px;height:20px;border-radius:6px;flex:none;display:grid;place-items:center;
+  background:color-mix(in srgb,var(--h-good) 14%,transparent);color:var(--h-good-ink)}
+.h-toast.warn .ti{background:color-mix(in srgb,var(--h-warn) 14%,transparent);color:var(--h-warn)}
+.h-toast.error .ti{background:color-mix(in srgb,var(--h-bad) 14%,transparent);color:var(--h-bad)}
+.h-toast .ti svg{width:13px;height:13px;stroke:currentColor;fill:none;stroke-width:2}
+.h-toast .tx{flex:1;min-width:0;overflow-wrap:anywhere;padding-top:1px}
+.h-toast .tact{flex:none;align-self:center;height:24px;padding:0 9px;border:1px solid var(--h-line2);border-radius:6px;
+  font-size:12px;font-weight:500;color:var(--h-text);white-space:nowrap}
+.h-toast .tact:hover{background:var(--h-raised)}
+.h-toast .x{width:22px;height:22px;border-radius:6px;flex:none;display:grid;place-items:center;color:var(--h-faint)}
+.h-toast .x:hover{background:var(--h-raised);color:var(--h-text)}
+.h-toast .x svg{width:12px;height:12px;stroke:currentColor;fill:none;stroke-width:1.8}
+
+.h-empty{padding:34px 16px;text-align:center;color:var(--h-dim);font-size:13.5px}
+.h-in{animation:h-flow .28s cubic-bezier(.2,.7,.2,1) both;animation-delay:var(--sd,0ms)}
+@keyframes h-flow{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+@media (prefers-reduced-motion: reduce){ .h-in{animation:none} }
+</style>
+</head>
+<body>
+<div id="app">
+<div class="h-shell">
+  <!-- ============ 左栏 ============ -->
+  <aside class="h-rail">
+    <div class="h-rail-head">
+      <span class="h-seal"><svg viewBox="0 0 24 24"><path d="M4 19c1.5-7.5 5-11.5 9.6-13.2"/><path d="M9.4 21c.4-4.7 2.3-8.4 5.6-10.6"/><path d="M14 21.6c.2-2.6 1.2-4.8 3-6.2"/><circle cx="18.4" cy="5.4" r="1.7"/></svg></span>
+      <span class="h-wordmark"><b>苍鹭 Heron</b><small>SKILL CONTROL</small></span>
+    </div>
+    <div class="h-rail-search" @click="say('全局模糊搜索（⌘K）在实现里覆盖本机 Skill 与收藏')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="11" cy="11" r="6"/><path d="M15.5 15.5 20 20"/></svg>搜索 Skill<kbd>⌘K</kbd></div>
+    <nav class="h-rail-scroll">
+      <div class="h-group">工作台</div>
+      <button class="h-nav" @click="other('概览')"><svg viewBox="0 0 24 24"><path d="M3 12h4l2.5-6 4 12 2.5-6H21"/></svg>概览</button>
+      <div class="h-group">收集·分发</div>
+      <button class="h-nav" @click="other('我的 Skill')"><svg viewBox="0 0 24 24"><rect x="3.5" y="4" width="4" height="16" rx="1"/><rect x="9.5" y="4" width="4" height="16" rx="1"/><path d="M15.5 5.2l3.6 14.6"/></svg>我的 Skill<span class="h-count">17</span></button>
+      <button class="h-nav" @click="other('发现')"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></svg>发现<span class="h-count">6</span></button>
+      <button class="h-nav is-active"><svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h10M4 17h13"/><circle cx="18.5" cy="16.5" r="2.5"/></svg>来源与市场</button>
+      <div class="h-group">维护</div>
+      <button class="h-nav" @click="other('更新')"><svg viewBox="0 0 24 24"><path d="M12 20V4"/><path d="M6.5 9.5 12 4l5.5 5.5"/></svg>更新<span class="h-count">3</span></button>
+      <button class="h-nav" @click="other('体检')"><svg viewBox="0 0 24 24"><path d="M3.5 12h4l1.5-4 3 8 2-4h6.5"/></svg>体检<span class="h-count">1</span></button>
+      <button class="h-nav" @click="other('项目')"><svg viewBox="0 0 24 24"><path d="M3.5 7.5A1.5 1.5 0 0 1 5 6h4l2 2h8a1.5 1.5 0 0 1 1.5 1.5V18A1.5 1.5 0 0 1 19 19.5H5A1.5 1.5 0 0 1 3.5 18z"/></svg>项目</button>
+      <button class="h-nav" @click="other('设置')"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 3.5v2M12 18.5v2M3.5 12h2M18.5 12h2M6 6l1.4 1.4M16.6 16.6 18 18M6 18l1.4-1.4M16.6 7.4 18 6"/></svg>设置</button>
+    </nav>
+    <div class="h-rail-foot">
+      <div class="h-health"><span class="h-dot good">Git 2.50.1</span><span class="h-muted" style="font-size:12px;margin-left:auto">本应用 v0.1.0</span></div>
+      <div class="h-health"><span class="h-dot warn">{{ favCount }} 条收藏</span><span class="h-muted" style="font-size:12px;margin-left:auto">暖纸 · 浅色</span></div>
+    </div>
+  </aside>
+
+  <!-- ============ 右区 ============ -->
+  <div class="h-main">
+    <header class="h-topbar">
+      <div class="h-crumbs"><span>苍鹭</span><span>/</span><span>收集·分发</span><span>/</span><b>来源与市场</b></div>
+      <span class="sp"></span>
+      <button class="h-btn" @click="say('扫描已在后台完成：52 处发现','ok')"><svg viewBox="0 0 24 24"><path d="M19.5 12a7.5 7.5 0 1 1-2.2-5.3"/><path d="M19.5 4v4h-4"/></svg>扫描本机</button>
+      <button class="h-btn primary" @click="say('校验完成：40 通过 · 1 坏链','warn')"><svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7"/></svg>校验</button>
+    </header>
+
+    <div class="h-view">
+      <div class="h-view-head">
+        <div>
+          <h1 class="h-h1">来源与市场</h1>
+          <p class="h-lead">一次搜索覆盖所有可搜索来源，结果按来源分组；能装的行直接装，只能逛的来源给带关键词的深链。</p>
+        </div>
+        <div class="h-actions">
+          <button class="h-btn" @click="dlg='scopes'"><svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h10M4 17h13"/></svg>搜索范围<span class="h-mono" style="color:inherit;opacity:.75">4 / 6</span></button>
+          <button class="h-btn" @click="tab='fav'; drawer='fav'"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>添加收藏</button>
+        </div>
+      </div>
+
+      <!-- 统一搜索框：没有「先选市场」这一步 -->
+      <div class="h-unified">
+        <div class="box">
+          <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="6"/><path d="M15.5 15.5 20 20"/></svg>
+          <input ref="q" v-model="query" @keyup.enter="runSearch" placeholder="搜索 skills，一次查遍 skills.sh · ClawHub · SkillHub 中文 · ModelScope Skills" aria-label="搜索所有可搜索来源">
+          <button v-if="query" class="h-iconbtn" @click="query=''; focusQ()" title="清空" style="width:22px;height:22px"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+          <kbd class="kbd">⏎</kbd>
+        </div>
+        <button class="h-btn primary" @click="runSearch">搜索全部来源</button>
+      </div>
+      <div class="h-coverage">
+        <span>查询 <b>{{ query || '—' }}</b></span><span class="sep">·</span>
+        <span>覆盖 <b>{{ searchables.length }}</b> 个可搜索来源</span><span class="sep">·</span>
+        <span class="live">{{ searchables.map(s=>s.name).join(' / ') }}</span><span class="sep">·</span>
+        <span>命中 <b>{{ totalHits }}</b> 条</span><span class="sep">·</span>
+        <span>用时 {{ elapsed }} ms</span>
+      </div>
+
+      <div class="h-bar">
+        <div class="h-seg">
+          <button :class="{'is-active':tab==='all'}" @click="tab='all'">全部来源<span class="n">{{ totalHits }}</span></button>
+          <button :class="{'is-active':tab==='fav'}" @click="tab='fav'">我的收藏<span class="n">{{ favCount }}</span></button>
+        </div>
+        <div class="tail">
+          <span class="h-mono">仅显示前 {{ perCap }} 条 / 来源</span>
+          <button class="h-btn sm" @click="say('已按来源刷新（dry-run 不落盘）')"><svg viewBox="0 0 24 24"><path d="M19.5 12a7.5 7.5 0 1 1-2.2-5.3"/><path d="M19.5 4v4h-4"/></svg>重新搜索</button>
+        </div>
+      </div>
+      <!-- ======================= TAB · 全部来源 ======================= -->
+      <template v-if="tab==='all'">
+        <section v-for="(s,i) in searchables" :key="s.id" class="h-card h-sgroup h-in" :style="{'--sd':(i*40)+'ms'}">
+          <header class="h-sgroup-h">
+            <span class="h-srcbadge"><svg viewBox="0 0 24 24"><path d="M4 12h4l2 5 3-11 2.5 6H20"/></svg>{{ s.name }}</span>
+            <span class="h-chip good">可搜索 · 可安装</span>
+            <span v-if="s.note" class="h-chip accent plain">{{ s.note }}</span>
+            <span class="h-hitcount">命中 <b>{{ rows(s).length }}</b> / {{ s.total }} 条</span>
+            <span class="r">
+              <span class="h-mono">{{ s.host }}</span>
+              <button class="h-btn sm ghost" @click="open(s.name + ' 首页', s.base)"><svg viewBox="0 0 24 24"><path d="M14 4h6v6"/><path d="M20 4 11 13"/><path d="M18 14v5.5H4.5V6H10"/></svg>打开来源</button>
+            </span>
+          </header>
+
+          <div v-if="rows(s).length">
+            <div v-for="r in rows(s)" :key="r.key" class="h-res">
+              <div class="nm">
+                <span class="k">{{ r.key }}</span>
+                <span class="own">{{ r.owner }}</span>
+                <span class="ver">v{{ r.ver }}</span>
+                <span v-if="r.ver2" class="h-chip good plain" style="height:20px">{{ r.ver2 }}</span>
+              </div>
+              <div class="stat">
+                <i title="下载量"><svg viewBox="0 0 24 24"><path d="M12 4v11"/><path d="M7.5 10.5 12 15l4.5-4.5"/><path d="M5 19h14"/></svg>{{ r.dl }}</i>
+                <i title="Stars"><svg viewBox="0 0 24 24"><path d="M12 4.5l2.3 4.7 5.2.8-3.8 3.7.9 5.2-4.6-2.4-4.6 2.4.9-5.2L5.5 10l5.2-.8z"/></svg>{{ r.stars }}</i>
+              </div>
+              <div class="acts">
+                <button class="h-btn sm" @click="plan = plan === key(s,r) ? '' : key(s,r)">{{ plan === key(s,r) ? '收起预览' : '预览' }}</button>
+                <button v-if="r.installable" class="h-btn sm primary" @click="install(s, r)">
+                  <svg viewBox="0 0 24 24"><path d="M12 4v11"/><path d="M7.5 10.5 12 15l4.5-4.5"/><path d="M5 19h14"/></svg>{{ r.ver2 ? '重新安装' : '安装' }}
+                </button>
+                <button v-else class="h-btn sm" disabled>安装</button>
+              </div>
+              <div class="sum">{{ r.sum }}</div>
+              <div v-if="!r.installable" class="h-inst-note">{{ r.why }} — 可在下方「粘贴地址安装」用压缩包地址装，或
+                <button class="h-btn sm ghost" style="height:20px;padding:0 6px" @click="open(r.key + ' 详情页', r.url)">打开详情页</button>
+              </div>
+              <div v-if="plan === key(s,r)" class="h-plan">计划（dry-run · 未写入任何文件）
+仓库   <span class="hl">{{ r.repo }}</span>
+子路径 <span class="hl">{{ r.sub }}</span>
+→ 存储 <span class="to">~/.heron/store/{{ r.key }}</span>   新建副本 {{ r.size }}
+→ 链接 ~/.claude/skills/{{ r.key }} → store/{{ r.key }}
+→ 链接 ~/.trae/skills/{{ r.key }}   → store/{{ r.key }}
+完成 3 处 · 跳过 0 处 · 0 错误</div>
+            </div>
+          </div>
+          <div v-else class="h-empty">该来源没有匹配 «{{ query }}» 的结果。</div>
+        </section>
+
+        <!-- 仅浏览器来源：不参与聚合搜索，给带关键词深链 -->
+        <div class="h-sec">
+          <h2>仅浏览器来源</h2><span class="line"></span>
+          <span class="h-mono">{{ browserSources.length }} 个 · 不进入上面的搜索</span>
+        </div>
+        <div class="h-browser">
+          <div v-for="s in browserSources" :key="s.id" class="h-card h-brow-card" :class="{'is-off':!s.on}">
+            <div class="th">
+              <span class="h-srcbadge"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M4 12h16"/><path d="M12 4c2.4 2.2 2.4 13.8 0 16"/><path d="M12 4c-2.4 2.2-2.4 13.8 0 16"/></svg>{{ s.name }}</span>
+              <span class="h-chip" :class="s.on ? 'warn' : 'neutral'">{{ s.on ? '无搜索索引 · 不可安装' : '默认关闭' }}</span>
+            </div>
+            <div class="dp">{{ s.brief }}</div>
+            <div class="dl">深链 {{ deepLink(s) }}</div>
+            <div class="acts">
+              <button class="h-btn sm primary" :disabled="!s.on" @click="open(s.name + ' 搜索结果', deepLink(s))">
+                <svg viewBox="0 0 24 24"><path d="M14 4h6v6"/><path d="M20 4 11 13"/><path d="M18 14v5.5H4.5V6H10"/></svg>打开带 «{{ query || '关键词' }}» 的搜索
+              </button>
+              <button class="h-btn sm" :disabled="!s.on" @click="say('已复制深链：' + deepLink(s))">复制深链</button>
+              <button class="h-btn sm ghost" @click="s.on=!s.on; say(s.on ? ('已启用 ' + s.name + '，现在可在搜索范围里勾选') : ('已停用 ' + s.name), s.on?'ok':'warn')">{{ s.on ? '停用' : '启用' }}</button>
+            </div>
+            <div class="h-inst-note" v-if="!s.on">启用后仍属「仅浏览器」：只补深链，不会出现在聚合结果里。</div>
+          </div>
+        </div>
+
+        <!-- 粘贴地址安装（保留） -->
+        <div class="h-sec"><h2>粘贴地址安装</h2><span class="line"></span><span class="h-mono">github / gitee · 仓库或子路径</span></div>
+        <div class="h-paste">
+          <input v-model="paste" aria-label="粘贴仓库地址" placeholder="https://github.com/anthropics/skills/tree/main/skills/pdf">
+          <button class="h-btn" @click="say('预览：' + (paste || '未填地址') + ' → ~/.heron/store/pdf（dry-run）')">预览</button>
+          <button class="h-btn primary" @click="installUrl">安装</button>
+          <button class="h-btn ghost" @click="drawer='fav'">存为收藏</button>
+        </div>
+      </template>
+<!--FAVTAB-->
+    </div>
+  </div>
+</div>
+<!--OVER-->
+</div>
+</body>
+</html>

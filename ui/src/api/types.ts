@@ -73,6 +73,9 @@ export interface DetectedMeta {
   description: string | null;
 }
 
+/** What the app will do with the content, per entry. */
+export type AdoptPlacement = "replace" | "liveBind" | "keepOriginal";
+
 /** One row of the dry-run adopt preview (`adopt_paths` with dryRun). */
 export interface AdoptPlan {
   detail: DetectedRow;
@@ -81,6 +84,16 @@ export interface AdoptPlan {
   issues: string[];
   /** Set when identical content is already in the store: no second copy is made. */
   duplicate_of: string | null;
+  /** What is under this path now. `foreignLink` means the user already chose where it lives. */
+  entry: "realDir" | "heronLink" | "missing" | { foreignLink: { target: string } };
+  suggested: AdoptPlacement;
+  /** The upstream an installer's own lockfile named, so provenance is not lost on adopt. */
+  upstream: {
+    url: string | null;
+    subpath: string | null;
+    via: string;
+    installerHash: string | null;
+  } | null;
 }
 
 export interface SkillRow {
@@ -156,7 +169,19 @@ export interface MarketInfo {
   name: string;
   capability: "indexed" | "guided";
   enabled_by_default: boolean;
+  /** The user's persisted on/off choice, seeded from `enabled_by_default`. */
+  enabled: boolean;
   base_url: string;
+}
+
+/** A user-favourited open-source skill (「来源与市场 → 我的收藏」). */
+export interface FavoriteRow {
+  id: number;
+  name: string;
+  url: string;
+  description: string;
+  market: string | null;
+  created_at: string;
 }
 
 export interface InstallPreview {

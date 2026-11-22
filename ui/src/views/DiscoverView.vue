@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// Discover is where adoption is decided. Selection, the keep-original choice and the dry-run
+// Discover is where adoption is decided. Selection, where the content will live, and the dry-run
 // preview live together so the user sees exactly what will move before anything moves.
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
@@ -13,7 +13,17 @@ import { useAppStore } from "../stores/app";
 const store = useAppStore();
 const { t, te } = useI18n();
 const selected = ref<string[]>([]);
-const keepOriginal = ref(true);
+/**
+ * Where the content will live. `auto` follows each entry's plan, which is what protects a link the
+ * user made elsewhere: copying it into the library would leave their own link pointing at nothing.
+ */
+const placement = ref<"auto" | "replace" | "liveBind" | "keepOriginal">("auto");
+const keepOriginal = computed(() => placement.value === "keepOriginal");
+const placementKeys = {
+  replace: "discover.placementReplace",
+  liveBind: "discover.placementLiveBind",
+  keepOriginal: "discover.placementKeepOriginal",
+} as const;
 const dialog = ref(false);
 const preview = ref<AdoptPlan[] | null>(null);
 const busy = ref(false);
@@ -215,12 +225,35 @@ function toggleAll() {
     : [...new Set([...selected.value, ...shown])];
 }
 
+/** The placement this entry will actually get: the user's choice, or the plan's suggestion. */
+function howOf(item: AdoptPlan): "replace" | "liveBind" | "keepOriginal" {
+  return placement.value === "auto" ? item.suggested : placement.value;
+}
+
+function howLabel(item: AdoptPlan): string {
+  return t(placementKeys[howOf(item)]);
+}
+
+/** The directory a foreign link points at — what a live bind keeps referencing. */
+function foreignTarget(item: AdoptPlan): string | null {
+  const entry = item.entry as unknown;
+  if (entry && typeof entry === "object" && "foreignLink" in entry) {
+    return (entry as { foreignLink: { target: string } }).foreignLink.target;
+  }
+  return null;
+}
+
+function destOf(item: AdoptPlan): string {
+  if (howOf(item) === "liveBind") return foreignTarget(item) ?? item.detail.path;
+  return t("discover.storeDest", { slug: item.slug ?? "" });
+}
+
 async function openPreview() {
   if (!selected.value.length) return;
   busy.value = true;
   try {
     const { api } = await import("../api");
-    preview.value = await api.adopt<AdoptPlan[]>(selected.value, true, keepOriginal.value);
+    preview.value = await api.adopt<AdoptPlan[]>(selected.value, true, keepOriginal.value, placement.value);
     dialog.value = true;
   } catch (e) {
     store.fail(e);
@@ -232,7 +265,7 @@ async function openPreview() {
 async function adopt() {
   dialog.value = false;
   const paths = [...selected.value];
-  const result = await store.adopt(paths, keepOriginal.value);
+  const result = await store.adopt(paths, placement.value);
   // "It did nothing" is usually one of these: every path failed (e.g. no permission on the
   // original) or the rows were gone before the command ran. Say which, don't fail silently.
   if (result.errors.length) {
@@ -251,10 +284,15 @@ async function adopt() {
   <section>
     <PageHeader :title="t('discover.title')" :lead="t('discover.subtitle')">
       <template #actions>
-        <span class="switch-label">
-          <span class="switch" :class="{ on: keepOriginal }" role="switch" :aria-checked="keepOriginal" @click="keepOriginal = !keepOriginal" />
-          {{ t("discover.keepOriginal") }}
-        </span>
+        <label class="placement-select">
+          {{ t("discover.placement") }}
+          <select v-model="placement">
+            <option value="auto">{{ t("discover.placementAuto") }}</option>
+            <option value="replace">{{ t("discover.placementReplace") }}</option>
+            <option value="liveBind">{{ t("discover.placementLiveBind") }}</option>
+            <option value="keepOriginal">{{ t("discover.placementKeepOriginal") }}</option>
+          </select>
+        </label>
         <span class="actions-divider" aria-hidden="true" />
         <!-- Only this walk's additions, and only until you have acknowledged them: the rows stay
              where they are either way, since they are already in the list. -->
@@ -424,12 +462,13 @@ async function adopt() {
         <div v-if="planned.length" class="pv-group">
           <div class="pv-label">
             {{ t("discover.willMove") }}
-            <span class="muted">{{ t("discover.keepOriginalNote", { on: keepOriginal ? t("common.yes") : t("common.no") }) }}</span>
+            <span class="muted">{{ t("discover.placementHint") }}</span>
           </div>
           <ul class="pv-list">
             <li v-for="item in planned" :key="item.detail.path">
               <div class="pv-title">
                 <span class="pv-slug">{{ item.slug }}</span>
+                <span class="chip neutral plain">{{ howLabel(item) }}</span>
                 <span v-if="item.detail.client_id" class="chip neutral plain">{{ clientLabel(item.detail.client_id) }}</span>
                 <span v-if="item.duplicate_of" class="chip neutral plain">{{ t("discover.sameContent", { slug: item.duplicate_of }) }}</span>
                 <span v-if="item.issues.length" class="chip warn">{{ t("discover.needsAttention") }}</span>
@@ -437,8 +476,18 @@ async function adopt() {
               <div class="pv-paths">
                 <span class="path" :title="item.detail.path">{{ item.detail.path }}</span>
                 <span class="pv-arrow" aria-hidden="true">→</span>
-                <span class="pv-dest" :title="t('discover.storeDest', { slug: item.slug })">{{ t("discover.storeDest", { slug: item.slug }) }}</span>
+                <span class="pv-dest" :title="destOf(item)">{{ destOf(item) }}</span>
               </div>
+              <!-- An external link was the user's own decision; say what each choice does to it. -->
+              <p v-if="foreignTarget(item) && howOf(item) === 'liveBind'" class="pv-note">
+                {{ t("discover.liveBindNote", { target: foreignTarget(item) as string }) }}
+              </p>
+              <p v-else-if="foreignTarget(item)" class="pv-note warn">
+                {{ t("discover.leaveBehindNote", { target: foreignTarget(item) as string }) }}
+              </p>
+              <p v-if="item.upstream?.url" class="pv-note">
+                {{ t("discover.upstreamNote", { url: item.upstream.url, via: item.upstream.via }) }}
+              </p>
             </li>
           </ul>
         </div>
@@ -472,6 +521,11 @@ async function adopt() {
 <style scoped>
 .switch-label { display: inline-flex; align-items: center; gap: 8px; font-size: 12px; color: var(--dim); cursor: pointer; user-select: none; }
 .switch { position: relative; display: inline-block; width: 30px; height: 17px; border-radius: 999px; background: var(--line-strong); cursor: pointer; transition: background 0.15s; }
+/* Where adopted content will live; `auto` defers to each entry's own plan. */
+.placement-select { display: inline-flex; align-items: center; gap: 8px; font-size: 12px; color: var(--dim); }
+.placement-select select { font: inherit; color: var(--ink); background: var(--panel); border: 1px solid var(--line-strong); border-radius: 6px; padding: 3px 6px; }
+.pv-note { margin: 4px 0 0; font-size: 11px; color: var(--dim); word-break: break-all; }
+.pv-note.warn { color: var(--warn); }
 .switch::after { content: ""; position: absolute; top: 2px; left: 2px; width: 13px; height: 13px; border-radius: 50%; background: var(--panel); transition: transform 0.15s; }
 .switch.on { background: var(--text); }
 .switch.on::after { transform: translateX(13px); background: var(--bg); }

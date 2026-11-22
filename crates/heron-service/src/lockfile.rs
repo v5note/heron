@@ -92,7 +92,7 @@ pub fn export(ctx: &Ctx) -> Result<LockFile> {
     }
 
     for row in heron_store::repos::skill::list(ctx.db.conn(), false)? {
-        let dir = ctx.skill_path(&row.slug);
+        let dir = ctx.content_path(&row);
         if !dir.is_dir() {
             continue;
         }
@@ -163,7 +163,7 @@ pub fn read(path: &Path) -> Result<LockFile> {
 pub fn diff(ctx: &Ctx, lock: &LockFile) -> Result<Vec<Drift>> {
     let mut drift = Vec::new();
     for (slug, entry) in &lock.skills {
-        let dir = ctx.skill_path(slug);
+        let dir = ctx.content_path_of(slug);
         if !dir.is_dir() {
             drift.push(Drift {
                 slug: slug.clone(),
@@ -203,7 +203,7 @@ pub fn apply(ctx: &mut Ctx, lock: &LockFile) -> Result<ImportReport> {
     };
 
     for (slug, entry) in &lock.skills {
-        let dir = ctx.skill_path(slug);
+        let dir = ctx.content_path_of(slug);
         if dir.is_dir() {
             match entry.content_hash.as_deref() {
                 Some(expected) => {

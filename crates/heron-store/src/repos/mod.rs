@@ -1,8 +1,10 @@
 //! Repositories. Each module is a thin, testable layer over SQL — no business rules.
 
+pub mod binding;
 pub mod client;
 pub mod detected;
 pub mod event;
+pub mod favorite;
 pub mod projection;
 pub mod skill;
 pub mod source;

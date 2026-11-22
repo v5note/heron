@@ -435,6 +435,7 @@ fn adopt_paths(
     paths: Vec<String>,
     dry_run: bool,
     keep_original: bool,
+    placement: Option<String>,
 ) -> Result<serde_json::Value, Msg> {
     let mut ctx = state.ctx.lock().unwrap();
     let rows =
@@ -449,10 +450,12 @@ fn adopt_paths(
         return serde_json::to_value(&plans)
             .map_err(|e| Msg::new("E_INTERNAL").with("detail", e.to_string()));
     }
-    let placement = if keep_original {
-        adopt::AdoptPlacement::KeepOriginal
-    } else {
-        adopt::AdoptPlacement::Replace
+    let placement = match placement.as_deref() {
+        Some(value) => Some(adopt::AdoptPlacement::parse(value).ok_or_else(|| {
+            Msg::new("E_INTERNAL").with("detail", format!("unknown placement {value}"))
+        })?),
+        None if keep_original => Some(adopt::AdoptPlacement::KeepOriginal),
+        None => None,
     };
     let mut report = adopt::AdoptReport {
         adopted: vec![],
@@ -460,9 +463,12 @@ fn adopt_paths(
         errors: vec![],
     };
     for plan in &plans {
+        // Without an explicit choice each entry goes the way its plan suggested: adopting a link the
+        // user made elsewhere must not silently re-point it.
+        let how = placement.unwrap_or(plan.suggested);
         // One failing path must not swallow the rest of the selection. Swallowing the error only
         // ever showed up as "nothing happened": an empty toast and an unchanged list.
-        match adopt::execute(&mut ctx, plan, placement) {
+        match adopt::execute(&mut ctx, plan, how) {
             Ok(outcome) => {
                 report.adopted.extend(outcome.adopted);
                 report.skipped.extend(outcome.skipped);
@@ -584,16 +590,69 @@ fn doctor_run(state: State<'_, AppState>) -> Result<doctor::DoctorReport, Msg> {
     doctor::run(&ctx).map_err(err)
 }
 
+/// A `source` row for a built-in market, used both to seed the table and to persist a toggle.
+/// The market catalogue in `heron-source` stays the source of truth; the row only carries the
+/// user's on/off choice (and the capability for display parity).
+fn market_row(id: &str, enabled: bool) -> Option<heron_store::models::SourceRow> {
+    let market = heron_source::MARKETS.iter().find(|m| m.id == id)?;
+    Some(heron_store::models::SourceRow {
+        id: market.id.to_owned(),
+        name: market.name.to_owned(),
+        kind: "market".to_owned(),
+        adapter: Some(market.id.to_owned()),
+        url: Some(market.base_url.to_owned()),
+        ref_name: None,
+        subpath: None,
+        path: None,
+        priority: 0,
+        trusted: true,
+        enabled,
+        capability: Some(match market.capability {
+            heron_source::Capability::Indexed => "indexed",
+            heron_source::Capability::Guided => "guided",
+        }
+        .to_owned()),
+        last_synced_at: None,
+        last_commit: None,
+        last_probe_ok: None,
+    })
+}
+
+/// Seed the `source` table from the built-in markets on first run, so a toggle has a row to update.
+/// Existing rows keep the user's persisted choice (upsert runs only when the id is absent).
+fn bootstrap_markets(ctx: &mut heron_service::Ctx) {
+    for market in heron_source::MARKETS {
+        let exists = heron_store::repos::source::get(ctx.db.conn(), market.id)
+            .ok()
+            .flatten()
+            .is_some();
+        if exists {
+            continue;
+        }
+        if let Some(row) = market_row(market.id, market.enabled_by_default) {
+            let _ = ctx.db.write(|tx| heron_store::repos::source::upsert(tx, &row));
+        }
+    }
+}
+
 #[tauri::command]
-fn markets_list() -> Vec<serde_json::Value> {
+fn markets_list(state: State<'_, AppState>) -> Vec<serde_json::Value> {
+    let ctx = state.ctx.lock().unwrap();
     heron_source::MARKETS
         .iter()
         .map(|m| {
+            // The persisted toggle wins; fall back to the built-in default before first seed.
+            let enabled = heron_store::repos::source::get(ctx.db.conn(), m.id)
+                .ok()
+                .flatten()
+                .map(|row| row.enabled)
+                .unwrap_or(m.enabled_by_default);
             serde_json::json!({
                 "id": m.id,
                 "name": m.name,
                 "capability": m.capability,
                 "enabled_by_default": m.enabled_by_default,
+                "enabled": enabled,
                 "base_url": m.base_url,
             })
         })
@@ -601,43 +660,124 @@ fn markets_list() -> Vec<serde_json::Value> {
 }
 
 #[tauri::command]
-fn market_search(
+fn market_set_enabled(
+    state: State<'_, AppState>,
+    market: String,
+    enabled: bool,
+) -> Result<(), Msg> {
+    if heron_source::MARKETS.iter().all(|m| m.id != market) {
+        return Err(Msg::new("E_MARKET_UNAVAILABLE").with("market", market));
+    }
+    let row = market_row(&market, enabled).expect("market checked above");
+    let mut ctx = state.ctx.lock().unwrap();
+    ctx.db
+        .write(|tx| heron_store::repos::source::upsert(tx, &row))
+        .map_err(err)?;
+    Ok(())
+}
+
+#[tauri::command]
+fn favorite_list(state: State<'_, AppState>) -> Result<Vec<heron_store::models::FavoriteRow>, Msg> {
+    let ctx = state.ctx.lock().unwrap();
+    heron_store::repos::favorite::list(ctx.db.conn()).map_err(err)
+}
+
+#[tauri::command]
+fn favorite_add(
+    state: State<'_, AppState>,
+    name: String,
+    url: String,
+    description: String,
+    market: Option<String>,
+) -> Result<heron_store::models::FavoriteRow, Msg> {
+    let url = url.trim().to_owned();
+    let name = name.trim().to_owned();
+    if name.is_empty() {
+        return Err(Msg::new("E_INTERNAL").with("detail", "favorite_name_required"));
+    }
+    if !(url.starts_with("https://") || url.starts_with("http://")) {
+        return Err(Msg::new("E_INTERNAL").with("detail", "favorite_url_required"));
+    }
+    let row = heron_store::models::FavoriteRow {
+        id: 0,
+        name,
+        url,
+        description: description.trim().to_owned(),
+        market: market.map(|m| m.trim().to_owned()).filter(|m| !m.is_empty()),
+        created_at: String::new(),
+    };
+    let mut ctx = state.ctx.lock().unwrap();
+    ctx.db
+        .write(|tx| heron_store::repos::favorite::save(tx, &row))
+        .map_err(err)
+}
+
+#[tauri::command]
+fn favorite_remove(state: State<'_, AppState>, id: i64) -> Result<(), Msg> {
+    let mut ctx = state.ctx.lock().unwrap();
+    ctx.db
+        .write(|tx| heron_store::repos::favorite::remove(tx, id))
+        .map_err(err)?;
+    Ok(())
+}
+
+#[tauri::command]
+async fn market_search(
     market: String,
     query: String,
 ) -> Result<Vec<heron_source::market::MarketItem>, Msg> {
-    let adapter = heron_source::adapter(&market).map_err(err)?;
-    adapter.search(&query, 20).map_err(err)
+    // ureq 是同步阻塞的 HTTP 客户端，一次搜索可能跑满超时（含重试）。放在 blocking 线程池里执行，
+    // 否则命令会在主线程上阻塞，点击搜索时整个窗口都会卡住；同时各来源才能真正并发。
+    tauri::async_runtime::spawn_blocking(move || {
+        let adapter = heron_source::adapter(&market).map_err(err)?;
+        adapter.search(&query, 20).map_err(err)
+    })
+    .await
+    .map_err(|e| Msg::new("E_INTERNAL").with("detail", e.to_string()))?
 }
 
 #[tauri::command]
-fn market_plan(market: String, key: String) -> Result<heron_source::market::InstallPlan, Msg> {
-    let adapter = heron_source::adapter(&market).map_err(err)?;
-    adapter.install_plan(&key).map_err(err)
+async fn market_plan(market: String, key: String) -> Result<heron_source::market::InstallPlan, Msg> {
+    // 同上：解析安装计划也可能发网络请求，移到 blocking 线程，避免卡住主线程。
+    tauri::async_runtime::spawn_blocking(move || {
+        let adapter = heron_source::adapter(&market).map_err(err)?;
+        adapter.install_plan(&key).map_err(err)
+    })
+    .await
+    .map_err(|e| Msg::new("E_INTERNAL").with("detail", e.to_string()))?
 }
 
 #[tauri::command]
-fn install_skill(
-    state: State<'_, AppState>,
+async fn install_skill(
+    app: tauri::AppHandle,
     input: String,
     ref_override: Option<String>,
     subpath: Option<String>,
     as_slug: Option<String>,
     dry_run: bool,
 ) -> Result<serde_json::Value, Msg> {
-    let mut ctx = state.ctx.lock().unwrap();
+    // git clone 是阻塞操作：与市场搜索同理移到 blocking 线程池，否则安装 / 预览时整个窗口会卡住。
+    // State<'_, _> 不能跨 await，故改传 'static + Send 的 AppHandle，在闭包内重新取回受管理的 AppState。
     let request = InstallRequest {
         input,
         ref_override,
         subpath_override: subpath,
         as_slug,
     };
-    if dry_run {
-        let preview = install::preview(&ctx, &request).map_err(err)?;
-        return serde_json::to_value(preview)
-            .map_err(|e| Msg::new("E_INTERNAL").with("detail", e.to_string()));
-    }
-    let report = install::install(&mut ctx, &request).map_err(err)?;
-    serde_json::to_value(report).map_err(|e| Msg::new("E_INTERNAL").with("detail", e.to_string()))
+    tauri::async_runtime::spawn_blocking(move || {
+        let state = app.state::<AppState>();
+        let mut ctx = state.ctx.lock().unwrap();
+        if dry_run {
+            let preview = install::preview(&ctx, &request).map_err(err)?;
+            return serde_json::to_value(preview)
+                .map_err(|e| Msg::new("E_INTERNAL").with("detail", e.to_string()));
+        }
+        let report = install::install(&mut ctx, &request).map_err(err)?;
+        serde_json::to_value(report)
+            .map_err(|e| Msg::new("E_INTERNAL").with("detail", e.to_string()))
+    })
+    .await
+    .map_err(|e| Msg::new("E_INTERNAL").with("detail", e.to_string()))?
 }
 
 #[tauri::command]
@@ -749,6 +889,7 @@ pub fn run() {
     let db = heron_store::db::Db::open(&dirs.db_path()).expect("index database");
     let mut ctx = Ctx::new(dirs, db, "gui");
     let _ = heron_service::clients::bootstrap(&mut ctx.db, &home);
+    bootstrap_markets(&mut ctx);
 
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
@@ -776,8 +917,12 @@ pub fn run() {
             rollback_skill,
             doctor_run,
             markets_list,
+            market_set_enabled,
             market_search,
             market_plan,
+            favorite_list,
+            favorite_add,
+            favorite_remove,
             install_skill,
             lock_export,
             lock_diff,

@@ -17,6 +17,7 @@ pub mod doctor;
 pub mod install;
 pub mod lockfile;
 pub mod native_scan;
+pub mod npx_lock;
 pub mod project;
 pub mod projects;
 pub mod scan;

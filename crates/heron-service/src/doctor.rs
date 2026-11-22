@@ -85,7 +85,7 @@ pub fn run(ctx: &Ctx) -> Result<DoctorReport> {
     let skills = heron_store::repos::skill::list(ctx.db.conn(), false)?;
     let mut seen: std::collections::HashMap<String, String> = Default::default();
     for skill in &skills {
-        let dir = ctx.skill_path(&skill.slug);
+        let dir = ctx.content_path(skill);
         if !dir.is_dir() {
             issues.push(Issue {
                 id: "store-missing".to_owned(),

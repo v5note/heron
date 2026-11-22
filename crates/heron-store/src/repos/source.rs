@@ -148,7 +148,7 @@ mod tests {
         .unwrap();
 
         let rows = list(db.conn()).unwrap();
-        assert_eq!(rows.len(), 5);
+        assert_eq!(rows.len(), 6);
         assert_eq!(rows[0].id, "skills_sh");
         let disabled: Vec<_> = rows
             .iter()
