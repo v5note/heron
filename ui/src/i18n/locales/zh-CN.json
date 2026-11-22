@@ -211,7 +211,7 @@
     "searchAllPlaceholder": "搜索全部来源里的 Skill，例如 pdf、code review…",
     "searchAll": "搜索全部来源",
     "queryHits": "本次查询打到",
-    "idleHint": "输入关键词并回车，一次并发搜索所有已启用的来源；这里会显示本次查询打到的来源与探测状态。",
+    "idleHint": "输入关键词并搜索，结果会按来源分组显示在这里；下面的来源可在浏览器中打开。",
     "onlyBrowser": "仅浏览器",
     "lastProbe": "上次探测",
     "neverProbed": "尚未探测",

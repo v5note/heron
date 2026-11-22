@@ -535,7 +535,7 @@ function stagger(i: number): string {
     </div>
 
     <!-- 本次查询打到哪些来源（勾选启停），并显示探测状态与命中数 -->
-    <div v-if="phase !== 'idle'" class="h-srow">
+    <div class="h-srow">
       <span class="cap">{{ t("sources.queryHits") }}</span>
       <button
         v-for="m in searchSources"
@@ -570,7 +570,6 @@ function stagger(i: number): string {
         </button>
       </span>
     </div>
-    <div v-else class="h-idle-hint">{{ t("sources.idleHint") }}</div>
 
     <!-- 汇总条 -->
     <div v-if="phase !== 'idle'" class="h-sumline">
@@ -632,7 +631,13 @@ function stagger(i: number): string {
       </div>
 
       <template v-else>
+        <!-- 未搜索：用一个提示条代替逐来源空卡 -->
+        <div v-if="phase === 'idle'" class="h-idle-hint">
+          <AppIcon name="search" :size="16" />
+          <span>{{ t("sources.idleHint") }}</span>
+        </div>
         <!-- 逐来源分组卡（先返回的先出现） -->
+        <template v-if="phase === 'done'">
         <section v-for="m in enabledSearchSources" :key="m.id" class="h-grp">
           <div v-if="errFor(m.id)" class="h-grp h-grp-empty bad">
             <div class="h-grp-h">
@@ -751,6 +756,7 @@ function stagger(i: number): string {
         <div v-else-if="phase === 'done' && totalHits === 0" class="card h-empty">
           {{ t("sources.searchEmpty", { q: searchedQ }) }}
         </div>
+        </template>
 
         <!-- 仅浏览器来源：不参与统一搜索，给深链 + 可收进收藏 -->
         <div class="h-sec">
@@ -972,7 +978,8 @@ function stagger(i: number): string {
 
 /* —— 来源勾选 chip 行 —— */
 .h-srow { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; margin: 12px 0 0; }
-.h-idle-hint { margin: 12px 0 0; font-size: 12.5px; color: var(--dim); line-height: 1.5; }
+.h-idle-hint { display: flex; align-items: center; gap: 9px; margin: 14px 0 0; padding: 13px 15px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--panel); font-size: 13px; color: var(--dim); line-height: 1.5; }
+.h-idle-hint svg { flex: none; color: var(--faint); stroke: currentColor; fill: none; stroke-width: 1.8; }
 .h-srow .cap { font-size: 12px; color: var(--dim); letter-spacing: 0.02em; }
 .fchip {
   display: inline-flex; align-items: center; gap: 7px; height: 28px; padding: 0 10px;

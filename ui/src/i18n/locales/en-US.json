@@ -211,7 +211,7 @@
     "searchAllPlaceholder": "Search all sources for a skill, e.g. pdf, code review…",
     "searchAll": "Search all sources",
     "queryHits": "This query hits",
-    "idleHint": "Type a keyword and press Enter to search every enabled source at once; the sources hit by this query and their probe status will appear here.",
+    "idleHint": "Type a keyword and search — results are grouped by source and appear here. The sources below can be opened in your browser.",
     "onlyBrowser": "browser only",
     "lastProbe": "Last probe",
     "neverProbed": "not probed yet",
