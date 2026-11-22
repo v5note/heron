@@ -4,8 +4,8 @@
 const props = withDefaults(defineProps<{ name: IconName; size?: number }>(), { size: 15 });
 export type IconName =
   | "overview" | "library" | "discover" | "sources" | "projects" | "upgrades" | "doctor" | "settings"
-  | "sun" | "moon" | "search" | "refresh" | "check" | "close" | "plus" | "external" | "alert" | "chevron" | "copy"
-  | "grid" | "globe" | "spark" | "terminal" | "pointer" | "braces" | "home"
+  | "sun" | "moon" | "auto" | "search" | "refresh" | "check" | "close" | "plus" | "external" | "alert" | "chevron" | "copy"
+  | "grid" | "list" | "globe" | "spark" | "terminal" | "pointer" | "braces" | "home"
   | "robot" | "rocket" | "star" | "cube" | "bolt" | "code" | "sparkles";
 
 const PATHS: Record<IconName, string> = {
@@ -19,6 +19,9 @@ const PATHS: Record<IconName, string> = {
   settings: '<circle cx="12" cy="12" r="3"/><path d="M12 3.5v2M12 18.5v2M3.5 12h2M18.5 12h2M6 6l1.4 1.4M16.6 16.6 18 18M6 18l1.4-1.4M16.6 7.4 18 6"/>',
   sun: '<circle cx="12" cy="12" r="4"/><path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6l1.4 1.4M17 17l1.4 1.4M5.6 18.4 7 17M17 7l1.4-1.4"/>',
   moon: '<path d="M20 14.2A8 8 0 1 1 9.8 4a6.4 6.4 0 0 0 10.2 10.2z"/>',
+  // Auto / follow the system: the letter A. The crossbar runs past both legs so it visually
+  // connects (a bar ending inside the counters reads as detached), and round caps soften the apex.
+  auto: '<path d="M6 19 12 5l6 14" stroke-linecap="round" stroke-linejoin="round"/><path d="M7.6 14.5h8.8" stroke-linecap="round"/>',
   search: '<circle cx="11" cy="11" r="6"/><path d="M15.5 15.5 20 20"/>',
   refresh: '<path d="M19.5 12a7.5 7.5 0 1 1-2.2-5.3"/><path d="M19.5 4v4h-4"/>',
   check: '<path d="M5 12.5l4.5 4.5L19 7"/>',
@@ -30,6 +33,7 @@ const PATHS: Record<IconName, string> = {
   copy: '<rect x="9" y="9" width="11.5" height="11.5" rx="2.5"/><path d="M5.5 15.5A1.5 1.5 0 0 1 4 14V5.5A1.5 1.5 0 0 1 5.5 4H14a1.5 1.5 0 0 1 1.5 1.5"/>',
   // Source clients. `agents` is the client-agnostic shared location, so it gets a globe.
   grid: '<rect x="4" y="4" width="7" height="7" rx="1.6"/><rect x="13" y="4" width="7" height="7" rx="1.6"/><rect x="4" y="13" width="7" height="7" rx="1.6"/><rect x="13" y="13" width="7" height="7" rx="1.6"/>',
+  list: '<path d="M4.5 6.5h15M4.5 12h15M4.5 17.5h10"/>',
   globe: '<circle cx="12" cy="12" r="8"/><path d="M4 12h16"/><path d="M12 4c2.4 2.2 2.4 13.8 0 16"/><path d="M12 4c-2.4 2.2-2.4 13.8 0 16"/>',
   spark: '<path d="M12 3.5v17M4.6 7.75l14.8 8.5M19.4 7.75l-14.8 8.5"/>',
   terminal: '<path d="M5 7l5 5-5 5"/><path d="M12 17h7"/>',

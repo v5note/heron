@@ -8,7 +8,9 @@ import { api } from "../api";
 import type { NativeScanStatus } from "../api/types";
 import { checkForUpdate, installUpdate, type UpdateInfo } from "../api/updater";
 import { setLocale, type Locale } from "../i18n";
-import { useAppStore, type ThemeId } from "../stores/app";
+import { useAppStore, type ProjectionMode, type ThemeId } from "../stores/app";
+import { displayPath } from "../utils/paths";
+import { openPath } from "@tauri-apps/plugin-opener";
 import pkg from "../../package.json";
 
 const store = useAppStore();
@@ -20,6 +22,32 @@ const progress = ref<string | null>(null);
 // The running build's version, injected at build time from package.json (kept in step with
 // tauri.conf.json): "up to date" is only meaningful when it says up to date with what.
 const currentVersion = pkg.version;
+
+// 数据与路径: the real directories, abbreviated to `~` only for display (utils/paths). `open` keeps
+// the absolute path, because that is what the OS file manager needs. When there is no home yet
+// (a browser dev session with no Rust host), fall back to the design's literal `~`-prefixed paths.
+const dataPaths = computed(() => {
+  const home = store.home;
+  const entries = [
+    { key: "dataRoot", rel: ".heron" },
+    { key: "marketCache", rel: ".cache/heron/market" },
+    { key: "logs", rel: ".heron/logs" },
+  ];
+  return entries.map((e) => {
+    const abs = home ? `${home.replace(/\/+$/, "")}/${e.rel}` : `~/${e.rel}`;
+    return { key: e.key, abs, shown: home ? displayPath(abs, home) : abs };
+  });
+});
+
+async function openFolder(abs: string) {
+  try {
+    await openPath(abs);
+  } catch (e) {
+    // Outside a Tauri window (browser dev) there is no file manager to open; say so, don't crash.
+    store.toast("warn", t("settings.openFailed"));
+    console.error(e);
+  }
+}
 
 // The header slot used to render the caption "主题立即生效…" where the current theme belongs.
 const themeLabel = computed(() => `${t(`settings.palette.${store.theme}`)} · ${t(`settings.themeStatus.${store.mode}`)}`);
@@ -112,6 +140,10 @@ onMounted(async () => {
 function changeLocale(event: Event) {
   setLocale((event.target as HTMLSelectElement).value as Locale);
 }
+
+function changeProjection(event: Event) {
+  store.setProjectionMode((event.target as HTMLSelectElement).value as ProjectionMode);
+}
 </script>
 
 <template>
@@ -160,7 +192,7 @@ function changeLocale(event: Event) {
           <span class="mode-cell">
             <div class="theme-switch" role="group" :aria-label="t('settings.colorMode')">
               <button :class="{ on: store.colorMode === 'system' }" :aria-pressed="store.colorMode === 'system'" @click="store.setColorMode('system')">
-                {{ t("settings.themeAuto") }}
+                <AppIcon name="auto" :size="14" />{{ t("settings.themeAuto") }}
               </button>
               <button :class="{ on: store.colorMode === 'light' }" :aria-pressed="store.colorMode === 'light'" @click="store.setColorMode('light')">
                 <AppIcon name="sun" :size="14" />{{ t("settings.themeLight") }}
@@ -179,6 +211,79 @@ function changeLocale(event: Event) {
               <option value="zh-CN">简体中文</option>
               <option value="en-US">English</option>
             </select>
+          </span>
+        </div>
+      </div>
+    </div>
+
+    <div class="card grid-card">
+      <div class="card-head"><h3>{{ t("settings.general") }}</h3></div>
+      <div class="card-body">
+        <div class="row">
+          <span class="label">{{ t("settings.defaultProjection") }}</span>
+          <span class="select-wrap">
+            <select class="select" :value="store.projectionMode" @change="changeProjection">
+              <option value="symlink">{{ t("settings.projectionSymlink") }}</option>
+              <option value="copy">{{ t("settings.projectionCopy") }}</option>
+            </select>
+          </span>
+        </div>
+        <div class="row">
+          <span class="label">{{ t("settings.autoScan") }}</span>
+          <span class="switch-cell">
+            <small class="row-hint">{{ t("settings.autoScanHint") }}</small>
+            <button
+              type="button"
+              class="switch"
+              :class="{ on: store.autoScan }"
+              role="switch"
+              :aria-checked="store.autoScan"
+              :aria-label="t('settings.autoScan')"
+              @click="store.setAutoScan(!store.autoScan)"
+            />
+          </span>
+        </div>
+        <div class="row">
+          <span class="label">{{ t("settings.autoDoctor") }}</span>
+          <span class="switch-cell">
+            <small class="row-hint">{{ t("settings.autoDoctorHint") }}</small>
+            <button
+              type="button"
+              class="switch"
+              :class="{ on: store.autoDoctor }"
+              role="switch"
+              :aria-checked="store.autoDoctor"
+              :aria-label="t('settings.autoDoctor')"
+              @click="store.setAutoDoctor(!store.autoDoctor)"
+            />
+          </span>
+        </div>
+        <div class="row">
+          <span class="label">{{ t("settings.keepLocal") }}</span>
+          <span class="switch-cell">
+            <small class="row-hint">{{ t("settings.keepLocalHint") }}</small>
+            <button
+              type="button"
+              class="switch"
+              :class="{ on: store.keepLocal }"
+              role="switch"
+              :aria-checked="store.keepLocal"
+              :aria-label="t('settings.keepLocal')"
+              @click="store.setKeepLocal(!store.keepLocal)"
+            />
+          </span>
+        </div>
+      </div>
+    </div>
+
+    <div class="card grid-card">
+      <div class="card-head"><h3>{{ t("settings.dataPaths") }}</h3></div>
+      <div class="card-body">
+        <div v-for="p in dataPaths" :key="p.key" class="row">
+          <span class="label">{{ t(`settings.${p.key}`) }}</span>
+          <span class="path-cell">
+            <code class="mono">{{ p.shown }}</code>
+            <button type="button" class="btn sm" @click="openFolder(p.abs)">{{ t("settings.open") }}</button>
           </span>
         </div>
       </div>
@@ -349,6 +454,28 @@ function changeLocale(event: Event) {
    be a stretched grid/flex item: the wrapper is the item and the select sits at its natural size. */
 .select-wrap { display: inline-flex; align-items: center; }
 .select { width: 132px; height: 30px; padding: 0 8px 0 10px; font-size: 12.5px; }
+
+/* 通用 toggles. A bare track with a knob, no border: the filled state is carried by --accent, the
+   off state by the same --line-strong the inputs already use, so it matches the rest of the page.
+   The hint shares the value column and sits left of the switch, both right-anchored by the row. */
+.switch-cell { gap: 12px !important; }
+.switch {
+  position: relative; flex: none; width: 36px; height: 21px; padding: 0; border: 0;
+  border-radius: 999px; background: var(--line-strong); cursor: pointer;
+  transition: background-color 150ms ease;
+}
+.switch::after {
+  content: ""; position: absolute; top: 2.5px; left: 2.5px; width: 16px; height: 16px;
+  border-radius: 50%; background: var(--panel); box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+  transition: left 150ms ease;
+}
+.switch.on { background: var(--accent); }
+.switch.on::after { left: 17.5px; }
+.switch:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* 数据与路径: the mono path takes the line, the open button hugs the card's right edge. */
+.path-cell { gap: 12px !important; }
+.path-cell code { color: var(--dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 .update { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; }
 .warn-text { color: var(--warn); }

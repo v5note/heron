@@ -19,6 +19,9 @@
     实体级状态（active/…）放抽屉 kv，来源用 chip 表达。
   - 追加设置页（用户指令「添加选项」+ 真实 app 设置截图）：主题 / 通用 / 数据与路径 / 客户端
     四段，选项与截图一一对应；侧栏「我的 Skill」「设置」可切换，其余导航提示见 dir-1.html。
+  - 追加「列表 / 网格」双视图（用户指令「我的 Skill添加「列表」和「网格」支持」）：
+    工具条右侧视图 segmented，选择记 localStorage(heron.view)；网格卡片=同一矩阵概念的另一种容量
+    （名称+来源+描述 2 行+6 落点点位），点击开抽屉、勾选进批量投影，筛选/搜索/健康读数条两视图共用。
 
   未解的问题：
   - 列头要不要显示每个落点的生效计数（现在放健康条里）；先做健康条。
@@ -157,8 +160,23 @@ tr:hover .dot{transform:scale(1.15)}
 .chev{color:var(--h-faint)}
 .chev svg{width:14px;height:14px}
 
+/* ---------- grid view ---------- */
+.h-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px}
+.g-card{padding:14px 16px 12px;cursor:pointer}
+.g-card:hover{background:var(--h-raised)}
+.g-card.is-sel{border-color:var(--h-vit);background:color-mix(in srgb,var(--h-vit) 7%,var(--h-panel))}
+.g-head{display:flex;align-items:center;gap:8px}
+.g-head .slug{overflow:hidden;text-overflow:ellipsis}
+.g-head .h-chip{margin-left:auto;flex:none}
+.g-desc{margin:8px 0 12px;color:var(--h-dim);font-size:12.5px;line-height:1.5;height:38px;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+.g-matrix{display:grid;grid-template-columns:repeat(3,1fr);gap:7px 10px;border-top:1px solid var(--h-line);padding-top:10px}
+.g-t{display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--h-dim);position:relative;min-width:0}
+.g-t .dot{width:10px;height:10px;flex:none}
+.g-t em{font-style:normal;font-size:12.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
 /* ---------- 落点健康读数条 ---------- */
-.hstrip{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:1px;background:var(--h-line);border-top:1px solid var(--h-line)}
+.hstrip-wrap{overflow:hidden;margin-top:12px}
+.hstrip{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:1px;background:var(--h-line)}
 .hstrip .cell{background:var(--h-panel);padding:10px 12px 11px}
 .hstrip .name{display:flex;align-items:baseline;gap:6px;font-size:12.5px;font-weight:600;color:var(--h-text)}
 .hstrip .name .frac{margin-left:auto;font-family:var(--h-mono);font-size:12.5px;color:var(--h-dim)}
@@ -281,9 +299,12 @@ tr:hover .dot{transform:scale(1.15)}
           <button id="fIssues">有问题 <span id="nIssues"></span></button>
         </div>
         <span class="sp"></span>
+        <div class="h-seg" id="viewSeg">
+          <button data-view="list" class="on">列表</button><button data-view="grid">网格</button>
+        </div>
       </div>
 
-      <div class="h-card">
+      <div class="h-card" id="listView">
         <table class="h-table">
           <thead><tr>
             <th style="width:34px"><input type="checkbox" class="h-cb" id="cbAll"></th>
@@ -294,8 +315,9 @@ tr:hover .dot{transform:scale(1.15)}
           </tr></thead>
           <tbody id="rows"></tbody>
         </table>
-        <div class="hstrip" id="hstrip"></div>
       </div>
+      <div class="h-grid" id="gridView" hidden></div>
+      <div class="h-card hstrip-wrap"><div class="hstrip" id="hstrip"></div></div>
 
       <div class="legend">
         <span class="k"><i class="dot visible"></i>生效中</span>
@@ -406,7 +428,7 @@ const SKILLS = [
 const LABEL={visible:"生效中",shadowed:"被压制",broken:"坏链",not_scanned:"未被扫描",restart_required:"需重启"};
 const isProjected=s=>s==="visible"||s==="shadowed"||s==="restart_required";
 
-const state={query:"",filter:"all",selected:[],drawer:null};
+const state={query:"",filter:"all",selected:[],drawer:null,view:localStorage.getItem("heron.view")||"list"};
 const $=id=>document.getElementById(id);
 const visible=()=>SKILLS.filter(s=>{
   const n=state.query.trim().toLowerCase();
@@ -431,9 +453,28 @@ function render(){
       ${TARGETS.map(t=>`<td class="tcol cell-tip"><i class="dot ${s.vis[t]}"></i><span class="tip">${t} · ${LABEL[s.vis[t]]}</span></td>`).join("")}
       <td class="chev" data-stop><svg viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></td>
     </tr>`).join("")||`<tr><td colspan="10" style="text-align:center;color:var(--h-dim);padding:28px">没有符合条件的 Skill</td></tr>`;
+  renderGrid();
   renderStrip();
   renderSel();
   if(state.drawer)renderDrawer();
+}
+const originChip=s=>`<span class="h-chip ${s.origin==="adopted"?"neutral":s.origin==="本地编辑"?"warn":"neutral"} plain">${s.origin}</span>`;
+function renderGrid(){
+  const rows=visible();
+  $("gridView").innerHTML=rows.map(s=>`
+    <div class="g-card h-card ${state.selected.includes(s.slug)?"is-sel":""}" data-slug="${s.slug}">
+      <div class="g-head">
+        <input type="checkbox" class="h-cb" data-cb="${s.slug}" ${state.selected.includes(s.slug)?"checked":""}>
+        <span class="slug">${s.slug}</span>${s.sample?'<span class="tag-sample">示例</span>':''}${originChip(s)}
+      </div>
+      <div class="g-desc">${s.desc}</div>
+      <div class="g-matrix">${TARGETS.map(t=>`<span class="g-t cell-tip"><i class="dot ${s.vis[t]}"></i><em>${t}</em><span class="tip">${t} · ${LABEL[s.vis[t]]}</span></span>`).join("")}</div>
+    </div>`).join("")||`<div class="h-card" style="padding:24px;text-align:center;color:var(--h-dim)">没有符合条件的 Skill</div>`;
+}
+function applyView(){
+  const g=state.view==="grid";
+  $("listView").hidden=g;$("gridView").hidden=!g;
+  document.querySelectorAll("#viewSeg button").forEach(b=>b.classList.toggle("on",b.dataset.view===state.view));
 }
 /* 落点健康读数条：每列一个仪器读数 */
 function renderStrip(){
@@ -492,11 +533,21 @@ $("q").addEventListener("input",e=>{state.query=e.target.value;render();});
 $("fAll").addEventListener("click",()=>{state.filter="all";$("fAll").classList.add("on");$("fIssues").classList.remove("on");render();});
 $("fIssues").addEventListener("click",()=>{state.filter="issues";$("fIssues").classList.add("on");$("fAll").classList.remove("on");render();});
 $("cbAll").addEventListener("change",e=>{state.selected=e.target.checked?visible().map(s=>s.slug):[];render();});
+function toggleSel(slug){state.selected=state.selected.includes(slug)?state.selected.filter(x=>x!==slug):[...state.selected,slug];render();}
 $("rows").addEventListener("click",e=>{
   const cb=e.target.closest("[data-cb]");
-  if(cb){const slug=cb.dataset.cb;state.selected=state.selected.includes(slug)?state.selected.filter(x=>x!==slug):[...state.selected,slug];render();return;}
+  if(cb){toggleSel(cb.dataset.cb);return;}
   if(e.target.closest("[data-stop]"))return;
   const tr=e.target.closest("tr[data-slug]");if(tr)openDrawer(tr.dataset.slug);
+});
+$("gridView").addEventListener("click",e=>{
+  const cb=e.target.closest("[data-cb]");
+  if(cb){toggleSel(cb.dataset.cb);return;}
+  const c=e.target.closest("[data-slug]");if(c)openDrawer(c.dataset.slug);
+});
+$("viewSeg").addEventListener("click",e=>{
+  const b=e.target.closest("[data-view]");if(!b)return;
+  state.view=b.dataset.view;localStorage.setItem("heron.view",state.view);applyView();
 });
 $("pop").addEventListener("click",e=>{
   const b=e.target.closest("[data-proj]");
@@ -560,6 +611,6 @@ function setTheme(th){
 setTheme(localStorage.getItem("heron.theme")||"dark");
 $("themeBtn").addEventListener("click",()=>setTheme(document.documentElement.getAttribute("data-theme")==="dark"?"light":"dark"));
 $("setTheme").addEventListener("click",e=>{const b=e.target.closest("[data-th]");if(b)setTheme(b.dataset.th);});
-render();
+render();applyView();
 </script>
 </body></html>

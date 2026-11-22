@@ -200,6 +200,14 @@ pub fn now_iso() -> String {
     chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Millis, true)
 }
 
+/// The same format as `now_iso` for a stored UNIX-millisecond timestamp, so the two compare
+/// lexicographically (fixed width, always UTC).
+pub fn iso_from_unix_millis(ms: i64) -> String {
+    chrono::DateTime::<chrono::Utc>::from_timestamp_millis(ms)
+        .map(|t| t.to_rfc3339_opts(chrono::SecondsFormat::Millis, true))
+        .unwrap_or_else(|| "1970-01-01T00:00:00.000Z".to_owned())
+}
+
 pub fn to_msg(e: rusqlite::Error) -> Msg {
     ErrorCode::DbCorrupt.msg().with("detail", e.to_string())
 }

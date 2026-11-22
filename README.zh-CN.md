@@ -312,4 +312,4 @@ docs/               设计、实现、指南与决策记录（ADR）
 
 ## 许可
 
-MIT OR Apache-2.0
+MIT。详见 [LICENSE](LICENSE)。

@@ -20,11 +20,26 @@ pub enum Visibility {
     Shadowed {
         by: String,
     },
-    /// Present and correct, but the client only rescans on session start.
+    /// Would be `Visible`, but this client only rescans at session start and the projection
+    /// has not been confirmed by an earlier verify — a running session cannot know it yet.
     RestartRequired,
     /// The projection is broken (dangling link / missing directory).
     Broken,
     Unknown,
+}
+
+impl Visibility {
+    /// The stable token shared by the `visibility` table and the UI contract.
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Visibility::Visible => "visible",
+            Visibility::NotScanned => "not_scanned",
+            Visibility::Shadowed { .. } => "shadowed",
+            Visibility::RestartRequired => "restart_required",
+            Visibility::Broken => "broken",
+            Visibility::Unknown => "unknown",
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -37,6 +52,10 @@ pub struct VerifyInput {
     pub occupied_names: Vec<String>,
     /// True when the link/dir resolves.
     pub resolves: bool,
+    /// The client re-reads its skill directories only when a new session opens (`rescan = "session"`).
+    pub rescans_on_session: bool,
+    /// No earlier verify has confirmed this landing (row missing, or link newer than the last check).
+    pub landing_unconfirmed: bool,
 }
 
 /// Decide visibility for one projection of one client.
@@ -55,6 +74,9 @@ pub fn classify(input: &VerifyInput) -> Result<Visibility> {
         if let Some(by) = input.occupied_names.iter().find(|n| **n == name) {
             return Ok(Visibility::Shadowed { by: by.clone() });
         }
+    }
+    if input.rescans_on_session && input.landing_unconfirmed {
+        return Ok(Visibility::RestartRequired);
     }
     Ok(Visibility::Visible)
 }
@@ -84,6 +106,8 @@ mod tests {
             scan_paths: scan.iter().map(PathBuf::from).collect(),
             occupied_names: occupied.iter().map(|s| (*s).to_owned()).collect(),
             resolves,
+            rescans_on_session: false,
+            landing_unconfirmed: false,
         }
     }
 
@@ -138,6 +162,56 @@ mod tests {
         ))
         .unwrap();
         assert_eq!(v, Visibility::Broken);
+    }
+
+    #[test]
+    fn session_rescan_client_reports_restart_until_confirmed() {
+        let mut i = input(
+            "/home/u/.claude/skills/pdf",
+            &["/home/u/.claude/skills"],
+            &[],
+            true,
+        );
+        i.rescans_on_session = true;
+        i.landing_unconfirmed = true;
+        assert_eq!(classify(&i).unwrap(), Visibility::RestartRequired);
+        // Once an earlier verify confirmed the landing, the same input reads as visible.
+        i.landing_unconfirmed = false;
+        assert_eq!(classify(&i).unwrap(), Visibility::Visible);
+        // A client that hot-reloads (watch) never owes the user a restart.
+        let mut w = input(
+            "/home/u/.agents/skills/pdf",
+            &["/home/u/.agents/skills"],
+            &[],
+            true,
+        );
+        w.rescans_on_session = false;
+        w.landing_unconfirmed = true;
+        assert_eq!(classify(&w).unwrap(), Visibility::Visible);
+    }
+
+    #[test]
+    fn restart_never_outranks_broken_not_scanned_or_shadowed() {
+        let mk = |path: &str, occupied: &[&str], resolves: bool| {
+            let mut i = input(path, &["/home/u/.claude/skills"], occupied, resolves);
+            i.rescans_on_session = true;
+            i.landing_unconfirmed = true;
+            i
+        };
+        assert_eq!(
+            classify(&mk("/home/u/.claude/skills/pdf", &[], false)).unwrap(),
+            Visibility::Broken
+        );
+        assert_eq!(
+            classify(&mk("/home/u/store/pdf", &[], true)).unwrap(),
+            Visibility::NotScanned
+        );
+        assert_eq!(
+            classify(&mk("/home/u/.claude/skills/pdf", &["pdf"], true)).unwrap(),
+            Visibility::Shadowed {
+                by: "pdf".to_owned()
+            }
+        );
     }
 
     #[test]

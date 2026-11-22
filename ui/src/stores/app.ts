@@ -20,6 +20,8 @@ export interface Toast {
 export type ThemeId = "default" | "dusk" | "forest-ink" | "wanqing";
 /** The user's light/dark choice; `system` follows prefers-color-scheme live. */
 export type ColorMode = "system" | "light" | "dark";
+/** How a projection is materialised at a target when nothing overrides it (settings → 通用). */
+export type ProjectionMode = "symlink" | "copy";
 export type VisibilityState = "visible" | "shadowed" | "not_scanned" | "broken" | "restart_required" | "unknown";
 
 /**
@@ -61,6 +63,10 @@ export interface ScanTask {
 
 const THEME_KEY = "heron.theme";
 const COLOR_MODE_KEY = "heron.colorMode";
+const PROJECTION_MODE_KEY = "heron.projectionMode";
+const AUTO_SCAN_KEY = "heron.autoScan";
+const AUTO_DOCTOR_KEY = "heron.autoDoctor";
+const KEEP_LOCAL_KEY = "heron.keepLocalOnUpdate";
 const THEME_IDS: readonly ThemeId[] = ["default", "dusk", "forest-ink", "wanqing"];
 const SCAN_PHASES: readonly string[] = ["prepare", "walk", "parse", "persist", "summary", "done", "canceled"];
 /** Mirrors `MAX_DIRS` in heron-discover: the event only carries the flag, so the copy names the ceiling. */
@@ -152,6 +158,21 @@ function initialPrefs(): { theme: ThemeId; colorMode: ColorMode } {
   return { theme, colorMode };
 }
 
+/**
+ * The 通用 preferences, read back from localStorage. They default to the library-v3 design's
+ * on-screen state: symlink projection, auto-scan on, auto-doctor off, keep local edits on.
+ */
+function initialGeneral(): {
+  projectionMode: ProjectionMode; autoScan: boolean; autoDoctor: boolean; keepLocal: boolean;
+} {
+  return {
+    projectionMode: localStorage.getItem(PROJECTION_MODE_KEY) === "copy" ? "copy" : "symlink",
+    autoScan: localStorage.getItem(AUTO_SCAN_KEY) !== "0",
+    autoDoctor: localStorage.getItem(AUTO_DOCTOR_KEY) === "1",
+    keepLocal: localStorage.getItem(KEEP_LOCAL_KEY) !== "0",
+  };
+}
+
 /** Only counts rows the backend actually scanned; anything else stays "unknown". */
 function stateOf(row: VisibilityReport | undefined): VisibilityState {
   const state = row?.visibility?.state;
@@ -164,6 +185,7 @@ function stateOf(row: VisibilityReport | undefined): VisibilityState {
 export const useAppStore = defineStore("app", {
   state: () => ({
     ...initialPrefs(),
+    ...initialGeneral(),
     /** What the OS says right now; only consulted while `colorMode` is `system`. */
     systemIsDark: systemPrefersDark(),
     busy: false,
@@ -248,6 +270,23 @@ export const useAppStore = defineStore("app", {
     /** The rail's quick switch: pin the opposite of what is on screen (leaves `system`). */
     toggleTheme() {
       this.setColorMode(this.mode === "dark" ? "light" : "dark");
+    },
+    /** 通用 settings: remembered across launches, like the appearance prefs above. */
+    setProjectionMode(mode: ProjectionMode) {
+      this.projectionMode = mode;
+      localStorage.setItem(PROJECTION_MODE_KEY, mode);
+    },
+    setAutoScan(on: boolean) {
+      this.autoScan = on;
+      localStorage.setItem(AUTO_SCAN_KEY, on ? "1" : "0");
+    },
+    setAutoDoctor(on: boolean) {
+      this.autoDoctor = on;
+      localStorage.setItem(AUTO_DOCTOR_KEY, on ? "1" : "0");
+    },
+    setKeepLocal(on: boolean) {
+      this.keepLocal = on;
+      localStorage.setItem(KEEP_LOCAL_KEY, on ? "1" : "0");
     },
     /** Re-apply when the OS flips, but only while the user asked to follow it. */
     watchSystemTheme() {

@@ -7,6 +7,7 @@ pub mod projection;
 pub mod skill;
 pub mod source;
 pub mod target;
+pub mod visibility;
 
 pub(crate) fn json_list(items: &[String]) -> String {
     serde_json::to_string(items).unwrap_or_else(|_| "[]".to_owned())

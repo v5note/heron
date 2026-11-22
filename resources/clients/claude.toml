@@ -9,6 +9,9 @@ project_skills = ".claude/skills"
 global_commands = ".claude/commands"
 project_commands = ".claude/commands"
 link_modes = ["symlink", "junction", "copy"]
+# Claude Code reads its skill directories when a session starts; a projection added while a
+# session runs only shows up in the next one (basis for verify's restart_required state).
+rescan = "session"
 verified_at = "2026-11-19"
 verified_by = "doc"
 

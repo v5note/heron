@@ -57,6 +57,17 @@ pub struct ProjectionRow {
     pub created_at: String,
 }
 
+/// One cached verify verdict per projection (the schema's `visibility` table).
+#[derive(Debug, Clone)]
+pub struct VisibilityRow {
+    pub projection_id: i64,
+    pub client_id: String,
+    /// One of the five tokens `Visibility::as_str` produces; "unknown" never lands here.
+    pub state: String,
+    pub shadowed_by: Option<String>,
+    pub checked_at: String,
+}
+
 impl Default for ProjectionRow {
     fn default() -> Self {
         Self {

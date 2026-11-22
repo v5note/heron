@@ -55,6 +55,11 @@ pub struct ClientToml {
     pub verified_by: Option<String>,
     #[serde(default)]
     pub native_scan: Option<NativeScanToml>,
+    /// When the client notices new files in its skill dirs: `"session"` = it only rescans when a
+    /// new session opens (so a fresh projection needs a restart); unset = treated as hot-reloading
+    /// and never produces `restart_required`. Marked per client only with real evidence.
+    #[serde(default)]
+    pub rescan: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -219,6 +224,11 @@ mod tests {
         assert_eq!(claude.global_skills, ".claude/skills"); // config values always use '/'
         assert_eq!(claude.global_commands.as_deref(), Some(".claude/commands"));
         assert_eq!(claude.verified_by.as_deref(), Some("doc"));
+        assert_eq!(claude.rescan.as_deref(), Some("session"));
+        // Only claude is evidence-backed as session-rescan; everyone else stays watch.
+        for c in matrix.iter().filter(|c| c.id != "claude") {
+            assert!(c.rescan.is_none(), "{} must opt in explicitly", c.id);
+        }
         assert!(
             !claude.native_scan.as_ref().unwrap().supported,
             "D6: no injection until verified"

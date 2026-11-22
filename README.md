@@ -316,4 +316,4 @@ docs/               design, implementation, guides and decision records
 
 ## License
 
-MIT OR Apache-2.0
+MIT. See [LICENSE](LICENSE) for details.
