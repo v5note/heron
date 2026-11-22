@@ -237,7 +237,10 @@
     "baseline": "Installed",
     "latest": "Upstream",
     "source": "Source",
-    "merge": "Merge files"
+    "merge": "Merge files",
+    "overwriteTitle": "Overwrite upgrade discards local edits",
+    "overwriteBody": "“Keep local edits on update” is off: the upgrade replaces the selected skills' local changes with the upstream version. This cannot be undone (only rollback history is kept). Continue?",
+    "overwriteConfirm": "Overwrite & upgrade"
   },
   "doctor": {
     "title": "Health",

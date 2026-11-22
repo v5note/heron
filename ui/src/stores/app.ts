@@ -568,7 +568,7 @@ export const useAppStore = defineStore("app", {
       this.busy = true;
       let outcomes: UpgradeOutcome[] = [];
       try {
-        outcomes = await api.upgrade(slugs, false);
+        outcomes = await api.upgrade(slugs, false, this.keepLocal);
         const conflicts = outcomes.filter((o) => o.result === "conflicts").length;
         const upgraded = outcomes.length - conflicts;
         // "0 upgraded, 3 conflicts" reads like a partial success; when nothing landed, say so.

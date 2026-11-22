@@ -556,6 +556,7 @@ fn upgrade_skills(
     state: State<'_, AppState>,
     slugs: Vec<String>,
     dry_run: bool,
+    keep_local: bool,
 ) -> Result<Vec<upgrade::UpgradeOutcome>, Msg> {
     let mut ctx = state.ctx.lock().unwrap();
     if dry_run {
@@ -563,7 +564,9 @@ fn upgrade_skills(
     }
     let mut outcomes = Vec::new();
     for slug in &slugs {
-        outcomes.push(upgrade::upgrade(&mut ctx, slug).map_err(err)?);
+        // `keep_local` carries 设置 → 通用 → 更新时保留本地改动: true = three-way merge, false =
+        // hard overwrite that discards local edits.
+        outcomes.push(upgrade::upgrade(&mut ctx, slug, keep_local).map_err(err)?);
     }
     Ok(outcomes)
 }

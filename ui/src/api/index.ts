@@ -62,7 +62,8 @@ export const api = {
   unproject: (slug: string, targetId: string) => call<void>("unproject_skill", { slug, targetId }),
   verify: () => call<VisibilityReport[]>("verify_visibility"),
   outdated: () => call<UpgradeCandidate[]>("outdated_list"),
-  upgrade: (slugs: string[], dryRun: boolean) => call<UpgradeOutcome[]>("upgrade_skills", { slugs, dryRun }),
+  upgrade: (slugs: string[], dryRun: boolean, keepLocal: boolean) =>
+    call<UpgradeOutcome[]>("upgrade_skills", { slugs, dryRun, keepLocal }),
   rollback: (slug: string, to: string) => call<void>("rollback_skill", { slug, to }),
   doctor: () => call<DoctorReport>("doctor_run"),
   markets: () => call<MarketInfo[]>("markets_list"),

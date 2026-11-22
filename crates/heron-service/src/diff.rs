@@ -153,8 +153,10 @@ pub fn resolve(ctx: &mut Ctx, slug: &str, resolved: &[(String, String)]) -> Resu
         repo.write_file(path, content)?;
     }
     repo.commit_all("heron: manual conflict resolution")?;
-    // The resolution is now "ours": retrying the upgrade merges upstream on top of it.
-    crate::upgrade::upgrade(ctx, slug)
+    // The resolution is now "ours": retrying the upgrade merges upstream on top of it. Keep-local
+    // is forced on here — a manual conflict resolution only exists in the merge mode, so the retry
+    // must preserve the resolved content rather than overwrite it.
+    crate::upgrade::upgrade(ctx, slug, true)
 }
 
 #[cfg(test)]

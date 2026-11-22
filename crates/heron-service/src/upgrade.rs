@@ -164,8 +164,14 @@ pub enum UpgradeOutcome {
     },
 }
 
-/// Upgrade one skill by merging upstream on top of the local state.
-pub fn upgrade(ctx: &mut Ctx, slug: &str) -> Result<UpgradeOutcome> {
+/// Upgrade one skill to the latest upstream revision.
+///
+/// `keep_local` selects how local edits are treated, mirroring 设置 → 通用 → 更新时保留本地改动:
+/// - `true` (default): three-way merge — the user's local edits and upstream changes are combined;
+///   a conflicting file is reported as `Conflicts` and the worktree is left untouched.
+/// - `false`: hard overwrite — every local edit (uncommitted *and* already-committed) is discarded
+///   in favour of the upstream snapshot, so nothing ever reports a conflict.
+pub fn upgrade(ctx: &mut Ctx, slug: &str, keep_local: bool) -> Result<UpgradeOutcome> {
     let dir = ctx.skill_path(slug);
     if !dir.is_dir() {
         return Err(ErrorCode::NotManaged
@@ -199,8 +205,21 @@ pub fn upgrade(ctx: &mut Ctx, slug: &str) -> Result<UpgradeOutcome> {
         });
     }
 
-    // Commit local edits first so the merge has a stable "ours".
-    let head_before = repo.commit_all("heron: local changes before upgrade")?;
+    // 更新时保留本地改动: when on, commit the local edits first so the merge has a stable "ours".
+    // When off (overwrite), rewind to the pristine upstream baseline instead — dropping both the
+    // uncommitted worktree changes and any committed local revisions — so the three-way merge below
+    // has no local contribution left and resolves straight to the upstream snapshot. This reuses
+    // the exact merge path a no-local-edits upgrade already takes, keeping the post-merge commit,
+    // version tag and event identical between the two modes; only the "ours" side differs.
+    let head_before = if keep_local {
+        repo.commit_all("heron: local changes before upgrade")?
+    } else {
+        if let Some(baseline_local) = meta.baseline.local_commit.as_deref() {
+            repo.fast_forward_to(baseline_local)?;
+        }
+        repo.discard_worktree_changes()?;
+        String::new()
+    };
     // The upstream commit lives in the cache; import it *and the recorded baseline* (a shallow
     // cache may not carry its parents) so git can see both sides of the merge.
     repo.import_objects(cached.path(), &latest)?;

@@ -2,6 +2,7 @@
 import { computed, onMounted, ref } from "vue";
 import { useI18n } from "vue-i18n";
 import AppIcon from "../components/AppIcon.vue";
+import AppOverlay from "../components/AppOverlay.vue";
 import ConflictEditor from "../components/ConflictEditor.vue";
 import PageHeader from "../components/PageHeader.vue";
 import StateChip from "../components/StateChip.vue";
@@ -11,14 +12,30 @@ const store = useAppStore();
 const { t } = useI18n();
 const selected = ref<string[]>([]);
 const editing = ref<string | null>(null);
+// Shown before an overwrite upgrade (设置 → 通用 → 更新时保留本地改动 off), which discards local edits.
+const confirmOverwrite = ref(false);
 onMounted(() => store.loadUpgrades());
 
 const eligible = computed(() => store.upgrades.filter((u) => u.state === "has_update" || u.state === "diverged"));
 
+function targetSlugs() {
+  return selected.value.length ? selected.value : eligible.value.map((u) => u.slug);
+}
+
 async function upgradeSelected() {
-  const slugs = selected.value.length ? selected.value : eligible.value.map((u) => u.slug);
+  const slugs = targetSlugs();
   if (!slugs.length) return;
-  const outcomes = await store.upgrade(slugs);
+  // Overwrite mode is destructive, so confirm before touching anything; merge mode just runs.
+  if (!store.keepLocal) {
+    confirmOverwrite.value = true;
+    return;
+  }
+  await runUpgrade();
+}
+
+async function runUpgrade() {
+  confirmOverwrite.value = false;
+  const outcomes = await store.upgrade(targetSlugs());
   // A conflict is a decision for the user, not an error: open the editor for the first one.
   const conflict = outcomes.find((o) => o.result === "conflicts");
   if (conflict && conflict.result === "conflicts") editing.value = conflict.slug;
@@ -93,5 +110,23 @@ function toggle(slug: string) {
     </div>
 
     <ConflictEditor v-if="editing" :slug="editing" @done="retryAfterResolve" @cancel="editing = null" />
+
+    <AppOverlay :open="confirmOverwrite" variant="dialog" @close="confirmOverwrite = false">
+      <header class="overlay-head">
+        <div>
+          <h3>{{ t("upgrades.overwriteTitle") }}</h3>
+          <p>{{ t("upgrades.overwriteBody") }}</p>
+        </div>
+        <button class="icon-btn" :title="t('common.close')" @click="confirmOverwrite = false">
+          <AppIcon name="close" :size="15" />
+        </button>
+      </header>
+      <footer class="overlay-foot">
+        <span class="right">
+          <button class="btn" @click="confirmOverwrite = false">{{ t("common.cancel") }}</button>
+          <button class="btn primary" :disabled="store.busy" @click="runUpgrade">{{ t("upgrades.overwriteConfirm") }}</button>
+        </span>
+      </footer>
+    </AppOverlay>
   </section>
 </template>

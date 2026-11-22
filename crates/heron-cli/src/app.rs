@@ -104,6 +104,10 @@ pub enum Command {
         all: bool,
         #[arg(long)]
         dry_run: bool,
+        /// Discard local edits and take the upstream snapshot wholesale, instead of three-way
+        /// merging them. The inverse of 设置 → 通用 → 更新时保留本地改动.
+        #[arg(long)]
+        overwrite: bool,
     },
     /// Return a skill to an earlier landed version.
     Rollback {
@@ -245,7 +249,8 @@ pub fn run() -> Result<ExitCode> {
             slugs,
             all,
             dry_run,
-        } => cmd_upgrade(&mut ctx, &slugs, all, dry_run, cli.json),
+            overwrite,
+        } => cmd_upgrade(&mut ctx, &slugs, all, dry_run, overwrite, cli.json),
         Command::Rollback { slug, to } => {
             let previous = upgrade::rollback(&mut ctx, &slug, &to)?;
             println!(
@@ -727,6 +732,7 @@ fn cmd_upgrade(
     slugs: &[String],
     all: bool,
     dry_run: bool,
+    overwrite: bool,
     json: bool,
 ) -> Result<ExitCode> {
     upgrade::refresh_sources(ctx)?;
@@ -757,7 +763,7 @@ fn cmd_upgrade(
     let mut conflicts = 0;
     let mut outcomes = Vec::new();
     for slug in &selected {
-        let outcome = upgrade::upgrade(ctx, slug)?;
+        let outcome = upgrade::upgrade(ctx, slug, !overwrite)?;
         if let UpgradeOutcome::Conflicts { .. } = &outcome {
             conflicts += 1;
         }

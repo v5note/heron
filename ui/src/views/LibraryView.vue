@@ -11,6 +11,7 @@ import PageHeader from "../components/PageHeader.vue";
 import StateChip from "../components/StateChip.vue";
 import { api } from "../api";
 import type { SkillRow, TargetRow } from "../api/types";
+import { clientColor, clientIcon } from "../utils/clients";
 import { displayPath } from "../utils/paths";
 import { useAppStore } from "../stores/app";
 
@@ -416,7 +417,12 @@ const drawerLive = computed(() => {
           <div class="tsec muted">{{ t("library.targets") }}</div>
           <div v-if="drawerRows.length" class="card tlist">
             <div v-for="row in drawerRows" :key="row.target.id" class="trow">
-              <b>{{ row.target.kind }}</b>
+              <span class="t-name">
+                <span class="t-icon" :style="{ color: clientColor(row.target.kind) }">
+                  <AppIcon :name="clientIcon(row.target.kind)" :size="14" />
+                </span>
+                <b>{{ row.target.kind }}</b>
+              </span>
               <span class="path tp" :title="row.path">{{ displayPath(row.path, store.home) }}</span>
               <StateChip :state="row.state" />
               <button class="btn sm" :disabled="busy" @click="project(drawer, row.target.id, !isProjected(row.state))">
@@ -475,6 +481,8 @@ const drawerLive = computed(() => {
 .tcol { text-align: center; width: 74px; }
 .desc { font-size: 11.5px; margin-top: 2px; max-width: 460px; }
 .actions { text-align: right; color: var(--faint); }
+/* The row chevron is a stroke, not a fill: an unfilled path would render as a solid triangle. */
+.actions svg { fill: none; stroke: currentColor; stroke-width: 1.6; }
 .no-match { padding: 24px 0; margin: 0; }
 
 .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; }
@@ -522,13 +530,17 @@ const drawerLive = computed(() => {
 .tsec { font-size: 12px; font-weight: 600; letter-spacing: 0.02em; margin: 2px 0 8px; }
 .tlist { padding: 2px 4px; }
 .trow {
-  display: grid; grid-template-columns: 110px minmax(0, 1fr) auto auto; align-items: center; gap: 10px;
+  display: grid; grid-template-columns: 128px minmax(0, 1fr) auto auto; align-items: center; gap: 10px;
   padding: 8px 10px; border-bottom: 1px solid var(--line); font-size: 12.5px;
 }
+/* Vendor glyph in front of the target name, same brand-color mapping as the client menus. */
+.t-name { display: inline-flex; align-items: center; gap: 7px; min-width: 0; }
+.t-icon { display: inline-grid; place-items: center; flex: none; }
+.t-icon svg { fill: none; stroke: currentColor; stroke-width: 1.6; }
 .trow:last-child { border-bottom: 0; }
 /* The path is data, not punctuation: keep it LTR whatever the surrounding language does. */
 .tp { unicode-bidi: plaintext; }
-.kv { display: grid; grid-template-columns: 110px 1fr; gap: 8px 12px; font-size: 12.5px; margin: 0; }
+.kv { display: grid; grid-template-columns: 128px 1fr; gap: 8px 12px; font-size: 12.5px; margin: 0; }
 .kv dt { color: var(--dim); }
 .kv dd { margin: 0; }
 </style>

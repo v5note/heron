@@ -229,7 +229,7 @@ fn outdated_then_upgrade_then_rollback() {
     let cands = upgrade::outdated(&ctx, PinPolicy::Semver).unwrap();
     assert_eq!(cands[0].state, UpgradeState::HasUpdate);
 
-    match upgrade::upgrade(&mut ctx, "pdf").unwrap() {
+    match upgrade::upgrade(&mut ctx, "pdf", true).unwrap() {
         UpgradeOutcome::Upgraded { from, to, .. } => assert_ne!(from, to),
         other => panic!("expected an upgrade, got {other:?}"),
     }
@@ -349,7 +349,7 @@ fn local_edits_survive_an_upgrade_and_conflicts_are_reported() {
         "local edits make it diverged"
     );
 
-    match upgrade::upgrade(&mut ctx, "pdf").unwrap() {
+    match upgrade::upgrade(&mut ctx, "pdf", true).unwrap() {
         UpgradeOutcome::Upgraded { .. } => {}
         other => panic!("expected clean merge, got {other:?}"),
     }
@@ -362,7 +362,7 @@ fn local_edits_survive_an_upgrade_and_conflicts_are_reported() {
     remote.publish("UPSTREAM\nTHEIR-LINE2\nline3\nline4\nline5\n", "1.2.0");
     upgrade::refresh_sources(&ctx).unwrap();
     let before = fs::read_to_string(&skill_md).unwrap();
-    match upgrade::upgrade(&mut ctx, "pdf").unwrap() {
+    match upgrade::upgrade(&mut ctx, "pdf", true).unwrap() {
         UpgradeOutcome::Conflicts { files, .. } => {
             assert!(files.iter().any(|f| f.path == "SKILL.md"), "got {files:?}");
         }
@@ -373,5 +373,47 @@ fn local_edits_survive_an_upgrade_and_conflicts_are_reported() {
         before, after,
         "an unsuccessful merge leaves the skill untouched"
     );
+    let _ = remote.tmp;
+}
+
+#[test]
+fn an_overwrite_upgrade_discards_local_edits() {
+    if !git_available() {
+        return;
+    }
+    let remote = Remote::new("line1\nline2\nline3\nline4\nline5\n");
+    let env = Env::new();
+    let mut ctx = env.ctx();
+    let req = InstallRequest {
+        input: remote.url(),
+        subpath_override: Some("skills/pdf".into()),
+        ..Default::default()
+    };
+    install::install(&mut ctx, &req).unwrap();
+
+    // The user edits the same line upstream will also change: under the merge mode this would
+    // conflict, but overwrite must resolve it in upstream's favour by dropping the local edit.
+    let skill_md = ctx.skill_path("pdf").join("SKILL.md");
+    let text = fs::read_to_string(&skill_md).unwrap();
+    fs::write(&skill_md, text.replace("line2", "LOCAL-LINE2")).unwrap();
+
+    remote.publish("line1\nTHEIR-LINE2\nline3\nline4\nline5\n", "1.1.0");
+    upgrade::refresh_sources(&ctx).unwrap();
+
+    // keep_local = false.
+    match upgrade::upgrade(&mut ctx, "pdf", false).unwrap() {
+        UpgradeOutcome::Upgraded { .. } => {}
+        other => panic!("expected overwrite to upgrade cleanly, got {other:?}"),
+    }
+    let after = fs::read_to_string(&skill_md).unwrap();
+    assert!(
+        after.contains("THEIR-LINE2"),
+        "overwrite should take the upstream line: {after}"
+    );
+    assert!(
+        !after.contains("LOCAL-LINE2"),
+        "overwrite must discard the local edit: {after}"
+    );
+
     let _ = remote.tmp;
 }

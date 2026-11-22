@@ -237,7 +237,10 @@
     "baseline": "安装时",
     "latest": "上游",
     "source": "来源",
-    "merge": "逐文件合并"
+    "merge": "逐文件合并",
+    "overwriteTitle": "覆盖升级将丢弃本地改动",
+    "overwriteBody": "「更新时保留本地改动」已关闭：升级会用上游版本直接覆盖所选 Skill 的本地修改，且不可撤销（仅保留可回滚的历史记录）。确定继续吗？",
+    "overwriteConfirm": "覆盖并升级"
   },
   "doctor": {
     "title": "体检",
