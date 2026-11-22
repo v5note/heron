@@ -36,6 +36,8 @@
     "no": "否",
     "close": "关闭",
     "applied": "已生效",
+    "enabled": "已启用",
+    "disabled": "已停用",
     "skipped": "已跳过",
     "done": "{n} 处已收拢",
     "error": "出错了",

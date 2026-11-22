@@ -215,7 +215,7 @@ fn project_creates_default_landing_and_verify_reports_visibility() -> Result<()>
     );
     assert_eq!(projection::list_for_skill(ctx.db.conn(), "pdf")?.len(), 1);
 
-    let reports = heron_service::verify::verify(&ctx, Some("pdf"))?;
+    let reports = heron_service::verify::verify(&mut ctx, Some("pdf"))?;
     assert_eq!(reports.len(), 1);
     assert_eq!(reports[0].visibility, heron_projection::Visibility::Visible);
 
@@ -329,7 +329,27 @@ fn two_copies_of_one_skill_both_register_as_visible() -> Result<()> {
         "both originals are projections"
     );
 
-    for report in heron_service::verify::verify(&ctx, Some("pdf"))? {
+    // First verify: claude only rescans at session start, so its fresh landing reads as
+    // "restart required" (§12.3); the agents client is a watcher, so its copy is simply visible.
+    for report in heron_service::verify::verify(&mut ctx, Some("pdf"))? {
+        let in_claude = Path::new(&report.path)
+            .components()
+            .any(|c| c.as_os_str() == ".claude");
+        assert_eq!(
+            report.visibility,
+            if in_claude {
+                heron_projection::Visibility::RestartRequired
+            } else {
+                heron_projection::Visibility::Visible
+            },
+            "{} in {}",
+            report.path,
+            report.target_id
+        );
+    }
+    // Second verify: the landing is confirmed (the user had a chance to reopen the client),
+    // so both copies report plain visible.
+    for report in heron_service::verify::verify(&mut ctx, Some("pdf"))? {
         assert_eq!(
             report.visibility,
             heron_projection::Visibility::Visible,

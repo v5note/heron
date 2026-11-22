@@ -75,6 +75,10 @@ let toastId = 0;
 let railTimer: number | undefined;
 let flashTimer: number | undefined;
 let scanWatching = false;
+// Whether the 打开时自动扫描 launch pass has already run this session. `init` can be called more
+// than once (every view guards on `ready`, but App.vue calls it unconditionally on mount), and a
+// machine-wide walk should start exactly once at boot — not again on each re-init.
+let bootScanDone = false;
 
 function initialScan(): ScanTask {
   return {
@@ -336,6 +340,13 @@ export const useAppStore = defineStore("app", {
       }
       this.ready = true;
       await this.refreshAll();
+      // 打开时自动扫描: kick off a machine-wide pass once per session so the inventory reflects
+      // what is on disk the moment the app opens. Fire-and-forget: boot must not wait on a walk
+      // that can run for minutes; progress and the auto-doctor follow-up both ride the scan events.
+      if (this.autoScan && !bootScanDone) {
+        bootScanDone = true;
+        void this.startScan();
+      }
     },
     async refreshAll() {
       await Promise.all([this.loadSkills(), this.loadDetected(), this.loadTargets(), this.verify()]);
@@ -466,6 +477,10 @@ export const useAppStore = defineStore("app", {
         scan.lastFound = scan.found;
         scan.lastRoots = scan.rootTotal || scan.rootIndex;
         scan.lastTruncated = truncated;
+        // 扫描完成后自动体检: the fresh inventory a just-finished scan wrote is exactly what a
+        // check-up needs, so run one now when the setting is on. runDoctor owns `busy` for the
+        // duration, which is what clears the "扫描中" pill rather than the flash timeout below.
+        if (this.autoDoctor) void this.runDoctor();
       }
       scan.flash = { kind, found: scan.found };
       clearTimeout(flashTimer);

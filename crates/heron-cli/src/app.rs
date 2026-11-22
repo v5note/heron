@@ -222,7 +222,7 @@ pub fn run() -> Result<ExitCode> {
             dry_run,
         } => cmd_project(&mut ctx, &slug, on, mode, dry_run, cli.json),
         Command::Unproject { slug, on } => cmd_unproject(&mut ctx, &slug, on),
-        Command::Verify { slug } => cmd_verify(&ctx, slug.as_deref(), cli.json),
+        Command::Verify { slug } => cmd_verify(&mut ctx, slug.as_deref(), cli.json),
         Command::Doctor => cmd_doctor(&ctx, cli.json),
         Command::Targets => cmd_targets(&ctx, cli.json),
         Command::Install {
@@ -566,7 +566,7 @@ fn cmd_unproject(ctx: &mut Ctx, slug: &str, on: Option<String>) -> Result<ExitCo
     Ok(ExitCode::SUCCESS)
 }
 
-fn cmd_verify(ctx: &Ctx, slug: Option<&str>, json: bool) -> Result<ExitCode> {
+fn cmd_verify(ctx: &mut Ctx, slug: Option<&str>, json: bool) -> Result<ExitCode> {
     let reports = verify::verify(ctx, slug)?;
     if json {
         println!("{}", serde_json::to_string_pretty(&reports).unwrap());

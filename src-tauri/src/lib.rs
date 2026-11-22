@@ -540,8 +540,8 @@ fn unproject_skill(state: State<'_, AppState>, slug: String, target_id: String) 
 
 #[tauri::command]
 fn verify_visibility(state: State<'_, AppState>) -> Result<Vec<verify::VerifyReport>, Msg> {
-    let ctx = state.ctx.lock().unwrap();
-    verify::verify(&ctx, None).map_err(err)
+    let mut ctx = state.ctx.lock().unwrap();
+    verify::verify(&mut ctx, None).map_err(err)
 }
 
 #[tauri::command]

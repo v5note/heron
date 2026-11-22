@@ -108,12 +108,12 @@ async function project(row: SkillRow, targetId: string, enabled: boolean) {
   busy.value = true;
   try {
     if (enabled) {
-      await api.project(row.slug, targetId, null, false);
+      await api.project(row.slug, targetId, store.projectionMode, false);
     } else {
       await api.unproject(row.slug, targetId);
     }
     await store.verify();
-    store.toast("ok", t("common.applied"));
+    store.toast("ok", t(enabled ? "common.enabled" : "common.disabled"));
   } catch (e) {
     store.fail(e);
   } finally {
@@ -140,7 +140,9 @@ async function projectSelected(targetIds: string[]) {
   try {
     for (const slug of selected.value) {
       for (const targetId of targetIds) {
-        await api.project(slug, targetId, null, false);
+        // The mode comes from 设置 → 通用 → 默认投影模式; `null` would let the server fall back to
+        // per-target defaults, ignoring the user's choice.
+        await api.project(slug, targetId, store.projectionMode, false);
       }
     }
     await store.verify();

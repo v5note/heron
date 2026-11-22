@@ -32,7 +32,8 @@ async function projectInto(targetId: string) {
   const slugs = store.skills.map((s) => s.slug);
   if (!slugs.length) return;
   try {
-    for (const slug of slugs) await api.project(slug, targetId, null, true);
+    // dryRun preview must use the same 默认投影模式 the apply call will use, or the plan lies.
+    for (const slug of slugs) await api.project(slug, targetId, store.projectionMode, true);
     await Promise.all([store.loadTargets(), store.verify()]);
     store.toast("ok", t("common.applied"));
   } catch (e) {

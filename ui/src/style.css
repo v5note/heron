@@ -295,8 +295,8 @@ a { color: var(--accent); }
 .dot.broken { background: var(--bad); }
 .dot.not_scanned { background: transparent; box-shadow: inset 0 0 0 1px var(--line-strong); }
 /* Link is in place but the client only picks it up after a restart: a warn ring with a core,
-   so it is neither "live" (solid) nor "wrong" (bad). Verify's classify() does not emit this
-   state yet; the style is forward-looking, matching StateChip's warn tone for it.
+   so it is neither "live" (solid) nor "wrong" (bad). classify() emits this for session-rescan
+   clients (claude) until a later verify confirms the landing, then it fades to visible.
    inset:25% keeps the core proportional at both dot densities. */
 .dot.restart_required { background: transparent; box-shadow: inset 0 0 0 1.5px var(--warn); }
 .dot.restart_required::after { content: ""; position: absolute; inset: 25%; border-radius: 50%; background: var(--warn); }

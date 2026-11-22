@@ -36,6 +36,8 @@
     "no": "No",
     "close": "Close",
     "applied": "Applied",
+    "enabled": "Enabled",
+    "disabled": "Disabled",
     "skipped": "Skipped",
     "done": "{n} adopted",
     "error": "Something went wrong",
