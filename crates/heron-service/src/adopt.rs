@@ -16,7 +16,6 @@ use heron_scan::FingerprintOptions;
 use heron_store::models::{DetectedRow, ProjectionRow, SkillRow, SourceBindingRow, TargetRow};
 use heron_store::repos::{binding, detected, event, projection, skill, target};
 
-use crate::clients::default_landing;
 use crate::{Ctx, Result};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
@@ -345,11 +344,18 @@ pub fn execute(ctx: &mut Ctx, plan: &AdoptPlan, placement: AdoptPlacement) -> Re
             let mode = ProjectionMode::resolve_auto(heron_core::PlatformKind::current());
             let dest_link = source_dir.clone();
             // The link takes the place of the entry *where it was found*, so the projection belongs
-            // to that client's target, not the landing. A landing-booked row makes `verify` name the
-            // wrong client and `unproject --on` miss the link.
+            // to that client's target, not to some generic one. A mis-booked row makes `verify` name
+            // the wrong client and `unproject --on` miss the link.
+            // `<client>@<slot>`: verify reads the client prefix to judge visibility against the
+            // right scan paths.
+            let client_kind = plan
+                .detail
+                .client_id
+                .clone()
+                .unwrap_or_else(|| "custom".to_owned());
             let managed_target = match target::find_for_path(ctx.db.conn(), &dest_link)? {
                 Some(row) => row,
-                None => ensure_default_target(ctx, &default_landing(&home_dir()?))?,
+                None => ensure_target_for_dir(ctx, &dest_link, &client_kind)?,
             };
             if heron_platform::link::probe(&dest_link)?.kind.is_real_dir() {
                 std::fs::remove_dir_all(&dest_link).map_err(|e| {
@@ -570,16 +576,17 @@ fn live_bind(ctx: &mut Ctx, plan: &AdoptPlan, slug: &str) -> Result<AdoptReport>
 
     // 3) The link the client already reads becomes a known projection, booked against the client
     //    directory it sits in so `verify` judges it against the right scan paths.
+    let client_kind = plan
+        .detail
+        .client_id
+        .clone()
+        .unwrap_or_else(|| "custom".to_owned());
     let managed_target = match target::find_for_path(ctx.db.conn(), &entry)? {
         Some(row) => row,
-        None => ensure_default_target(ctx, &default_landing(&home_dir()?))?,
+        None => ensure_target_for_dir(ctx, &entry, &client_kind)?,
     };
     let link_name = format!(
-        "{}@{}",
-        plan.detail
-            .client_id
-            .clone()
-            .unwrap_or_else(|| "heron".to_owned()),
+        "{client_kind}@{}",
         heron_platform::paths::project_key(&entry)
     );
     let entry_key = entry.to_string_lossy().to_string();
@@ -619,40 +626,31 @@ fn live_bind(ctx: &mut Ctx, plan: &AdoptPlan, slug: &str) -> Result<AdoptReport>
     })
 }
 
-fn ensure_default_target(ctx: &mut Ctx, landing: &Path) -> Result<TargetRow> {
-    if let Some(existing) = target::get_default(ctx.db.conn())? {
+/// Register the directory a link actually sits in as a target, reusing it when it is already known.
+///
+/// There is no default target any more (the store is not a projection destination), so an entry
+/// found in a directory the client matrix does not know has to be booked against *that* directory:
+/// `verify` then judges it against the right paths and `unproject --on` finds the link.
+fn ensure_target_for_dir(ctx: &mut Ctx, dest_link: &Path, client_kind: &str) -> Result<TargetRow> {
+    let dir = dest_link
+        .parent()
+        .map(Path::to_path_buf)
+        .unwrap_or_else(|| dest_link.to_path_buf());
+    if let Some(existing) = target::find_for_path(ctx.db.conn(), dest_link)? {
         return Ok(existing);
     }
     let row = TargetRow {
-        id: "heron:global".to_owned(),
-        kind: "heron".to_owned(),
+        id: format!("{client_kind}:{}", heron_platform::paths::project_key(&dir)),
+        kind: client_kind.to_owned(),
         scope: "global".to_owned(),
         project_path: None,
-        path: landing.to_string_lossy().to_string(),
+        path: dir.to_string_lossy().to_string(),
         enabled: true,
-        is_default: true,
+        is_default: false,
         discover: "manual".to_owned(),
     };
     ctx.db.write(|tx| target::upsert(tx, &row))?;
     Ok(row)
-}
-
-fn home_dir() -> Result<PathBuf> {
-    std::env::var_os("HOME")
-        .map(PathBuf::from)
-        .filter(|p| p.is_dir())
-        .or_else(|| {
-            std::env::var_os("USERPROFILE")
-                .map(PathBuf::from)
-                .filter(|p| p.is_dir())
-        })
-        .ok_or_else(|| {
-            heron_core::HeronError::from(
-                heron_core::ErrorCode::Internal
-                    .msg()
-                    .with("detail", "no_home_dir"),
-            )
-        })
 }
 
 pub fn copy_tree(from: &Path, to: &Path) -> Result<()> {

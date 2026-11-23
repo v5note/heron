@@ -61,7 +61,7 @@ export const api = {
   ) => call<T>("adopt_paths", { paths, dryRun, keepOriginal, placement: placement ?? null }),
   skills: () => call<SkillRow[]>("skills_list"),
   targets: () => call<TargetRow[]>("targets_list"),
-  project: (slug: string, targetId: string | null, mode: string | null, dryRun: boolean) =>
+  project: (slug: string, targetId: string, mode: string | null, dryRun: boolean) =>
     call<{ applied: boolean; path: string; mode: string }>("project_skill", { slug, targetId, mode, dryRun }),
   unproject: (slug: string, targetId: string) => call<void>("unproject_skill", { slug, targetId }),
   verify: () => call<VisibilityReport[]>("verify_visibility"),

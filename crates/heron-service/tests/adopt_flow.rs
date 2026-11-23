@@ -182,7 +182,7 @@ fn adopt_keep_original_leaves_the_file_in_place() -> Result<()> {
 }
 
 #[test]
-fn project_creates_default_landing_and_verify_reports_visibility() -> Result<()> {
+fn project_needs_an_explicit_target_and_verify_reports_visibility() -> Result<()> {
     let env = Env::new();
     env.write_skill(".agents/skills/pdf", "pdf");
     let mut ctx = env.ctx("cli");
@@ -193,7 +193,7 @@ fn project_creates_default_landing_and_verify_reports_visibility() -> Result<()>
 
     let req = ProjectRequest {
         slug: "pdf".into(),
-        target_id: "heron:global".into(),
+        target_id: "codex:global".into(),
         mode: None,
         link_name: None,
     };
@@ -208,19 +208,25 @@ fn project_creates_default_landing_and_verify_reports_visibility() -> Result<()>
         outcome.path
     );
 
-    let landing = env.home.join(".heron").join("skills").join("pdf");
+    let projected = env.home.join(".codex").join("skills").join("pdf");
     assert!(
-        landing.join("SKILL.md").is_file(),
-        "projected into the default landing"
+        projected.join("SKILL.md").is_file(),
+        "projected into the named client target"
     );
     assert_eq!(projection::list_for_skill(ctx.db.conn(), "pdf")?.len(), 1);
+    assert!(
+        heron_store::repos::target::get_default(ctx.db.conn())
+            .unwrap()
+            .is_none(),
+        "the store is not a target, so nothing is a default one"
+    );
 
     let reports = heron_service::verify::verify(&mut ctx, Some("pdf"))?;
     assert_eq!(reports.len(), 1);
     assert_eq!(reports[0].visibility, heron_projection::Visibility::Visible);
 
-    project::unproject(&mut ctx, "pdf", "heron:global")?;
-    assert!(!landing.exists());
+    project::unproject(&mut ctx, "pdf", "codex:global")?;
+    assert!(!projected.exists());
     assert!(
         ctx.skill_path("pdf").join("SKILL.md").is_file(),
         "store copy survives unproject"
@@ -239,13 +245,13 @@ fn project_refuses_to_replace_user_data() -> Result<()> {
     adopt::execute(&mut ctx, &plan, AdoptPlacement::KeepOriginal)?;
 
     // Somebody else already owns the destination.
-    let occupied = env.home.join(".heron/skills/pdf");
+    let occupied = env.home.join(".codex/skills/pdf");
     fs::create_dir_all(&occupied)?;
     fs::write(occupied.join("user.md"), "precious")?;
 
     let req = ProjectRequest {
         slug: "pdf".into(),
-        target_id: "heron:global".into(),
+        target_id: "codex:global".into(),
         mode: None,
         link_name: None,
     };

@@ -81,17 +81,22 @@ struct ScanDoneDto {
     roots_missing: Vec<String>,
 }
 
-/// One entry of a `scan://hit` batch: what a card needs, camelCase.
+/// One entry of a `scan://hit` batch: what a card needs, in the same camelCase field names the UI
+/// reads out of `detected_list` (`clientId`, `observedSlug`), so a row that streamed in and the row
+/// the same scan later persists are one and the same row, not two cards.
+///
+/// `path` stays a real path, never the `~`-shortened display form: the UI keys on it, hands it back
+/// to `detected_meta` and `adopt_paths`, and those open the file by that name.
 #[derive(Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
 struct ScanHitDto {
     path: String,
     real_path: String,
     kind: &'static str,
-    client: Option<String>,
+    client_id: Option<String>,
     scope: Option<&'static str>,
-    project: Option<String>,
-    slug: Option<String>,
+    project_path: Option<String>,
+    observed_slug: Option<String>,
     name: Option<String>,
     description: Option<String>,
     frontmatter_ok: bool,
@@ -161,17 +166,15 @@ fn done_progress(stats: &ScanStats, found: usize) -> ScanProgressDto {
 }
 
 fn hit_dto(hit: &Hit) -> ScanHitDto {
+    let real = |p: &std::path::Path| p.to_string_lossy().to_string();
     ScanHitDto {
-        path: heron_platform::paths::display(&hit.path),
-        real_path: heron_platform::paths::display(&hit.real_path),
+        path: real(&hit.path),
+        real_path: real(&hit.real_path),
         kind: hit.kind.as_str(),
-        client: hit.client.clone(),
+        client_id: hit.client.clone(),
         scope: hit.scope.map(|s| s.as_str()),
-        project: hit
-            .project
-            .as_ref()
-            .map(|p| heron_platform::paths::display(p)),
-        slug: hit.slug.clone(),
+        project_path: hit.project.as_ref().map(|p| real(p)),
+        observed_slug: hit.slug.clone(),
         name: hit
             .frontmatter
             .as_ref()
@@ -504,7 +507,7 @@ fn targets_list(state: State<'_, AppState>) -> Result<Vec<heron_store::models::T
 fn project_skill(
     state: State<'_, AppState>,
     slug: String,
-    target_id: Option<String>,
+    target_id: String,
     mode: Option<String>,
     dry_run: bool,
 ) -> Result<serde_json::Value, Msg> {
@@ -516,16 +519,11 @@ fn project_skill(
         Some("pointer") => Some(heron_core::ProjectionMode::Pointer),
         _ => None,
     };
-    let resolved_target = match target_id {
-        Some(t) => t,
-        None => heron_store::repos::target::get_default(ctx.db.conn())
-            .map_err(err)?
-            .map(|t| t.id)
-            .ok_or_else(|| Msg::new("E_TARGET_NOT_FOUND").with("target", "default"))?,
-    };
+    // The target is mandatory: there is no default projection target, since the store is a source,
+    // not a destination, and guessing a client directory would write where the user never pointed.
     let request = ProjectRequest {
         slug,
-        target_id: resolved_target,
+        target_id,
         mode,
         link_name: None,
     };
@@ -1076,9 +1074,13 @@ mod tests {
         let entry = &value["hits"][0];
         assert_eq!(entry["kind"], "skill");
         assert_eq!(entry["scope"], "global");
-        assert_eq!(entry["slug"], "pdf");
+        // The names the UI reads, and the real path it keys on: a streamed row has to be the same
+        // row as the one `detected_list` returns for the same file.
+        assert_eq!(entry["clientId"], "claude");
+        assert_eq!(entry["observedSlug"], "pdf");
+        assert_eq!(entry["path"], "/Users/me/.claude/skills/pdf");
         assert_eq!(entry["frontmatterOk"], false);
-        assert!(entry["project"].is_null());
+        assert!(entry["projectPath"].is_null());
         assert!(entry["name"].is_null());
     }
 

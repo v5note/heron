@@ -191,12 +191,12 @@ Skill 已经成为 AI 编码助手的核心资产：既承载个人方法论，�
 * **理由**：Windows 创建符号链接需要管理员或开发者模式，junction 零权限负担。
 * **后果**：**必须**正确处理 Windows 上 junction 的删除语义（见 §10.2，头号实现陷阱）。
 
-### ADR-8　本地数据目录：遵循各家规范；默认落点为 Heron 自有目录，`~/.agents` 仅作映射点
+### ADR-8　本地数据目录：遵循各家规范；Store 位于 Heron 自有目录 `~/.heron/skills`，`~/.agents` 仅作映射点
 
-* **决策**：使用 `directories` 约定解析用户数据 / 缓存 / 日志目录；Store 位于数据目录（macOS `~/Library/Application Support/heron`，Windows `%LOCALAPPDATA%\heron`）。
-* **理由**：与 `npx skills` 拥有的 `~/.agents` 解耦；Windows 上 `%LOCALAPPDATA%` 不参与 OneDrive 漫游，避免链接被云占位符化。
-* **后果**：用户历史资产集中在 `~/.agents`，**收拢流程（Adopt）必须是一等公民**，否则用户会感到"东西被搬走了"。
-* **默认落点（D10）**：新安装 Skill 默认投影到 `~/.heron/skills/`（Heron 自有契约）；`~/.agents/skills` 降为"映射点"，按需开启且与 `npx skills` 共享所有权。详见 §10.15。
+* **决策**：使用 `directories` 约定解析用户数据 / 缓存 / 日志目录；Store 位于用户主目录下的 `~/.heron/skills`（Windows `%USERPROFILE%\.heron\skills`），数据目录（macOS `~/Library/Application Support/xin.v5ai.heron`，Windows `%LOCALAPPDATA%\v5ai\heron\data`）只放索引、缓存、备份、日志。
+* **理由**：Store 是全部 Skill 实体唯一的存放地，放在 Heron 自己的目录里既不依赖任何第三方客户端的版本行为，也不会落在扫描路径中（不会自己扫自己）；与 `npx skills` 拥有的 `~/.agents` 解耦；Windows 上索引与备份留在 `%LOCALAPPDATA%`，不参与 OneDrive 漫游，避免链接被云占位符化。
+* **后果**：用户历史资产集中在 `~/.agents`，**收拢流程（Adopt）必须是一等公民**，否则用户会感到"东西被搬走了"。指定 `--data-dir` 时该目录拥有 Heron 写入的一切，Store 也随之落到 `<data-dir>/.heron/skills`。
+* **投影目标（D10）**：Store 本身**不是**投影目标，也没有"默认目标"——`heron project <slug>` 必须用 `--on` 显式指定客户端目标。`~/.agents/skills` 是普通的可选映射点，按需开启且与 `npx skills` 共享所有权。详见 §10.15。
 
 ### ADR-9　CLI 与 GUI 共享一套状态：单实例 + 本地 IPC
 
@@ -321,8 +321,8 @@ Skill 已经成为 AI 编码助手的核心资产：既承载个人方法论，�
 
 | 议题 | macOS | Windows | Linux（Phase 2） |
 |------|-------|---------|------------------|
-| 数据目录 | `~/Library/Application Support/heron` | `%LOCALAPPDATA%\heron` | `~/.local/share/heron` |
-| 配置目录 | 同上 | `%APPDATA%\heron` | `~/.config/heron` |
+| 数据目录 | `~/Library/Application Support/xin.v5ai.heron` | `%LOCALAPPDATA%\v5ai\heron\data` | `~/.local/share/heron` |
+| 配置目录 | 同上 | `%APPDATA%\v5ai\heron\config` | `~/.config/heron` |
 | 默认投影 | `symlink` | `junction` | `symlink` |
 | 链接识别 | `symlink_metadata` | 需区分 **symlink 与 junction**（二者都被 `is_symlink()` 报告） | 同 macOS |
 | 链接删除 | `remove_file` 安全 | **junction 必须先解除 reparse point**，否则可能连带删除目标内容 | — |
@@ -341,20 +341,21 @@ Skill 已经成为 AI 编码助手的核心资产：既承载个人方法论，�
 ### 7.1 磁盘布局
 
 ```text
-<DATA_DIR>                         # macOS: ~/Library/Application Support/heron
-│                                  # Win:   %LOCALAPPDATA%\heron
+~/.heron/skills                    # Store：唯一真相源（Heron 自有，Windows %USERPROFILE%\.heron\skills）
+│   └── <slug>/
+│       ├── .git/                  # 每 Skill 独立 Git 仓库（ADR-5）
+│       ├── heron.skill.json       # 本地元数据：基线、来源、投影推导信息
+│       ├── SKILL.md
+│       └── …                      # 其余 Skill 内容
+
+<DATA_DIR>                         # macOS: ~/Library/Application Support/xin.v5ai.heron
+│                                  # Win:   %LOCALAPPDATA%\v5ai\heron\data
 ├── heron.db                       # SQLite 索引（可从 store 重建）
 ├── config.toml                    # 用户配置（人类可编辑）
 ├── sources.toml                   # 来源注册表（人类可编辑）
 ├── targets.toml                   # 目标注册表（全局目标 + 项目目标）
 ├── clients/                       # 客户端兼容性矩阵（内置只读 + 用户覆盖）
 │   └── overrides.toml
-├── store/                         # 唯一真相源（受管）
-│   └── <slug>/
-│       ├── .git/                  # 每 Skill 独立 Git 仓库（ADR-5）
-│       ├── heron.skill.json       # 本地元数据：基线、来源、投影推导信息
-│       ├── SKILL.md
-│       └── …                      # 其余 Skill 内容
 ├── sources-cache/                 # 远端裸仓缓存（可安全删除重建）
 │   └── <sha256-of-url>/
 ├── backups/                       # 收拢 / 覆盖前的安全备份
@@ -364,7 +365,9 @@ Skill 已经成为 AI 编码助手的核心资产：既承载个人方法论，�
 └── ipc.json                       # daemon 端口与令牌（仅当前用户可读）
 ```
 
-**关于 `store/` 内的 `.git`**：扫描器的忽略规则必须显式排除 `store/**/.git/**`，避免病态递归。所有版本能力都以 Git 为基础；未安装 `git` 时按 D7 **引导安装**，不提供静默降级（见 §10.4）。
+Store 不在数据目录里：数据目录不再有 `store/` 一项，实体一律在 `~/.heron/skills`（ADR-8）。指定 `--data-dir` 时该目录拥有 Heron 写入的一切，Store 也随之变为 `<data-dir>/.heron/skills`。
+
+**关于 Store 内的 `.git`**：扫描器的忽略规则必须显式排除 `.git/**`，避免病态递归；Store 自身也不在任何客户端的扫描路径内，因此不存在"自己扫自己"。所有版本能力都以 Git 为基础；未安装 `git` 时按 D7 **引导安装**，不提供静默降级（见 §10.4）。
 
 ### 7.2 目录约定与投影规则
 
@@ -375,8 +378,9 @@ Skill 已经成为 AI 编码助手的核心资产：既承载个人方法论，�
 | `codex` | `~/.agents/skills/<name>`（跨客户端约定） | `<proj>/.agents/skills/<name>` | auto |
 | `cursor` | `~/.cursor/skills/<name>` | `<proj>/.cursor/skills/<name>` | auto |
 | `opencode` | `~/.config/opencode/skills/<name>` | `<proj>/.opencode/skills/<name>` | auto |
-| `heron`（**默认落点**） | `~/.heron/skills/<name>` | `<proj>/.heron/skills/<name>` | auto |
 | `custom` | 用户自定义目录 | 用户自定义 | auto |
+
+> Store `~/.heron/skills/<slug>` 不在此表内：它是被投影的**源**，不是投影目标（ADR-8 / D10）。
 
 > 上表是**可热更配置**（`clients/*.toml`），不是硬编码。每项带 `verified_at` 与 `verified_by`（`spec` / `doc` / `probe`），GUI 展示证据链，避免把未验证的路径当真理（见 §15 风险 R1）。
 
@@ -388,11 +392,11 @@ Skill 已经成为 AI 编码助手的核心资产：既承载个人方法论，�
 | 手动登记 | 用户在"项目"页添加目录，或 CLI `heron targets add` | 状态为 `manual` |
 | 自动结果可固化 | 用户把 `auto` 项目提升为受管 | 之后该项目随扫描持续跟踪，可绑定 `heron.lock` |
 
-**默认落点与映射点（评审决议 D10）**：
+**Store 与映射点（评审决议 D10）**：
 
-* **Heron 自有默认落点** `~\.heron/skills/`：新安装 Skill 的**默认投影目标**。它不依赖任何第三方客户端的版本行为，是 Heron 自己的稳定契约；（Windows：`%USERPROFILE%\.heron\skills`）
-* **`~/.agents/skills` 仅作映射点**：它被当作"跨客户端共享入口"按需开启，Heron 不把它作为主落点，也不接管 `npx skills` 在该目录的所有权；开启时由 Heron 在该目录建立**指向 Store 的投影**，并在界面标注"此目录由 npx skills 与 Heron 共享"。
-* 客户端自有目录（`.claude/skills` 等）仍是可选目标，用于"必须让某个客户端直接看到"的场景。
+* **Store** `~/.heron/skills/`：全部 Skill 实体唯一的存放地（Heron 完全拥有，不依赖任何第三方客户端的版本行为，也不在任何客户端的扫描路径内）。它**不是**投影目标，因此没有"默认投影目标"这回事——`heron project <slug>` 必须用 `--on <target>` 显式点名要写入哪个客户端目录。
+* **`~/.agents/skills` 仅作映射点**：它被当作"跨客户端共享入口"按需开启，Heron 不接管 `npx skills` 在该目录的所有权；开启时由 Heron 在该目录建立**指向 Store 的投影**，并在界面标注"此目录由 npx skills 与 Heron 共享"。
+* 客户端自有目录（`.claude/skills` 等）是仅有的投影目标，用于"让某个客户端看到"的场景。
 
 安全约束：自动发现得到的**项目级投影默认全部关闭**（项目 Skill 来自他人仓库，不可信）；启用需用户显式确认，符合 §9.4 的信任原则。
 
@@ -549,7 +553,6 @@ follow_links = false              # 默认不跟随，防环
 exclude = [
   "**/node_modules/**", "**/.git/**", "**/target/**", "**/dist/**",
   "**/.venv/**", "**/.codex/vendor_imports/**", "**/.vscode/extensions/**",
-  "**/store/**/.git/**",
 ]
 
 [upgrade]
@@ -1157,23 +1160,24 @@ Claude Code 的 `.claude/commands/*.md` 是 Skill 的前身：单文件、frontm
 | 体检 | 标记 `legacy-command`，提示"建议逐步迁移为 Skill 目录形态" |
 | 冲突 | 同名 Skill 与 command 同时存在时，二者**并存**（客户端语义不同），在界面合并展示并标注来源 |
 
-### 10.15 默认落点与映射点（对应 D10）
+### 10.15 Store 与映射点（对应 D10）
 
 ```text
-<DATA>/store/<slug>/                    唯一真相源（含 .git）
+~/.heron/skills/<slug>/             唯一真相源（含 .git），不是投影目标
         │
-        ├──▶ ~/.heron/skills/<slug>            默认落点（Heron 自有契约，推荐）
-        ├──▶ <proj>/.heron/skills/<slug>       项目级默认落点（需显式启用）
-        ├──▶ ~/.agents/skills/<slug>           映射点（跨客户端共享，与 npx skills 共享所有权）
-        └──▶ ~/.claude/skills/<slug> …         客户端自有目录（按需）
+        ├──▶ ~/.agents/skills/<slug>          映射点（跨客户端共享，与 npx skills 共享所有权）
+        ├──▶ ~/.claude/skills/<slug> …        客户端自有目录（按需）
+        └──▶ <proj>/.claude/skills/<slug>     项目级目标（需显式启用）
 ```
 
-| 落点 | 默认状态 | 说明 |
+| 位置 | 默认状态 | 说明 |
 |------|----------|------|
-| `~/.heron/skills` | **启用（默认投影目标）** | 由 Heron 完全拥有，不受第三方工具变更影响 |
-| `<proj>/.heron/skills` | 关闭（需用户对具体项目开启） | 项目级默认落点 |
+| `~/.heron/skills` | **Store，始终启用** | 由 Heron 完全拥有，不受第三方工具变更影响；不出现在目标清单里，不参与扫描 |
 | `~/.agents/skills` | 关闭（映射点） | 启用时 **必须** 先检测 `skills-lock.json` / `npx skills` 的存在，并提示共享风险；Heron 只增删自己创建的投影，不动其它条目 |
-| `~/.claude/skills` 等 | 关闭 | 仅在用户要求"客户端直接可见"时启用 |
+| `~/.claude/skills` 等 | 关闭 | 仅在 `heron project <slug> --on <target>` 明确点名时投影 |
+| `<proj>/.claude/skills` 等 | 关闭（需用户对具体项目开启） | 项目级目标 |
+
+**没有"默认目标"**：`heron project` / `heron unproject` 不带 `--on` 时报错并列出当前已启用的目标 id，避免把 Skill 悄悄写进用户没选过的客户端目录。
 
 **与 `npx skills` 的共存规则（明确写入产品文档）**：
 
@@ -1315,10 +1319,10 @@ heron cache clean
   ~/projA/.claude/skills/find-skills/      实体副本 B（内容已漂移）
 
 收拢后：
-  <DATA>/store/find-skills/                唯一实体（含 .git 与 heron.skill.json）
-  ~/.agents/skills/find-skills    → <DATA>/store/find-skills   (symlink)
-  ~/.claude/skills/find-skills    → <DATA>/store/find-skills   (symlink)
-  ~/projA/.claude/skills/find-skills → <DATA>/store/find-skills (symlink)
+  ~/.heron/skills/find-skills/             唯一实体（含 .git 与 heron.skill.json）
+  ~/.agents/skills/find-skills    → ~/.heron/skills/find-skills   (symlink)
+  ~/.claude/skills/find-skills    → ~/.heron/skills/find-skills   (symlink)
+  ~/projA/.claude/skills/find-skills → ~/.heron/skills/find-skills (symlink)
   <DATA>/backups/<时间戳>/projA.claude.skills.find-skills/      （副本 B 的备份）
 ```
 
@@ -1329,7 +1333,7 @@ heron cache clean
 | 里程碑 | 范围 | 完成判据（DoD） |
 |--------|------|-----------------|
 | **M0 地基** | 工作区、core / platform、扫描与索引、`scan/list/detected`、客户端矩阵（含 native_scan 能力表）、Git preflight 与安装引导、**i18n 骨架（中/英）** | 本机 4 类目录全部识别；扫描性能达标；Windows CI 跑通；两种语言包 key 一致；未装 git 时给出可执行引导 |
-| **M1 收拢与分发** | `adopt/project/unproject/targets/verify`、四种投影、默认落点 `~/.heron/skills`、客户端配置只读识别、旧式命令接管、备份与撤销 | 本机 3 处重复 Skill 收拢为 1 份；`~/.heron/skills` 为默认投影目标；`.claude/commands` 可被收拢且原文件保留；`verify` 能报告客户端加载状态；Windows 普通用户全流程通过 |
+| **M1 收拢与分发** | `adopt/project/unproject/targets/verify`、四种投影、Store `~/.heron/skills`、客户端配置只读识别、旧式命令接管、备份与撤销 | 本机 3 处重复 Skill 收拢为 1 份；实体统一存放于 `~/.heron/skills`，投影只写入 `--on` 明确点名的客户端目录；`.claude/commands` 可被收拢且原文件保留；`verify` 能报告客户端加载状态；Windows 普通用户全流程通过 |
 | **M2 远程与升级** | `source add/browse`、**五个内置市场适配器**、`add`、`outdated/upgrade/rollback/diff` | 从 GitHub 子目录装 Skill → 本地改一行 → 上游更新 → 三方合并成功 → 回滚；断网或中断不留半态 |
 | **M3 体检与团队** | `doctor`（病态嵌套只报告）、原生扫描注入（默认关）、`heron.lock` 导出/导入、`sync` | 同一锁文件在 macOS 与 Windows 两台机器复现同一套 Skill；病态嵌套样本只报告不改动；原生扫描注入前展示 diff 且可一键还原 |
 | **M4 GUI 完整化** | 全部页面（Vue 3）、托盘、自动更新、诊断包 | 非技术用户 5 分钟内完成"发现 → 收拢 → 启用"；中英文界面切换无遗漏 |
@@ -1354,7 +1358,7 @@ heron cache clean
 | R9 | 代码签名 / 分发渠道缺失导致安装受阻 | 中 | 中 | 开发期提供未签名构建与安装说明；签名任务前置于发布清单 |
 | R10 | 隐私与合规（扫描可能包含敏感信息的项目目录） | 中 | 低 | 永不联网上报；扫描结果仅本地存储；日志脱敏 |
 | R11 | **改写客户端原生配置导致客户端异常**（D6 注入） | 高 | 中 | 能力表驱动、默认关闭、逐客户端确认、写入前展示 diff 并备份、`--revert-native` 一键还原；无法确证格式时**宁可不写** |
-| R12 | 默认落点 `~/.heron/skills` 不在当前客户端扫描路径内，导致"装了看不见" | 中 | 中 | `verify` 明示"未扫描"；首次引导时询问"是否同时投影到 `.claude/skills` 等客户端目录" |
+| R12 | 客户端目录都没开启时，Skill 只在 Store 里、任何客户端都看不见 | 中 | 中 | `project` 不带 `--on` 直接报错并列出可用目标；`verify` 明示"未扫描"；首次引导时询问"是否同时投影到 `.claude/skills` 等客户端目录" |
 
 ---
 
@@ -1373,7 +1377,7 @@ heron cache clean
 | D7 | 无 Git 环境（原 Q3） | **引导安装 Git**；不做静默降级（仅当用户显式选择时才进入"只读预览"模式） | §10.4 / §10.12 |
 | D8 | 病态嵌套（原 Q4） | **只报告 + 给修复建议，绝不自动修改**，决定权交给用户 | §8.2 流程 D / §10.13 |
 | D9 | 旧式 `.claude/commands`（原 Q5） | **接管**：作为 Skill 的兼容形态纳入管理（导入/收拢/投影），来源标记为 `legacy-command` | §8.3 / §10.14 |
-| D10 | `~/.agents/skills` 的定位（原 Q6） | **不作默认落点**：Heron 定义**自有默认落点**；`~/.agents/skills` 仅作为**映射点**（跨客户端共享入口），由用户按需开启 | §7.2 / §10.15 |
+| D10 | `~/.agents/skills` 的定位（原 Q6） | **不作默认落点**：Store 就是 `~/.heron/skills`（Heron 自有），它**不是**投影目标，也没有默认目标；`~/.agents/skills` 仅作为**映射点**（跨客户端共享入口），由用户按需开启 | §7.2 / §10.15 |
 
 ### 16.2 剩余开放问题
 
@@ -1387,10 +1391,9 @@ heron cache clean
 |------|------|
 | **Skill** | 含 `SKILL.md` 的目录（Agent Skills 规范） |
 | **slug** | Skill 的全局唯一标识（默认取 frontmatter `name` 并规范化；大小写不敏感唯一） |
-| **Store** | Heron 的受管存储区，唯一真相源 |
+| **Store** | `~/.heron/skills/<slug>/`，全部 Skill 实体唯一的存放地（受管，含 `.git`）；不是投影目标，不参与扫描（ADR-8 / D10） |
 | **Source** | Skill 的来源：Git 仓库 / 本地目录 / 内置市场 |
 | **Target** | 落地点：客户端 × 作用域（全局 / 项目） |
-| **默认落点** | `~/.heron/skills/`，Heron 自有契约，新安装 Skill 的默认投影目标（D10） |
 | **映射点** | `~/.agents/skills/`，跨客户端共享入口，仅按需开启且与 `npx skills` 共享所有权（D10） |
 | **legacy-command** | 旧式命令文件（`.claude/commands/*.md`）接管后的来源标记（D9） |
 | **native-scan** | 客户端原生扫描注入能力，能力表驱动、默认关闭（D6） |
@@ -1438,4 +1441,4 @@ heron cache clean
 5. 四种投影方式（§10.1）的取舍与默认值是否认可？
 6. 内置五市场的能力分级（§9.5，A 档一键安装 / B 档引导式）是否认可？
 7. 客户端原生扫描口径（§10.11，只读识别 + 能力表驱动的注入）是否符合预期？
-8. 默认落点 `~/.heron/skills` 与 `~/.agents/skills` 仅作映射点（§10.15）是否符合预期？
+8. Store 放在 `~/.heron/skills`（不是投影目标、没有默认目标）与 `~/.agents/skills` 仅作映射点（§10.15）是否符合预期？

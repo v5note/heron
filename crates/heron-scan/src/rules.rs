@@ -1,6 +1,9 @@
 //! Ignore rules for the walker.
 //!
 //! Defaults follow the design (§5.1) and are compiled once into a `globset`.
+//!
+//! `**/.git/**` is what keeps the store's per-skill repositories out of the results: the store is
+//! scanned as an extra skill directory, and every entry under it owns a `.git`.
 
 use globset::{Glob, GlobSet, GlobSetBuilder};
 use heron_core::Result;
@@ -15,7 +18,6 @@ pub const DEFAULT_EXCLUDES: &[&str] = &[
     "**/vendor_imports/**",
     "**/.codex/vendor_imports/**",
     "**/.vscode/extensions/**",
-    "**/store/**/.git/**",
 ];
 
 #[derive(Debug, Clone)]

@@ -452,7 +452,7 @@ function favParseBlock(): string {
       R(t("sources.vReason"), t("sources.vLinkReasonVal")) +
       R(t("sources.vAfter"), t("sources.vLinkAfterVal"))
     );
-  const landing = "~/.heron/store/" + (p.slug || "");
+  const storeDir = "~/.heron/skills/" + (p.slug || "");
   const isInstalled = p.slug ? installed.value.has(p.slug) : false;
   return (
     `${t("sources.vOkTitle")}\n` +
@@ -461,7 +461,7 @@ function favParseBlock(): string {
     R("repo", p.repo || "") +
     R(t("sources.vBranch"), p.branch || t("sources.vDefaultBranch")) +
     R(t("sources.vSub"), p.sub || t("sources.repoRoot")) +
-    R(t("sources.vLanding"), landing, "to") +
+    R(t("sources.vStoreDir"), storeDir, "to") +
     (isInstalled
       ? R(t("sources.vStatus"), t("sources.vInstalled"))
       : R(t("sources.vAction"), t("sources.vNewAction")))

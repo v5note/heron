@@ -57,8 +57,8 @@ heron adopt --all # 全部收拢（会先备份、再去重）
 
 ```text
 收拢前                          收拢后
-~/.agents/skills/pdf/     →     ~/.agents/skills/pdf → <数据目录>/store/pdf
-~/.claude/skills/pdf/     →     ~/.claude/skills/pdf → <数据目录>/store/pdf   （重复的自动去重）
+~/.agents/skills/pdf/     →     ~/.agents/skills/pdf → ~/.heron/skills/pdf
+~/.claude/skills/pdf/     →     ~/.claude/skills/pdf → ~/.heron/skills/pdf   （重复的自动去重）
 ```
 
 > 第一次使用务必先跑 `heron adopt --all --dry-run`，看清每一步再执行。
@@ -90,8 +90,8 @@ heron adopt --all # 全部收拢（会先备份、再去重）
 | `heron detected` | 列出未纳管的 Skill |
 | `heron adopt <slug...> \| --all` | 收拢到存储区 |
 | `heron list` | 已纳管的 Skill |
-| `heron project <slug> [--on <target>]` | 投影到某个落点 |
-| `heron unproject <slug> [--on <target>]` | 移除投影（保留存储副本） |
+| `heron project <slug> --on <target>` | 投影到某个落点（没有默认落点，必须点名） |
+| `heron unproject <slug> --on <target>` | 移除投影（保留存储副本） |
 | `heron verify` | 该 Skill 在客户端里到底会不会生效 |
 | `heron doctor` | 只读体检：重复、坏链、病态嵌套、来源丢失 |
 | `heron install <url>` | 从 Git 仓库安装 |
@@ -129,15 +129,15 @@ heron adopt --all # 全部收拢（会先备份、再去重）
 
 | 平台 | 数据目录 |
 |---|---|
-| macOS | `~/Library/Application Support/io.greyheron.heron` |
-| Windows | `%LOCALAPPDATA%\heron` |
+| macOS | `~/Library/Application Support/xin.v5ai.heron` |
+| Windows | `%LOCALAPPDATA%\v5ai\heron\data` |
 | Linux | `~/.local/share/heron` |
 
-其中 `store/` 是唯一真相源（每个 Skill 一个 Git 仓库），`backups/` 是安全网，`trash/` 是软删除区。
-整个索引（`heron.db`）可以随时从存储区重建。
+`~/.heron/skills` 就是存储区（Store）——唯一真相源，每个 Skill 一个 Git 仓库，它不在数据目录里。
+数据目录只放 `backups/`（安全网）、`trash/`（软删除区）和 `heron.db`（可随时从存储区重建）。
 
-> `~/.agents/skills` **不是** Heron 的存储区。Heron 有自己的默认落点 `~/.heron/skills`，
-> `~/.agents/skills` 只作为可选的"共享映射点"，因为那个目录同时被 `npx skills` 使用。
+> `~/.agents/skills` 只是一个投影目标（"共享映射点"），因为那个目录同时被 `npx skills` 使用；
+> 它**不是**存储区，Heron 也只清理自己创建的条目。
 
 ---
 
@@ -225,7 +225,8 @@ cargo run -p heron-cli -- --data-dir /tmp/x scan     # 不用包装脚本
 HOME=/tmp/fake-home ./target/debug/heron --data-dir /tmp/heron-dev scan
 ```
 
-`--data-dir` 会同时接管 data / config / cache / **log** 四类目录，不会往系统路径写任何东西。
+`--data-dir` 会同时接管 data / config / cache / **log** 与存储区（`<数据目录>/.heron/skills`），
+不会往系统路径写任何东西，真实的 `~/.heron` 也不会被碰到。
 在 `/tmp/fake-home` 下造几个假 Skill（`~/.claude/skills/foo/SKILL.md` 之类），
 就能安全地演练收拢流程。
 
@@ -238,7 +239,7 @@ HOME=/tmp/fake-home ./target/debug/heron --data-dir /tmp/heron-dev scan
 | 前端调用链路 | 控制台里每次后端调用都是一次 `invoke`，入口在 `ui/src/api/index.ts` |
 | 前端报错 | `useAppStore().toasts`——任何失败命令都会以本地化提示弹出 |
 | 看索引内容 | `sqlite3 <数据目录>/heron.db '.tables'`、`select * from skill;` |
-| 看某个 Skill 的历史 | `git -C <数据目录>/store/<slug> log --oneline` |
+| 看某个 Skill 的历史 | `git -C ~/.heron/skills/<slug> log --oneline` |
 | 为什么某个 Skill 不生效 | `heron verify`——区分「未被扫描 / 被压制 / 坏链」 |
 | 为什么升级冲突 | `heron conflict <slug>`（加 `--json` 可拿到完整文件内容） |
 | 后端 panic | `RUST_BACKTRACE=1 cargo run -p heron-app` |

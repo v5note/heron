@@ -67,7 +67,7 @@ pub enum Command {
     /// Materialize a managed skill into a target directory.
     Project {
         slug: String,
-        /// Target id, e.g. `heron:global` or `claude:global` (defaults to the default target).
+        /// Target id, e.g. `claude:global`. Required: Heron has no default projection target.
         #[arg(long)]
         on: Option<String>,
         #[arg(long)]
@@ -516,7 +516,7 @@ fn cmd_adopt(
         }
         if !adopted.is_empty() {
             println!();
-            println!("next: heron project <slug>   (or --on claude:global for a specific client)");
+            println!("next: heron project <slug> --on <target>   (see `heron targets`)");
         }
     }
     Ok(ExitCode::SUCCESS)
@@ -535,14 +535,33 @@ fn parse_mode(raw: Option<String>) -> Result<Option<ProjectionMode>> {
     .transpose()
 }
 
+/// A projection destination must be named. There is no default target: the store (`~/.heron/skills`)
+/// is the source of truth, not a place to project into, and silently picking one of the client
+/// directories would write into a client the user never chose.
 fn resolve_target(ctx: &Ctx, on: Option<String>) -> Result<String> {
     match on {
         Some(id) => Ok(id),
-        None => target::get_default(ctx.db.conn())?
-            .map(|t| t.id)
-            .ok_or_else(|| {
-                HeronError::from(ErrorCode::TargetNotFound.msg().with("target", "default"))
-            }),
+        None => {
+            let available: Vec<String> = target::list(ctx.db.conn())?
+                .into_iter()
+                .filter(|t| t.enabled)
+                .map(|t| t.id)
+                .collect();
+            Err(HeronError::from(
+                ErrorCode::TargetNotFound
+                    .msg()
+                    .with("target", "default")
+                    .with(
+                        "detail",
+                        if available.is_empty() {
+                            "no target is enabled; run `heron scan` first".to_owned()
+                        } else {
+                            format!("--on is required, e.g. --on {}", available[0])
+                        },
+                    )
+                    .with("targets", available.join(", ")),
+            ))
+        }
     }
 }
 

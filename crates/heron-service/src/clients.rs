@@ -86,11 +86,6 @@ pub fn builtin() -> Result<Vec<ClientToml>> {
         .collect()
 }
 
-/// Heron's own landing directory (decision D10).
-pub fn default_landing(home: &Path) -> PathBuf {
-    home.join(heron_platform::dirs::DEFAULT_LANDING_DIRNAME)
-}
-
 pub fn specs(home: &Path) -> Result<Vec<heron_scan::classify::ClientSpec>> {
     Ok(builtin()?
         .into_iter()
@@ -112,7 +107,10 @@ pub fn specs(home: &Path) -> Result<Vec<heron_scan::classify::ClientSpec>> {
         .collect())
 }
 
-/// Seed the client matrix and the default landing target. Idempotent.
+/// Seed the client matrix. Idempotent.
+///
+/// No target is marked default: projecting into a client directory is always an explicit choice.
+/// Heron's own `~/.heron/skills` is the store, not a projection target, so it never appears here.
 pub fn bootstrap(db: &mut Db, home: &Path) -> Result<()> {
     if db.kv_get("bootstrap_done")?.as_deref() == Some("1") {
         return Ok(());
@@ -161,35 +159,6 @@ pub fn bootstrap(db: &mut Db, home: &Path) -> Result<()> {
                 },
             )?;
         }
-        client::upsert(
-            tx,
-            &ClientRow {
-                id: "heron".into(),
-                display_name: "Heron landing".into(),
-                global_paths: vec![default_landing(home).to_string_lossy().to_string()],
-                project_paths: vec![".heron/skills".into()],
-                link_modes: vec!["symlink".into(), "junction".into(), "copy".into()],
-                global_commands: vec![],
-                project_commands: vec![],
-                priority: 0,
-                native_scan: None,
-                verified_at: Some("2026-11-19".into()),
-                verified_by: Some("design".into()),
-            },
-        )?;
-        target::upsert(
-            tx,
-            &TargetRow {
-                id: "heron:global".into(),
-                kind: "heron".into(),
-                scope: "global".into(),
-                project_path: None,
-                path: default_landing(home).to_string_lossy().to_string(),
-                enabled: true,
-                is_default: true,
-                discover: "manual".into(),
-            },
-        )?;
         Ok(())
     })?;
     db.kv_set("bootstrap_done", "1")?;
@@ -240,7 +209,7 @@ mod tests {
     }
 
     #[test]
-    fn bootstrap_is_idempotent_and_seeds_heron_landing() {
+    fn bootstrap_is_idempotent_and_leaves_no_default_target() {
         let tmp = tempfile::tempdir().unwrap();
         let mut db = Db::open(&tmp.path().join("heron.db")).unwrap();
         let home = Path::new("/home/u");
@@ -248,13 +217,19 @@ mod tests {
         bootstrap(&mut db, home).unwrap();
 
         let clients = client::list(db.conn()).unwrap();
-        assert_eq!(clients.len(), 6, "five clients plus the heron landing");
-        let landing = target::get_default(db.conn()).unwrap().unwrap();
-        // Build the expectation with PathBuf so the separator matches the platform.
-        let expected = PathBuf::from("/home/u").join(".heron").join("skills");
-        assert_eq!(PathBuf::from(&landing.path), expected);
+        assert_eq!(clients.len(), 5, "only the built-in client matrix");
+        assert!(!clients.iter().any(|c| c.id == "heron"));
         let targets = target::list(db.conn()).unwrap();
+        assert_eq!(targets.len(), 5, "one global target per built-in client");
         assert!(targets.iter().any(|t| t.id == "claude:global"));
-        assert_eq!(targets.iter().filter(|t| t.is_default).count(), 1);
+        assert!(
+            !targets.iter().any(|t| t.id == "heron:global"),
+            "the store is not a projection target"
+        );
+        assert!(
+            target::get_default(db.conn()).unwrap().is_none(),
+            "nothing is projected without an explicit --on"
+        );
+        assert_eq!(targets.iter().filter(|t| t.is_default).count(), 0);
     }
 }

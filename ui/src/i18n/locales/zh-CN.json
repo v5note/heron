@@ -188,8 +188,7 @@
       "qoder": "Qoder",
       "grok": "Grok",
       "cline": "Cline",
-      "copilot": "Copilot",
-      "heron": "本机收纳"
+      "copilot": "Copilot"
     },
     "otherClient": "其他",
     "scopes": {
@@ -307,7 +306,7 @@
     "vBranch": "分支",
     "vDefaultBranch": "默认分支",
     "vSub": "子路径",
-    "vLanding": "落点",
+    "vStoreDir": "存入库",
     "vStatus": "状态",
     "vInstalled": "已在存储区，重复安装会跳过",
     "vAction": "动作",

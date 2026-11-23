@@ -10,8 +10,6 @@ import AppIcon from "../components/AppIcon.vue";
 import PageHeader from "../components/PageHeader.vue";
 import ScanPill from "../components/ScanPill.vue";
 import ScanStatusLine from "../components/ScanStatusLine.vue";
-import logoDark from "../assets/logo-dark.png";
-import logoLight from "../assets/logo-light.png";
 import { clientColor, clientIcon } from "../utils/clients";
 import { displayPath } from "../utils/paths";
 import { useAppStore } from "../stores/app";
@@ -398,11 +396,7 @@ async function copyPath(path: string, id: string) {
     <div class="tiles">
       <div v-for="card in targetCards" :key="card.id" class="tile" @click="go('/projects')">
         <div class="t-head">
-          <span v-if="card.kind === 'heron'" class="glyph brand">
-            <img class="on-light" :src="logoLight" alt="Heron" draggable="false" />
-            <img class="on-dark" :src="logoDark" alt="Heron" draggable="false" />
-          </span>
-          <span v-else class="glyph" :style="glyphStyle(card.kind)">
+          <span class="glyph" :style="glyphStyle(card.kind)">
             <AppIcon :name="clientIcon(card.kind)" :size="26" />
           </span>
           <span class="t-name">{{ card.kind }}</span>
@@ -520,11 +514,6 @@ async function copyPath(path: string, id: string) {
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--text) 7%, transparent);
 }
 .glyph :deep(svg) { width: 26px; height: 26px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
-/* heron 不用假 monogram：容器换成品牌底板，里面是真实 logo */
-.glyph.brand { padding: 0; background: transparent; box-shadow: 0 0 0 1px var(--logo-ring); overflow: hidden; }
-.glyph.brand img { width: 34px; height: 34px; display: block; object-fit: cover; }
-:root[data-color-mode="dark"] .glyph.brand .on-light { display: none; }
-:root[data-color-mode="light"] .glyph.brand .on-dark { display: none; }
 .t-path { display: flex; align-items: center; gap: 8px; }
 .t-path .path { flex: 1; min-width: 0; }
 .t-copied { width: 44px; flex: none; font-size: 12px; color: var(--good); text-align: right; visibility: hidden; }

@@ -160,7 +160,7 @@ fn occupied_names(_kind: &str, _project: Option<&str>) -> Vec<String> {
 
 /// Is this client known at all? Used by the CLI to warn about unknown target kinds.
 pub fn known_client(id: &str) -> bool {
-    id == "heron"
+    id == "custom"
         || crate::clients::builtin()
             .map(|m| m.iter().any(|c| c.id == id))
             .unwrap_or(false)

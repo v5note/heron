@@ -51,9 +51,10 @@
 
 ## 分发
 
-### `heron project <slug> [--on <target>] [--mode copy|symlink|junction|pointer] [--dry-run]`
+### `heron project <slug> --on <target> [--mode copy|symlink|junction|pointer] [--dry-run]`
 
-投影到某个落点。不指定 `--on` 时用默认落点（`heron:global`）。
+投影到某个落点。**必须显式指定 `--on`**：存储区 `~/.heron/skills` 是被投影的源，不是落点，所以
+没有"默认落点"；不指定时命令报错并列出当前已启用的目标 id。
 
 可能的结果：
 
@@ -65,13 +66,13 @@
 | 是别人的链接 | `E_DRIFTED`，不覆盖 |
 | copy 模式且内容被改过 | `E_DRIFTED`，不覆盖 |
 
-### `heron unproject <slug> [--on <target>]`
+### `heron unproject <slug> --on <target>`
 
-移除投影，**保留存储副本**。copy 模式下若目标内容被改动过，会拒绝删除。
+移除投影，**保留存储副本**。copy 模式下若目标内容被改动过，会拒绝删除。同样必须显式指定 `--on`。
 
 ### `heron targets`
 
-列出所有落点，`*` 标记默认落点。
+列出所有落点，`*` 标记被设为默认的那个（安装后默认没有；需要用户自己指定）。
 
 ### `heron verify [<slug>]`
 
@@ -231,14 +232,18 @@ heron --data-dir /tmp/heron-test scan    # 完全隔离的一套数据
 ## 配置与数据布局
 
 ```text
+~/.heron/skills/<slug>/   每个 Skill 一个 Git 仓库；存储区（唯一真相源），不在数据目录里
+
 <数据目录>/
 ├── heron.db          索引（可从 store 重建）
-├── store/<slug>/     每个 Skill 一个 Git 仓库（唯一真相源）
 ├── backups/          收拢/覆盖前的完整副本
 ├── sources-cache/    远端裸仓缓存（可安全删除）
 ├── staging/          安装过程的临时区
 ├── trash/            软删除区
 └── log/
 ```
+
+`--data-dir <路径>` 时数据目录整体搬家，存储区也随之变成 `<数据目录>/.heron/skills/`——测试与便携
+安装因此不会碰到真实的 `~/.heron`。
 
 客户端路径与能力表位于仓库的 `resources/clients/*.toml`，每条都带 `verified_by` 标记来源。

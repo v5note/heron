@@ -1,4 +1,7 @@
-//! User data, config, cache and log directories (design ADR-8).
+//! User home, data, config, cache and log directories (design ADR-8).
+//!
+//! The store of managed skills is not inside the data directory: it is `~/.heron/skills`, the one
+//! place skill content lives, mapped out to the client directories by projection.
 //!
 //! Windows deliberately uses `LOCALAPPDATA` for data so that OneDrive roaming cannot turn
 //! junctions into cloud placeholders.
@@ -9,6 +12,8 @@ use heron_core::{ErrorCode, Msg};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Dirs {
+    /// The user's home directory; the store lives under it ([`Dirs::store`]).
+    pub home: PathBuf,
     pub data: PathBuf,
     pub config: PathBuf,
     pub cache: PathBuf,
@@ -18,10 +23,16 @@ pub struct Dirs {
 impl Dirs {
     /// Resolve the standard locations for `app` (e.g. `heron`).
     pub fn resolve(app: &str) -> Result<Self, Msg> {
-        let pd = directories::ProjectDirs::from("io", "greyheron", app)
+        let pd = directories::ProjectDirs::from("xin", "v5ai", app)
+            .ok_or_else(|| ErrorCode::Internal.msg().with("detail", "no_home_dir"))?;
+        // `directories` 6 gives no home through `ProjectDirs`, so ask `BaseDirs`; its constructor
+        // already resolves $HOME and the passwd entry, and absence is the same hard error as above.
+        let home = directories::BaseDirs::new()
+            .map(|base| base.home_dir().to_path_buf())
             .ok_or_else(|| ErrorCode::Internal.msg().with("detail", "no_home_dir"))?;
         let data = pd.data_local_dir().to_path_buf();
         Ok(Self {
+            home,
             config: pd.config_dir().to_path_buf(),
             cache: pd.cache_dir().to_path_buf(),
             log: data.join("log"),
@@ -29,8 +40,8 @@ impl Dirs {
         })
     }
 
-    /// Data directory can be relocated (e.g. to an external disk); the other three follow
-    /// the platform defaults.
+    /// Data directory can be relocated (e.g. to an external disk); config, cache, log and the store
+    /// follow it, the rest stays on the platform defaults.
     pub fn resolve_with_override(app: &str, data_override: Option<&Path>) -> Result<Self, Msg> {
         let mut dirs = Self::resolve(app)?;
         if let Some(dir) = data_override {
@@ -40,8 +51,11 @@ impl Dirs {
                     .with("detail", "empty_data_override"));
             }
             // An explicit data directory owns everything Heron writes, so portable installs,
-            // tests and CI never need access outside it.
+            // tests and CI never need access outside it. That includes the store: it lives in the
+            // home directory by default, so `home` follows the override too and never points at
+            // the real `~/.heron`.
             dirs.data = dir.to_path_buf();
+            dirs.home = dir.to_path_buf();
             dirs.config = dirs.data.join("config");
             dirs.cache = dirs.data.join("cache");
             dirs.log = dirs.data.join("log");
@@ -57,8 +71,9 @@ impl Dirs {
         Ok(())
     }
 
+    /// The store: the one and only place every managed skill lives.
     pub fn store(&self) -> PathBuf {
-        self.data.join("store")
+        self.home.join(HERON_DIRNAME).join(STORE_DIRNAME)
     }
     pub fn backups(&self) -> PathBuf {
         self.data.join("backups")
@@ -86,8 +101,17 @@ pub(crate) fn io_msg(path: &Path) -> impl Fn(std::io::Error) -> Msg + '_ {
     }
 }
 
-/// Default landing directory owned by Heron (decision D10).
-pub const DEFAULT_LANDING_DIRNAME: &str = ".heron/skills";
+/// The directory Heron owns inside the user's home, holding the store and nothing else.
+///
+/// Kept as two separate names rather than one `".heron/skills"` string: `Path::join` appends the
+/// whole argument, so a literal slash would survive on Windows as `C:\Users\you\.heron/skills`.
+/// Joining segment by segment gives the platform-correct `%USERPROFILE%\.heron\skills`.
+pub const HERON_DIRNAME: &str = ".heron";
+/// The store directory within [`HERON_DIRNAME`]: the single place every managed skill's content is
+/// kept. It is deliberately Heron's own directory and never a client's, so the store is not one of
+/// the paths the scanner walks (no self-scan) and stays decoupled from `npx skills`, which uses
+/// `~/.agents`.
+pub const STORE_DIRNAME: &str = "skills";
 
 #[cfg(test)]
 mod tests {
@@ -108,7 +132,8 @@ mod tests {
         assert!(uses_own_dir("heron-test-dirs"));
         let d = Dirs::resolve("heron-test-dirs").expect("home dir available");
         assert!(d.log.starts_with(&d.data));
-        assert_eq!(d.store(), d.data.join("store"));
+        // Only compared, never created: this test must not turn the real ~/.heron into a target.
+        assert_eq!(d.store(), d.home.join(HERON_DIRNAME).join(STORE_DIRNAME));
         assert_eq!(d.db_path(), d.data.join("heron.db"));
         assert_eq!(d.backups(), d.data.join("backups"));
         assert_eq!(d.trash(), d.data.join("trash"));
@@ -129,6 +154,8 @@ mod tests {
         );
         assert_eq!(d.cache, tmp.join("cache"));
         assert_eq!(d.db_path(), tmp.join("heron.db"));
+        assert_eq!(d.home, tmp, "an explicit data dir owns the store too");
+        assert_eq!(d.store(), tmp.join(".heron").join("skills"));
     }
 
     #[test]
@@ -154,9 +181,17 @@ mod tests {
     }
 
     #[test]
-    fn default_landing_is_heron_owned() {
-        // Decision D10: Heron's own landing dir, not ~/.agents/skills.
-        assert!(DEFAULT_LANDING_DIRNAME.starts_with(".heron"));
-        assert!(!DEFAULT_LANDING_DIRNAME.contains(".agents"));
+    fn store_dir_is_heron_owned() {
+        // The store is Heron's own directory, never a client's: it must not be one of the paths the
+        // scanner walks, and it stays decoupled from `npx skills`, which owns ~/.agents.
+        assert_eq!(HERON_DIRNAME, ".heron");
+        assert_eq!(STORE_DIRNAME, "skills");
+        assert!(!HERON_DIRNAME.contains("agents"));
+        // Each segment must be a single component: a separator inside them would survive as a
+        // foreign `/` on Windows instead of being rendered with `\`.
+        assert!(
+            !HERON_DIRNAME.contains('/') && !STORE_DIRNAME.contains('\\'),
+            "store path must be joined segment by segment"
+        );
     }
 }

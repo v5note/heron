@@ -229,7 +229,7 @@ fn installer_lockfile_provenance_is_recorded_on_adopt() {
     );
 
     // The replacement link sits inside `.agents/skills`, so the projection belongs to that client.
-    // Booked on the landing instead, `verify` names the wrong client and `unproject --on` misses it.
+    // Booked against any other target, `verify` names the wrong client and `unproject --on` misses it.
     let links = projection::list_for_skill(ctx.db.conn(), "pdf").unwrap();
     assert_eq!(links.len(), 1, "{links:?}");
     assert_eq!(links[0].target_id, "agents:global", "{links:?}");

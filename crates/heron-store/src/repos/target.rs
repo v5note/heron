@@ -68,9 +68,9 @@ pub fn get(conn: &rusqlite::Connection, id: &str) -> Result<Option<TargetRow>> {
 
 /// The target whose directory `path` sits in, i.e. the client dir an entry was discovered in.
 ///
-/// Adoption needs this: a projection created where the skill was found belongs to *that* client, not
-/// to the default landing. A mislabelled row makes `verify` report the wrong client and
-/// `unproject --on` miss the link entirely.
+/// Adoption needs this: a projection created where the skill was found belongs to *that* client's
+/// target. A mislabelled row makes `verify` report the wrong client and `unproject --on` miss the
+/// link entirely.
 pub fn find_for_path(conn: &rusqlite::Connection, path: &Path) -> Result<Option<TargetRow>> {
     let Some(parent) = path.parent() else {
         return Ok(None);
@@ -82,7 +82,8 @@ pub fn find_for_path(conn: &rusqlite::Connection, path: &Path) -> Result<Option<
         .find(|t| t.enabled && trim(&t.path) == want))
 }
 
-/// The default landing target (decision D10: `~/.heron/skills`).
+/// The target marked default, if any. Nothing marks one automatically: it is a user choice, so
+/// callers must be ready for `None`.
 pub fn get_default(conn: &rusqlite::Connection) -> Result<Option<TargetRow>> {
     conn.query_row(
         &format!("SELECT {COLUMNS} FROM target WHERE is_default = 1 AND enabled = 1 LIMIT 1"),

@@ -571,15 +571,15 @@ pub type Result<T, E = HeronError> = std::result::Result<T, E>;
 
 ```rust
 pub struct Dirs { pub data: PathBuf, pub config: PathBuf, pub cache: PathBuf, pub log: PathBuf }
-pub fn resolve(app: &str) -> Dirs;   // directories::ProjectDirs::from("io","greyheron",app)
+pub fn resolve(app: &str) -> Dirs;   // directories::ProjectDirs::from("xin","v5ai",app)
 
 // 影子数据目录：允许用户把数据目录搬到外置盘，其它三项仍留在系统默认位置
 pub fn resolve_with_override(override_data: Option<&Path>) -> Result<Dirs, Msg>;
 
 | 平台 | data | config | cache | log |
 |------|------|--------|-------|-----|
-| macOS | `~/Library/Application Support/heron` | 同 data | `~/Library/Caches/heron` | `~/Library/Logs/heron` |
-| Windows | `%LOCALAPPDATA%\\heron` | `%APPDATA%\\heron` | `%LOCALAPPDATA%\\heron\\cache` | data\\log |
+| macOS | `~/Library/Application Support/xin.v5ai.heron` | 同 data | `~/Library/Caches/xin.v5ai.heron` | data\\log |
+| Windows | `%LOCALAPPDATA%\\v5ai\\heron\\data` | `%APPDATA%\\v5ai\\heron\\config` | `%LOCALAPPDATA%\\v5ai\\heron\\cache` | data\\log |
 | Linux | `~/.local/share/heron` | `~/.config/heron` | `~/.cache/heron` | data/log |
 ```
 

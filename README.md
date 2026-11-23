@@ -59,8 +59,8 @@ Your original directories do not disappear — they become links into the store:
 
 ```text
 before                          after
-~/.agents/skills/pdf/     →     ~/.agents/skills/pdf → <data>/store/pdf
-~/.claude/skills/pdf/     →     ~/.claude/skills/pdf → <data>/store/pdf   (duplicate, deduplicated)
+~/.agents/skills/pdf/     →     ~/.agents/skills/pdf → ~/.heron/skills/pdf
+~/.claude/skills/pdf/     →     ~/.claude/skills/pdf → ~/.heron/skills/pdf   (duplicate, deduplicated)
 ```
 
 > Always run `heron adopt --all --dry-run` first: it prints every step without touching the disk.
@@ -91,8 +91,8 @@ button at the bottom of the rail, or from Settings.
 | `heron detected` | List skills Heron does not manage yet |
 | `heron adopt <slug...> \| --all` | Move them into the store |
 | `heron list` | Managed skills |
-| `heron project <slug> [--on <target>]` | Materialize into a target directory |
-| `heron unproject <slug> [--on <target>]` | Remove a projection (store copy is kept) |
+| `heron project <slug> --on <target>` | Materialize into a target directory (no default target — name it) |
+| `heron unproject <slug> --on <target>` | Remove a projection (store copy is kept) |
 | `heron verify` | Would a client actually load this skill? |
 | `heron doctor` | Read-only health check: duplicates, broken links, nested trees, lost sources |
 | `heron install <url>` | Install from a git repository |
@@ -130,16 +130,16 @@ never writes to a client that has not been verified.
 
 | Platform | Data directory |
 |---|---|
-| macOS | `~/Library/Application Support/io.greyheron.heron` |
-| Windows | `%LOCALAPPDATA%\heron` |
+| macOS | `~/Library/Application Support/xin.v5ai.heron` |
+| Windows | `%LOCALAPPDATA%\v5ai\heron\data` |
 | Linux | `~/.local/share/heron` |
 
-`store/` is the single source of truth (one git repository per skill), `backups/` is the safety net,
-`trash/` is a soft-delete area. The index (`heron.db`) can be rebuilt from the store at any time.
+`~/.heron/skills` is the store — the single source of truth, one git repository per skill. It is not
+inside the data directory. The data directory holds `backups/` (the safety net), `trash/`
+(a soft-delete area) and `heron.db`, which can be rebuilt from the store at any time.
 
-> `~/.agents/skills` is **not** Heron's store. Heron has its own default landing directory
-> (`~/.heron/skills`); `.agents/skills` is only an optional shared drop point, because `npx skills`
-> uses that directory too.
+> `~/.agents/skills` is a projection target, not the store — `npx skills` writes there too, so Heron
+> only ever touches the entries it created itself.
 
 ---
 
@@ -228,7 +228,8 @@ Development must never touch `~/.claude` or `~/.codex`. Two levers:
 HOME=/tmp/fake-home ./target/debug/heron --data-dir /tmp/heron-dev scan
 ```
 
-`--data-dir` redirects data, config, cache **and** logs, so nothing lands in system paths.
+`--data-dir` redirects data, config, cache, logs **and the store** (`<data-dir>/.heron/skills`), so
+nothing lands in system paths and the real `~/.heron` is never written to.
 Build a fixture tree under `/tmp/fake-home` (`~/.claude/skills/foo/SKILL.md`, …) to exercise
 adoption without risking your own configuration.
 
@@ -241,7 +242,7 @@ adoption without risking your own configuration.
 | Frontend network/RPC | devtools console; every Tauri call is one `invoke`, see `ui/src/api/index.ts` |
 | Frontend errors | `useAppStore().toasts` — every failed command surfaces as a localised toast |
 | Inspect the index | `sqlite3 <data>/heron.db '.tables'` and `select * from skill;` |
-| Inspect a skill's history | `git -C <data>/store/<slug> log --oneline` |
+| Inspect a skill's history | `git -C ~/.heron/skills/<slug> log --oneline` |
 | Why a skill is invisible | `heron verify` — distinguishes *not scanned* from *shadowed* from *broken* |
 | Why an upgrade conflicted | `heron conflict <slug>` (add `--json` for full file contents) |
 | Backend panic | `RUST_BACKTRACE=1 cargo run -p heron-app` |

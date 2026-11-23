@@ -19,7 +19,7 @@ scanned 219 directories in 79 ms
   legacy commands 0
   nested suspects 0   (reported only - nothing is moved)
   needs attention 0
-  skipped (not found) ~/.heron/skills
+  skipped (not found) ~/.agents/skills
   skipped (not found) ~/.cursor/skills
 ```
 
@@ -57,7 +57,7 @@ heron adopt --all --dry-run
 would adopt pdf
   - {"action":"create_store","slug":"pdf","from":"…/.agents/skills/pdf"}
   - {"action":"backup","from":"…/.agents/skills/pdf","to":"<backups>/adopt"}
-  - {"action":"link_original_path","path":"…/.agents/skills/pdf/SKILL.md","target":"…/store/pdf"}
+  - {"action":"link_original_path","path":"…/.agents/skills/pdf/SKILL.md","target":"~/.heron/skills/pdf"}
 would adopt review
   - {"action":"create_store","slug":"review","from":"…/.claude/commands/review.md"}
   - …
@@ -76,7 +76,7 @@ heron adopt --all
 
 ```bash
 ls -la ~/.agents/skills/
-# pdf -> /Users/you/Library/Application Support/io.greyheron.heron/store/pdf
+# pdf -> /Users/you/.heron/skills/pdf
 ```
 
 ### 只想收拢指定的几个
@@ -107,8 +107,8 @@ heron verify
 ````
 
 ```text
-pdf      heron:global     symlink   visible
-review   claude:global    symlink   visible
+pdf      agents:global      symlink   visible
+review   claude:global      symlink   visible
 ```
 
 - `visible` — 客户端会加载
@@ -123,7 +123,6 @@ heron targets
 ```
 
 ```text
-* heron:global           heron      ~/.heron/skills
   agents:global          agents     ~/.agents/skills
   claude:global          claude     ~/.claude/skills
   codex:global           codex      ~/.codex/skills
@@ -131,7 +130,8 @@ heron targets
   opencode:global        opencode   ~/.config/opencode/skills
 ```
 
-`*` 是默认落点（`~/.heron/skills`，由 Heron 自己拥有，不受任何客户端升级影响）。
+这里列的都是**投影目标**；存储区 `~/.heron/skills` 不在其中——它是被投影的源，由 Heron 自己拥有，
+不受任何客户端升级影响。也没有"默认落点"：`heron project` 必须用 `--on` 点名要写进哪个客户端目录。
 
 想装到某个客户端自己的目录：
 
@@ -338,13 +338,13 @@ error   broken-link         ~/.claude/skills/old-skill
 ## 常见疑问
 
 **Q: 我的文件被移到哪了？**
-收拢后实体在数据目录的 `store/<slug>/`，原位置是指过去的链接。备份在 `backups/`。
+收拢后实体在存储区 `~/.heron/skills/<slug>/`，原位置是指过去的链接。备份在数据目录的 `backups/`。
 
 **Q: 能撤销收拢吗？**
 备份是操作前的完整副本，手工拷回即可。Heron 目前不提供一键撤销收拢（设计里是可选项）。
 
 **Q: `~/.agents/skills` 会被 Heron 接管吗？**
-不会。Heron 的默认落点是 `~/.heron/skills`；`.agents/skills` 只作为可选落点，
+不会。存储区是 `~/.heron/skills`；`.agents/skills` 只是一个可选的投影目标，
 并且 Heron 只碰它自己创建的条目，不动 `npx skills` 装的东西。
 
 **Q: 为什么有些 Skill 显示 `not tracked`？**

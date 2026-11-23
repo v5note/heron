@@ -188,8 +188,7 @@
       "qoder": "Qoder",
       "grok": "Grok",
       "cline": "Cline",
-      "copilot": "Copilot",
-      "heron": "Heron landing"
+      "copilot": "Copilot"
     },
     "otherClient": "Other",
     "scopes": {
@@ -314,7 +313,7 @@
     "vBranch": "branch",
     "vDefaultBranch": "default branch",
     "vSub": "subpath",
-    "vLanding": "lands at",
+    "vStoreDir": "stores at",
     "vStatus": "status",
     "vInstalled": "already in the store; re-installing is skipped",
     "vAction": "action",
