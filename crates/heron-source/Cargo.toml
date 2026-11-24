@@ -9,6 +9,7 @@ description = "Where skills come from: URL parsing, catalog files and marketplac
 [dependencies]
 heron-core = { path = "../heron-core" }
 heron-git = { path = "../heron-git" }
+heron-platform = { path = "../heron-platform" }
 serde = { workspace = true }
 serde_json = { workspace = true }
 toml = { workspace = true }

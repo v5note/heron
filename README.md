@@ -1,320 +1,389 @@
-# Heron
+# Heron (苍鹭)
 
-**Gather the Agent Skills scattered across your machine into one versioned copy, project them where your tools actually look, and make upgrading a single command.**
+<p align="center">
+  <img src="grey-heron-苍鹭.webp" alt="Heron Logo" width="160" />
+</p>
 
-> English · [中文](README.zh-CN.md)
+<p align="center">
+  <strong>Gather the Agent Skills scattered across your machine into one versioned, single source of truth, project them where your tools actually look, and make upgrading a single command.</strong>
+</p>
 
-Heron is for developers running several AI coding tools at once. Skills end up in `~/.claude/skills`,
-`~/.codex/skills`, `~/.agents/skills` and in the `.claude` directory of every project. Edit one copy and
-the rest go stale; upgrade one and you lose your local edits. Heron collapses that into three verbs:
-**adopt → project → upgrade**.
+<p align="center">
+  <img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="License MIT" />
+  <img src="https://img.shields.io/badge/Rust-1.80%2B%20(2021)-orange.svg" alt="Rust Version" />
+  <img src="https://img.shields.io/badge/Tauri-v2-24c8db.svg" alt="Tauri 2" />
+  <img src="https://img.shields.io/badge/Platform-macOS%20%7C%20Windows%20%7C%20Linux-brightgreen.svg" alt="Platform" />
+  <img src="https://img.shields.io/badge/Git-2.38%2B%20Required-red.svg" alt="Git Required" />
+</p>
 
-- macOS 12+ and Windows 10 1803+ (runs on Linux; not a first-class target yet)
-- Desktop app **and** command line, backed by the same code — identical behaviour
-- Every change can be previewed and rolled back; nothing is deleted before it is backed up
-
----
-
-## What it solves
-
-| Pain | What Heron does |
-|---|---|
-| Skills scattered across five hidden directories | `heron scan` finds everything; lists "managed" vs "unowned" |
-| The same skill copied several times | `heron adopt` keeps **one** copy and turns the other locations into links |
-| No idea whether the client actually loads it | `heron verify` distinguishes *live / not scanned / shadowed / broken* |
-| Upstream moved and nobody noticed | `heron outdated` compares against the upstream commit |
-| Upgrading overwrites my edits | Three-way merge keeps both your changes and upstream's |
-| Every teammate has a different skill set | `heron.lock` exports and reproduces it |
-| Installing skills from GitHub or a marketplace | `heron install` + five built-in marketplaces |
+<p align="center">
+  English · <a href="README.zh-CN.md">中文文档</a>
+</p>
 
 ---
 
-## Quick start
+## Table of Contents
+
+- [Why Heron?](#why-heron)
+- [Core Workflow: Adopt · Project · Upgrade](#core-workflow-adopt--project--upgrade)
+- [System Architecture & Workspace Crates](#system-architecture--workspace-crates)
+- [Core Mechanisms & Technical Highlights](#core-mechanisms--technical-highlights)
+  - [1. Single Source of Truth & 4 Projection Modes](#1-single-source-of-truth--4-projection-modes)
+  - [2. Per-Skill Git Repositories & Three-Way Merge Upgrades](#2-per-skill-git-repositories--three-way-merge-upgrades)
+  - [3. Dynamic Presence Detection for 12+ AI Clients](#3-dynamic-presence-detection-for-12-ai-clients)
+  - [4. Team Collaboration & Lockfile](#4-team-collaboration--lockfile)
+- [Quick Start](#quick-start)
+  - [Requirements](#requirements)
+  - [Install](#install)
+  - [Three Commands to Get Going](#three-commands-to-get-going)
+- [Desktop App Navigation](#desktop-app-navigation)
+- [CLI Command Overview](#cli-command-overview)
+- [Design Principles & Safety Contracts](#design-principles--safety-contracts)
+- [Where Data Lives & Storage Isolation](#where-data-lives--storage-isolation)
+- [Development & Contributing](#development--contributing)
+  - [Local Development](#local-development)
+  - [Debugging Cheat Sheet](#debugging-cheat-sheet)
+  - [Building from Source](#building-from-source)
+- [Documentation & References](#documentation--references)
+- [License](#license)
+
+---
+
+## Why Heron?
+
+Built for developers concurrently running multiple AI coding tools—such as **Claude Code, Codex, Cursor, Trae, Cline, Google Antigravity, OpenCode, and WorkBuddy**.
+
+As Agent Skills (`SKILL.md` bundles containing prompts, execution workflows, scripts, and references) become core engineering assets, their storage and delivery models remain stuck in the stone age: manually copying and pasting folders into hidden system directories. This creates systematic friction:
+
+| Problem Scenario | Traditional Workaround | What Heron Does |
+|---|---|---|
+| **Scattered**: Skills end up in various global and project directories | Hop across four or five hidden folders to inspect files | `heron scan` inspects everything at once, cleanly distinguishing "managed" vs "unowned" |
+| **Duplicated**: The same skill is copied into multiple locations | Edit one copy, and the rest silently drift and become stale | `heron adopt` consolidates copies into **one single entity**, replacing originals with managed links |
+| **Opaque Visibility**: No idea whether the client actually loads it | Guesswork debugging; often broken by symlink faults or name shadowing | `heron verify` strictly audits visibility: *live / not scanned / shadowed / broken* |
+| **Disconnected Upstream**: Authors push upstream updates unnoticed | Catching updates is purely accidental | `heron outdated` compares local commits against upstream commits, flagging pending updates |
+| **Overwritten Customizations**: Upgrades wipe out local prompt tuning | Re-apply personal tweaks and patches after every upgrade | **Three-way merge (`git merge-tree`)**: Preserves upstream improvements while keeping your local customizations intact |
+| **Team Drift**: Teammates work with mismatched skill sets | Ad-hoc chat messaging; new hires lack the required skill assets | `heron.lock` exports a lockfile; one command reproduces identical setups |
+| **Fragmented Catalogs**: Siloed marketplaces and install tools | Manual downloads, zip extraction, or single-point shell scripts | `heron install` + unified adapter for 5 built-in marketplaces and any Git repo |
+
+---
+
+## Core Workflow: Adopt · Project · Upgrade
+
+Heron collapses complex skill lifecycle management into a clean, closed loop:
+
+```mermaid
+flowchart LR
+    A["Existing Scattered Skills<br/>(~/.claude, ~/.agents, project dirs, etc.)"] -->|"heron scan & adopt<br/>(Backup, Deduplicate, Register)"| B[("Heron Central Store<br/>~/.heron/skills/<br/>(Each Skill is an isolated Git repo)")]
+    B -->|"heron project<br/>(Unidirectional Projection)"| C["Client & Project Targets<br/>(Claude / Cursor / Trae / VSCode, etc.)"]
+    D["Remote Upstream / Markets<br/>(GitHub, skills.sh, ClawHub, etc.)"] -->|"heron upgrade<br/>(git merge-tree Three-way Merge)"| B
+```
+
+1. **Adopt**: Scans the disk for existing skills, creates safe backups, moves physical files into the central store (`~/.heron/skills/`), deduplicates identical content by hash, and replaces original locations with reverse links;
+2. **Project**: Unidirectionally projects skills from the store to selected client paths or workspace projects with granular toggles;
+3. **Upgrade**: Checks upstream releases and executes three-way merges in an isolated git tree. If conflicts occur, an interactive visual conflict resolver is surfaced, never dirtying your working tree.
+
+---
+
+## System Architecture & Workspace Crates
+
+Heron follows a strict **unidirectional dependency layered architecture**. The business service layer orchestrates all use cases, while the GUI and CLI share the exact same service core to guarantee 100% behavioral parity:
+
+```mermaid
+graph TD
+    subgraph UI_Layer ["Presentation Layer"]
+        UI["Vue 3 + TypeScript GUI<br/>(ui/)"] <-->|"Tauri 2 IPC / Events"| Shell["Tauri Desktop Shell<br/>(src-tauri)"]
+        CLI["heron CLI<br/>(crates/heron-cli)"]
+    end
+
+    subgraph Service_Layer ["Service Orchestration Layer"]
+        Shell --> Service["heron-service<br/>(Plan -> Preview / dry-run -> Apply with Undo Audits)"]
+        CLI --> Service
+    end
+
+    subgraph Core_Engines ["Core Engines"]
+        Service --> Scan["heron-scan<br/>(Read-only Traversal, Frontmatter, Hashing)"]
+        Service --> Proj["heron-projection<br/>(Projection Planning, Token Budget, Visibility)"]
+        Service --> VCS["heron-vcs<br/>(Per-Skill Git, Three-way Merge)"]
+        Service --> Git["heron-git<br/>(Remote Bare Cache, Subdir Checkouts)"]
+        Service --> Source["heron-source<br/>(Market Adapters, Git URL Parsing)"]
+        Service --> Store["heron-store<br/>(SQLite Metadata, Migrations, Audits)"]
+    end
+
+    subgraph Foundation ["Infrastructure & Domain Foundation"]
+        Service --> Plat["heron-platform<br/>(Link Safety Contract, Atomic IO, Probe)"]
+        Scan --> Core["heron-core<br/>(Pure Domain Models, No IO, Structured Msg)"]
+        Proj --> Core
+        VCS --> Core
+        Store --> Core
+    end
+```
+
+### Workspace Crate Responsibility Matrix
+
+| Crate | Responsibilities & Technical Highlights | Path |
+|---|---|---|
+| **`heron-core`** | **Pure Domain Model**: Absolutely no IO, async, or system clock. Defines domain models (`Slug`, `Hash`, `PlatformKind`), policies, and localized structured error codes (`Msg`). | [`crates/heron-core`](crates/heron-core) |
+| **`heron-platform`** | **OS Abstraction**: Link safety contract (`link`), atomic file mutations, cross-platform locking, process probing (deadline-bound `which` fixing Finder's stripped `PATH`), and automatic proxy detection. | [`crates/heron-platform`](crates/heron-platform) |
+| **`heron-store`** | **Metadata Persistence**: Embedded SQLite via `rusqlite`. Manages schemas and tables for clients, targets, skills, projections, source bindings, and historical audit events. | [`crates/heron-store`](crates/heron-store) |
+| **`heron-scan`** | **Read-Only Scanner**: Multi-threaded disk traversal, YAML frontmatter parser, Blake3 fingerprinting, streaming progress event emitter, and cooperative cancellation. | [`crates/heron-scan`](crates/heron-scan) |
+| **`heron-vcs`** | **Per-Skill Version Control**: Manages independent Git repositories for every skill. Executes in-memory `git merge-tree` three-way merges without touching the working tree. | [`crates/heron-vcs`](crates/heron-vcs) |
+| **`heron-git`** | **Remote Git Engine**: Shallow fetching, branch/tag resolution, and local bare Git caching. | [`crates/heron-git`](crates/heron-git) |
+| **`heron-source`** | **Marketplace & Source Adapters**: Adapters for 5 major marketplaces (skills.sh, ClawHub, etc.); parses complex Git URLs (repositories, monorepo subdirectories, single-skill files). | [`crates/heron-source`](crates/heron-source) |
+| **`heron-projection`**| **Projection & Verification**: Computes projection plans, estimates token budgets, executes safe filesystem linking, and audits live client loading visibility. | [`crates/heron-projection`](crates/heron-projection) |
+| **`heron-service`** | **Use Case Orchestrator**: High-level business logic (adopt, project, upgrade, doctor, install, scan). Enforces `Plan -> Preview (dry-run) -> Apply with Undo Audit`. | [`crates/heron-service`](crates/heron-service) |
+| **`heron-cli`** | **Unified CLI**: Built on `clap` 4, supporting interactive terminal tables and `--json` machine-readable output. | [`crates/heron-cli`](crates/heron-cli) |
+| **`src-tauri`** | **Tauri 2 Shell**: Window management, system tray, IPC routing, and async background scan event streaming (contains zero business logic). | [`src-tauri`](src-tauri) |
+| **`ui`** | **Frontend Application**: Vue 3 + TypeScript + Vite + Tailwind CSS + Vue I18n thin client. | [`ui`](ui) |
+
+---
+
+## Core Mechanisms & Technical Highlights
+
+### 1. Single Source of Truth & 4 Projection Modes
+
+The store (`~/.heron/skills/<slug>`) is the single source of truth. To ensure that different AI clients and operating systems can reliably read skills, Heron supports **4 projection modes**:
+
+1. **`symlink` (Symbolic Link)**: Default for macOS and Linux. Zero disk duplication with instant synchronization;
+2. **`junction` (Directory Junction)**: Windows-specific. Provides cross-directory links **without requiring Administrator privileges** or Developer Mode;
+3. **`pointer` (Pointer File)**: Emits a lightweight proxy `SKILL.md` pointing to the real store path, solving compatibility bugs where certain client scanners report `dirent.isDirectory() == false` on symlinked directories;
+4. **`copy` (Unidirectional Copy)**: Fallback mode equipped with drift detection (`E_DRIFTED`), refusing to overwrite unexpected external edits.
+
+### 2. Per-Skill Git Repositories & Three-Way Merge Upgrades
+
+Each adopted skill in the store is initialized as an isolated Git repository:
+* **`main` branch**: The user's active working branch (all local custom prompt tweaks are committed here);
+* **`upstream` branch**: The mirror of upstream releases (written only during Heron upgrade cycles);
+* **`v<version>` tags**: Historical release points allowing one-click rollbacks via `heron rollback`;
+* **Three-Way Merge**: Upgrades invoke `git merge-tree --write-tree --merge-base=<baseline>`:
+  * **Auto-Merge**: When local changes and upstream improvements do not overlap, they merge cleanly without losing custom lines;
+  * **Conflict Protection**: If conflicts occur, the working tree remains untouched. Conflict payloads are parsed and displayed in a side-by-side visual merge editor.
+
+### 3. Dynamic Presence Detection for 12+ AI Clients
+
+Out-of-the-box definitions for 12+ industry AI coding tools:
+* **Supported Clients**: Claude Code, Codex, Cursor, Trae, Qoder, Grok, Cline, GitHub Copilot, Google Antigravity, OpenCode, WorkBuddy, Agents, etc.;
+* **Non-Invasive Probing**: Probes installation status via compound signals (standard configuration directories, CLI `--version`, and macOS `.app` bundles);
+* **Orthogonal State**: Undetected clients are greyed out with an honest "Not detected on this machine" badge, **never deleting configurations and never modifying user-defined `enabled` switches**.
+
+### 4. Team Collaboration & Lockfile
+
+Similar to modern package managers, Heron supports exporting `heron.lock` at the project root:
+```bash
+heron lock export --write # Export current skill dependencies and commit hashes
+heron lock diff           # Detect drifts between local skills and the lockfile
+heron lock apply          # Recreate identical skill environments across the team
+```
+
+---
+
+## Quick Start
 
 ### Requirements
 
-- **git 2.38+** (three-way merges need `git merge-tree --write-tree`). If git is missing, Heron tells
-  you how to install it instead of silently degrading.
-- macOS 12+ / Windows 10 1803+ (Windows needs WebView2, built into Windows 11).
+- **git 2.38+** (Required: Three-way merges depend on `git merge-tree --write-tree`);
+- **macOS 12+** or **Windows 10 1803+** (Windows requires the built-in WebView2 runtime);
+- Linux core is functional; releases currently focus on macOS and Windows packages.
 
 ### Install
 
-**Desktop app** (recommended): download `Heron.dmg` (macOS) or `Heron_x64-setup.exe` (Windows).
+* **Desktop Application (Recommended)**: Download `Heron.dmg` or `Heron_x64-setup.exe` from Releases;
+* **Command Line**: Shipped alongside the desktop app, or downloaded standalone:
+  ```bash
+  heron --version
+  heron --help
+  ```
 
-**Command line**, shipped alongside the app and usable on its own:
+### Three Commands to Get Going
 
 ```bash
-heron --help
+# 1. Scan known directories and build a global asset index
+heron scan
+
+# 2. Inspect skills found on disk that are not managed yet
+heron detected
+
+# 3. Adopt all unmanaged skills into the central store (backs up first, deduplicates)
+heron adopt --all
 ```
 
-### Three commands to get going
+> [!TIP]
+> Before running adopt for the first time, use `--dry-run` to preview all planned mutations:
+> `heron adopt --all --dry-run`.
 
-```bash
-heron scan        # look around
-heron detected    # what Heron does not manage yet
-heron adopt --all # take it all over (backs up first, de-duplicates)
-```
-
-Your original directories do not disappear — they become links into the store:
-
+After adoption, original directories remain intact and become links pointing back to the central store:
 ```text
-before                          after
-~/.agents/skills/pdf/     →     ~/.agents/skills/pdf → ~/.heron/skills/pdf
-~/.claude/skills/pdf/     →     ~/.claude/skills/pdf → ~/.heron/skills/pdf   (duplicate, deduplicated)
+Before Adoption                               After Adoption
+~/.agents/skills/pdf/          →             ~/.agents/skills/pdf   ──┐ (Symlink / Junction)
+~/.claude/skills/pdf/          →             ~/.claude/skills/pdf   ──┼─→ ~/.heron/skills/pdf (Single Source of Truth)
+/path/to/project/.cursor/pdf/  →             .../project/.cursor/pdf ─┘
 ```
-
-> Always run `heron adopt --all --dry-run` first: it prints every step without touching the disk.
-
-### 4. Using the desktop app
-
-The app is organised as **collect → distribute → maintain**. It opens in **dark**; switch to light from the
-button at the bottom of the rail, or from Settings.
-
-| Where | What it is for |
-|---|---|
-| **Overview** | Only what needs deciding *now*: broken links, files to merge, upgrades, unmanaged skills. Otherwise a single "Nothing needs you right now" |
-| **My skills** | One row per skill, one column per client: filled dot = live, amber = shadowed, red = broken link, hollow = not scanned. Open a row for the detail drawer and project/unproject each target |
-| **Discover** | Skills on disk that Heron does not manage yet; selection shows a read-only dry run before anything moves |
-| **Sources & markets** | Five markets: two are searchable and installable, three are browse-only (paste the git URL back) |
-| **Updates** | Local changes, upstream updates and diverged skills are listed apart; conflicts open a file-by-file merge and retry automatically |
-| **Health** | Read-only checks, grouped by error/warning; nothing on disk is touched |
-| **Projects** | The directories clients actually read (targets) plus project targets, each switchable |
-| **Settings** | Theme (dark/light), language, app updates, client native-scan capability |
 
 ---
 
-## Commands
+## Desktop App Navigation
+
+The desktop application follows a natural **Adopt → Project → Maintain** layout, featuring automatic theme detection and dark/light toggling:
+
+| View | Purpose |
+|---|---|
+| **Overview** | **Action Center**: Displays only items requiring active decisions (broken links, merge conflicts, available upgrades, unmanaged skills); displays client presence status. |
+| **My Skills** | **Asset Matrix**: One row per skill with client status chips (solid = live, amber = shadowed, red = broken link, hollow = unprojected); drawer enables per-target projection toggling. |
+| **Discover** | Browse skills found on disk that are not yet managed; supports selective adoption, dry-run previews, and in-place linking (LiveBind). |
+| **Sources & Markets** | 5 integrated marketplaces; supports keyword search, one-click install, direct Git URL installs, and bookmarking. |
+| **Upgrades** | Distinguishes between local edits, upstream releases, and diverged conflicts; features an interactive side-by-side file conflict editor. |
+| **Health (Doctor)** | Deep read-only diagnostic checks: detects duplicate contents, broken links, pathological directory nestings (e.g. `skills/.claude/skills/`), and missing sources. |
+| **Projects** | Discover and manage workspace-specific client configurations and project-scoped skills. |
+| **Settings** | Theme preferences, language selection (English / Simplified Chinese), global proxy configuration, and app updates. |
+
+---
+
+## CLI Command Overview
+
+All commands support `--json` (for CI pipelines and scripting) and `--data-dir <DIR>` (for isolated execution):
 
 | Command | Purpose |
 |---|---|
-| `heron scan` | Scan all known locations, refresh the index |
-| `heron detected` | List skills Heron does not manage yet |
-| `heron adopt <slug...> \| --all` | Move them into the store |
-| `heron list` | Managed skills |
-| `heron project <slug> --on <target>` | Materialize into a target directory (no default target — name it) |
-| `heron unproject <slug> --on <target>` | Remove a projection (store copy is kept) |
-| `heron verify` | Would a client actually load this skill? |
-| `heron doctor` | Read-only health check: duplicates, broken links, nested trees, lost sources |
-| `heron install <url>` | Install from a git repository |
-| `heron outdated` / `upgrade` / `rollback` | Check / three-way-merge upgrade / roll back |
-| `heron diff` / `conflict` / `resolve` | Inspect changes / inspect conflicts / resolve them |
-| `heron market list\|search\|plan` | Five built-in marketplaces |
-| `heron lock export\|diff\|apply` | Team workflow |
-| `heron projects` | Discover projects that contain client directories |
+| `heron scan [ROOTS...]` | Scan known client paths and optional custom roots to refresh index |
+| `heron detected [--state candidate]` | List skills detected on disk that are not yet managed |
+| `heron adopt <SLUG...> \| --all` | Safely adopt skills into the store (`--placement replace\|keep\|live-bind`) |
+| `heron list` | List all managed skills and their current state |
+| `heron project <SLUG> --on <TARGET>` | Project a skill to a target directory (target must be specified) |
+| `heron unproject <SLUG> --on <TARGET>` | Retract projection from target (deletes link, preserves store copy) |
+| `heron verify` | Audit whether clients will actually load the projected skills |
+| `heron doctor` | Run non-destructive system diagnostics |
+| `heron install <URL>` | Install skills from GitHub/GitLab, monorepo subpaths, or local directories |
+| `heron outdated` | Check managed skills against cached upstream commits |
+| `heron upgrade <SLUG...> \| --all` | Upgrade skills via three-way merge |
+| `heron rollback <SLUG> --to <TAG>` | Roll back a skill to a specific release tag |
+| `heron diff <SLUG>` / `conflict` | View local modifications / inspect pending upgrade conflicts |
+| `heron resolve <SLUG>` | Submit resolved conflict files and complete version commits |
+| `heron market list \| search \| plan` | Browse and search built-in marketplaces |
+| `heron lock export \| diff \| apply` | Export, diff, and apply team lockfiles |
+| `heron projects discover [ROOTS...]` | Scan and register projects containing AI tool configurations |
 
-Every command accepts `--json` (for scripts) and `--data-dir` (an isolated data directory).
-
-Full details: **[getting-started guide](docs/GUIDE.md)** · **[command reference](docs/REFERENCE.md)**.
-
----
-
-## Design choices worth knowing
-
-**Heron never damages anything on its own.** These behaviours are deliberate, not gaps:
-
-- Adoption always backs up first; if the backup fails, the whole operation aborts.
-- Projection stops with `E_NOT_MANAGED` when someone else's real directory is in the way.
-- In `copy` mode, a destination changed by another program reports `E_DRIFTED` instead of being overwritten.
-- Pathological nesting (`skills/.claude/skills/…`) is **reported, never reorganised**.
-- Heron never executes scripts from a skill.
-
-**Heron does not pretend.** Marketplaces come in two classes: *searchable* (skills.sh and ClawHub,
-which Heron can install from) and *browser only* (qoder, SkillHub, SkillsMP — Heron opens the site and
-you paste a git URL back). Skills adopted from local disk show up as `not tracked` with version
-`0.0.0`; they are not presented as upgradable. Client native-scan injection is off by default and
-never writes to a client that has not been verified.
+For complete command syntax and parameter details, see the [Command Reference (docs/REFERENCE.md)](docs/REFERENCE.md).
 
 ---
 
-## Where data lives
+## Design Principles & Safety Contracts
 
-| Platform | Data directory |
-|---|---|
-| macOS | `~/Library/Application Support/xin.v5ai.heron` |
-| Windows | `%LOCALAPPDATA%\v5ai\heron\data` |
-| Linux | `~/.local/share/heron` |
+> **Heron's Golden Rule: Never silently destroy user data.**
 
-`~/.heron/skills` is the store — the single source of truth, one git repository per skill. It is not
-inside the data directory. The data directory holds `backups/` (the safety net), `trash/`
-(a soft-delete area) and `heron.db`, which can be rebuilt from the store at any time.
-
-> `~/.agents/skills` is a projection target, not the store — `npx skills` writes there too, so Heron
-> only ever touches the entries it created itself.
+- **Safety Net**: Before mutating or moving existing directories, Heron creates a full backup under `<data-dir>/backups/`; if backup creation fails, the transaction aborts immediately;
+- **No Overwrite of Foreign Content**: Projections stop with `E_NOT_MANAGED` when encountering an unmanaged non-empty directory;
+- **Drift Protection**: Under `copy` mode, if a target file was modified externally, Heron refuses to overwrite it and reports `E_DRIFTED`;
+- **Non-Destructive Doctor**: Diagnostic issues like pathological nesting (`skills/.claude/skills/...`) are reported with recommended remedies, never reorganized silently;
+- **Honesty in Capabilities**:
+  - Markets are categorized explicitly: direct API installation vs. external browser navigation;
+  - Uninstalled client environments are labelled as undetected rather than claiming phantom "active" links;
+  - Locally adopted skills without remote tracking are labelled `not tracked` rather than falsely showing as "up-to-date".
 
 ---
 
-## Development
+## Where Data Lives & Storage Isolation
+
+Heron strictly separates the **Single Source of Truth (Store)** from **Runtime Data (Data Directory)**:
+
+| Platform | Runtime Data Directory (backups, logs, cache, `heron.db`) | Central Store (Each skill's Git repo) |
+|---|---|---|
+| **macOS** | `~/Library/Application Support/xin.v5ai.heron/` | `~/.heron/skills/` |
+| **Windows** | `%LOCALAPPDATA%\v5ai\heron\data\` | `%USERPROFILE%\.heron\skills\` |
+| **Linux** | `~/.local/share/heron/` | `~/.heron/skills/` |
+
+> [!NOTE]
+> `~/.agents/skills` is merely an optional projection target (shared mapping location). It is **not** the Heron store. Heron only manages entries that it created.
+
+---
+
+## Development & Contributing
 
 ### Prerequisites
 
-| Tool | Version | Notes |
-|---|---|---|
-| Rust | stable | `rust-toolchain.toml` pins it; rustup picks it up automatically |
-| Node.js | 22+ | needed for the frontend |
-| pnpm | 10+ | `corepack enable` installs it |
-| git | 2.38+ | three-way merges need `git merge-tree --write-tree` |
+- **Rust**: Stable (pinned via `rust-toolchain.toml`, managed with `rustup`);
+- **Node.js**: v22+, with **pnpm** 10+ (`corepack enable`);
+- **Git**: 2.38+;
+- **Linux Build Dependencies** (not required on macOS / Windows):
+  ```bash
+  sudo apt install libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev
+  ```
 
-On Linux, Tauri also needs system libraries:
+### One-Time Setup
 
 ```bash
-sudo apt install libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev
+# 1. Install frontend dependencies
+pnpm --dir ui install
+
+# 2. Compile Rust workspace
+cargo build --workspace
 ```
 
-### One-time setup
+> **Note (Read-only HOME / Sandboxed Environments):** If `~/.cargo` is read-only, point Cargo to a local directory: `export CARGO_HOME=$PWD/.cargo-home`.
+
+### Local Development
 
 ```bash
-pnpm --dir ui install     # frontend dependencies
-cargo build --workspace   # first Rust build (several minutes)
+# Start full desktop app (Tauri hot reload, occupies port 5183)
+scripts/dev.sh dev
+
+# Frontend-only dev server (Browser opens http://localhost:5183, no Rust IPC)
+scripts/dev.sh web
+
+# Run CLI against an isolated test environment (redirects data to /tmp/heron-dev)
+scripts/dev.sh cli scan
+scripts/dev.sh cli list
 ```
 
-> **Sandboxed / air-gapped machines:** every Cargo command in this project expects
-> `CARGO_HOME` to point at a writable directory. If `~/.cargo` is not writable, export
-> `CARGO_HOME=$PWD/.cargo-home` before building — `.cargo-home/` is already git-ignored.
-
-### Running it
+#### Protecting Your Personal Skills During Dev
 
 ```bash
-scripts/dev.sh dev      # desktop app with hot reload (needs tauri-cli)
-scripts/dev.sh web      # frontend only, in a browser, no Rust backend
-scripts/dev.sh cli …    # the CLI against an isolated data dir
-```
-
-**Full desktop app, one process** (hot reload for both halves):
-
-```bash
-cargo install tauri-cli --version '^2' --locked   # once
-scripts/dev.sh dev        # equivalent to: cargo tauri dev
-```
-
-Tauri starts Vite on port **5183** (strict, so a port clash fails loudly) and rebuilds Rust on
-change. The app loads `http://localhost:5183`.
-
-**Two processes, no tauri-cli** — this is what `scripts/dev.sh dev` tells you to do when
-tauri-cli is missing, and it is also the easiest way to debug the frontend alone:
-
-```bash
-# terminal 1 — frontend with hot reload only
-pnpm --dir ui dev
-# terminal 2 — Rust shell
-cargo run -p heron-app
-```
-
-**Frontend only, no Rust:**
-
-```bash
-scripts/dev.sh web        # open http://localhost:5183 in any browser
-```
-
-Tauri commands will reject with an error there (there is no Rust side). That is expected;
-it is the fastest loop for layout and styling work.
-
-**CLI:**
-
-```bash
-scripts/dev.sh cli scan                              # isolated data dir under /tmp/heron-dev
-HERON_DEV_DATA=/tmp/mine scripts/dev.sh cli list     # choose the isolated dir
-cargo run -p heron-cli -- --data-dir /tmp/x scan     # plain cargo, no wrapper
-```
-
-### Isolating your real skills
-
-Development must never touch `~/.claude` or `~/.codex`. Two levers:
-
-```bash
-# 1. isolate the data directory (index, store, backups all move together)
+# 1. Isolate the data directory (database, store, and backups redirect together)
 ./target/debug/heron --data-dir /tmp/heron-dev scan
 
-# 2. isolate the home directory seen by the scanner
+# 2. Isolate the HOME directory visible to the scanner
 HOME=/tmp/fake-home ./target/debug/heron --data-dir /tmp/heron-dev scan
 ```
 
-`--data-dir` redirects data, config, cache, logs **and the store** (`<data-dir>/.heron/skills`), so
-nothing lands in system paths and the real `~/.heron` is never written to.
-Build a fixture tree under `/tmp/fake-home` (`~/.claude/skills/foo/SKILL.md`, …) to exercise
-adoption without risking your own configuration.
+### Debugging Cheat Sheet
 
-### Debugging
-
-| What | How |
+| Task | Command / Technique |
 |---|---|
-| Rust logs | `RUST_LOG=debug cargo run -p heron-app`; CLI uses `--verbose` where available |
-| WebView devtools | right-click → Inspect (dev builds), or `cmd+opt+I` / `ctrl+shift+I` |
-| Frontend network/RPC | devtools console; every Tauri call is one `invoke`, see `ui/src/api/index.ts` |
-| Frontend errors | `useAppStore().toasts` — every failed command surfaces as a localised toast |
-| Inspect the index | `sqlite3 <data>/heron.db '.tables'` and `select * from skill;` |
-| Inspect a skill's history | `git -C ~/.heron/skills/<slug> log --oneline` |
-| Why a skill is invisible | `heron verify` — distinguishes *not scanned* from *shadowed* from *broken* |
-| Why an upgrade conflicted | `heron conflict <slug>` (add `--json` for full file contents) |
-| Backend panic | `RUST_BACKTRACE=1 cargo run -p heron-app` |
+| **Inspect Backend Logs** | `RUST_LOG=debug cargo run -p heron-app` |
+| **Open WebView DevTools** | Right-click in dev window → "Inspect", or press `Cmd+Opt+I` / `Ctrl+Shift+I` |
+| **Query Index SQLite Database** | `sqlite3 <data-dir>/heron.db "select * from skill;"` |
+| **Inspect Skill Git History** | `git -C ~/.heron/skills/<slug> log --graph --oneline` |
+| **Diagnose Inactive Projections** | `heron verify` (inspect not-scanned, shadowed, or broken link causes) |
+| **Inspect Upgrade Conflicts** | `heron conflict <slug> --json` |
+| **Run Specific Integration Test** | `cargo test -p heron-service --test adopt_flow -- --nocapture` |
 
-A single Rust test with output:
+### Pre-Push Quality Checks
 
 ```bash
-cargo test -p heron-service --test remote_flow -- --nocapture
-cargo test -p heron-platform --test link_safety_windows -- --nocapture   # Windows only
+scripts/dev.sh check    # fmt + clippy (matches CI rules)
+scripts/dev.sh test     # run all unit and integration tests
+scripts/dev.sh ui       # TypeScript typecheck, i18n key synchronization & build
 ```
 
-Live marketplace checks are `#[ignore]`d so CI stays offline-safe:
-
-```bash
-cargo test -p heron-source --test live_markets -- --ignored --nocapture
-```
-
-### Before you push
-
-```bash
-scripts/dev.sh check    # fmt + clippy, exactly as CI runs it
-scripts/dev.sh test     # all tests
-scripts/dev.sh ui       # typecheck + i18n parity + build
-```
-
-Frontend strings live only in `ui/src/i18n/locales/{zh-CN,en-US}.json` and must stay in sync —
-`scripts/dev.sh ui` fails if a key exists in one file but not the other. Rust never emits
-user-facing prose; it returns `Msg { code, params }` and the UI renders `errors.<code>`.
-
-### Locking down the toolchain
-
-`rust-toolchain.toml` pins the Rust version, so every contributor and CI builds with the same
-compiler. If `~/.cargo` is read-only, point `CARGO_HOME` somewhere writable (see above) rather
-than editing the pin.
-
-## Build from source
+### Building from Source
 
 ```bash
 pnpm --dir ui build
-cargo build -p heron-cli --release   # CLI    → target/release/heron
-cargo build -p heron-app --release   # desktop app
-scripts/dev.sh bundle                # dmg / NSIS installer (needs tauri-cli)
+cargo build -p heron-cli --release   # CLI binary → target/release/heron
+cargo build -p heron-app --release   # Desktop binary
+scripts/dev.sh bundle                # Native installer packages (.dmg / NSIS installer)
 ```
 
-## Layout
+---
 
-```text
-crates/
-  heron-core        domain model (no IO)
-  heron-platform    the only platform-specific layer: links, locks, paths, dirs
-  heron-store       SQLite index and migrations
-  heron-scan        traversal, frontmatter parsing, content fingerprints
-  heron-vcs         one git repository per skill, three-way merges
-  heron-git         bare cache and subdirectory checkouts
-  heron-source      URL parsing, catalogs, marketplace adapters
-  heron-projection  projection planning / execution / visibility
-  heron-service     use cases shared by the CLI and the GUI
-  heron-cli         command line
-src-tauri/          Tauri 2 shell (thin adapter)
-ui/                 Vue 3 frontend
-docs/               design, implementation, guides and decision records
-```
+## Documentation & References
 
-## Documentation
+- **[Getting Started Guide (docs/GUIDE.md)](docs/GUIDE.md)** —— Step-by-step tutorial from chaos to order
+- **[Design Document v2 (docs/DESIGN-heron-v2.md)](docs/DESIGN-heron-v2.md)** —— Architectural decisions and background rationale
+- **[Implementation Document v1 (docs/IMPLEMENTATION-heron-v1.md)](docs/IMPLEMENTATION-heron-v1.md)** —— Component decomposition and milestones
+- **[Command & Error Reference (docs/REFERENCE.md)](docs/REFERENCE.md)** —— Complete CLI manual and structured error codes
+- **[Architecture Decision Records (docs/adr/)](docs/adr/)** —— ADR records for platform edge cases and design trade-offs
 
-- [Design](docs/DESIGN-heron-v2.md) — why it works this way
-- [Implementation](docs/IMPLEMENTATION-heron-v1.md) — how it is built, in what order
-- [Getting started](docs/GUIDE.md) — from a messy machine to a managed set
-- [Command reference](docs/REFERENCE.md) — every command, every error code
-- [Signing & releases](docs/SIGNING.md) — how releases are signed without paid certificates
-- [Decision records](docs/adr/) — the trade-offs made along the way
+---
 
 ## License
 
-MIT. See [LICENSE](LICENSE) for details.
+This project is licensed under the [MIT License](LICENSE).

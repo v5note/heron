@@ -215,6 +215,38 @@ fn checkout_subdir_materializes_exactly_the_skill() {
 }
 
 #[test]
+fn checkout_subdir_keeps_binary_bytes_intact() {
+    if !git_available() {
+        return;
+    }
+    // A skill that ships an image is the common case; text-captured tar bytes would replace every
+    // invalid UTF-8 sequence and the archive would either fail to parse or land corrupt files.
+    let blob: Vec<u8> = vec![0x89, 0x50, 0x4e, 0x47, 0x00, 0xff, 0xfe, 0x01, 0xc2, 0x20];
+    let remote = Remote::new();
+    fs::write(remote.work.join("skills/pdf/logo.png"), &blob).unwrap();
+    git(&remote.work, &["add", "-A"]);
+    git(&remote.work, &["commit", "-qm", "binary"]);
+    git(
+        &remote.work,
+        &["push", "-q", remote.bare.to_str().unwrap(), "main"],
+    );
+
+    let cache_root = tempfile::tempdir().unwrap();
+    let dest_root = tempfile::tempdir().unwrap();
+    let mut repo = cached(&remote, cache_root.path());
+    repo.ensure().unwrap();
+    let head = repo.resolve(Some("main")).unwrap().commit;
+
+    let dest = dest_root.path().join("pdf");
+    repo.checkout_subdir(&head, "skills/pdf", &dest).unwrap();
+    assert_eq!(fs::read(dest.join("logo.png")).unwrap(), blob);
+    assert!(
+        !dest_root.path().join(".pdf-heron.tar").exists(),
+        "tarball is cleaned up"
+    );
+}
+
+#[test]
 fn checkout_refuses_to_overwrite_an_existing_destination() {
     if !git_available() {
         return;

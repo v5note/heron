@@ -47,7 +47,8 @@ function distributed(targetId: string): number {
     store.visibilityBySlug(s.slug).some((e) => e.target.id === targetId && e.state === "visible"),
   ).length;
 }
-const enabledCount = computed(() => store.targets.filter((x) => x.enabled).length);
+// Enabled count uses the one presence rule, so it agrees with the overview's greyed-out cards.
+const enabledCount = computed(() => store.targets.filter((x) => store.isLiveTarget(x)).length);
 
 onMounted(async () => {
   await store.init();

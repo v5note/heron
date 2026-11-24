@@ -1,0 +1,22 @@
+# Qoder — scan locations + presence rules.
+# Paths verified against docs.qoder.com/extensions/skills (2026-11-23): user ~/.qoder/skills,
+# project .qoder/skills, project wins on a name collision.
+# A separate product, QoderWork, uses ~/.qoderwork/skills and is NOT this client.
+id = "qoder"
+display_name = "Qoder"
+priority = 70
+global_skills = ".qoder/skills"
+project_skills = ".qoder/skills"
+link_modes = ["symlink", "junction", "copy"]
+# Docs state a restart is needed to pick up newly added skills.
+rescan = "session"
+verified_at = "2026-11-23"
+verified_by = "doc"
+
+# No [native_scan] section: injection was never researched for this client.
+[detect]
+dirs = ["~/.qoder"]
+apps = ["Qoder.app"]
+
+[[detect.commands]]
+bin = "qoder"

@@ -29,11 +29,7 @@ impl Ctx {
     /// Where the authoritative content of `row` actually lives: its store copy, or the external
     /// directory a live-bound skill was adopted from without being moved.
     pub fn content_path(&self, row: &SkillRow) -> PathBuf {
-        match row
-            .storage_path
-            .as_deref()
-            .filter(|p| !p.trim().is_empty())
-        {
+        match row.storage_path.as_deref().filter(|p| !p.trim().is_empty()) {
             Some(p) => std::path::PathBuf::from(p),
             None => self.skill_path(&row.slug),
         }

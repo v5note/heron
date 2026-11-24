@@ -208,6 +208,8 @@ pub fn run() -> Result<ExitCode> {
     let home = home_dir()?;
     let db = Db::open(&dirs.db_path())?;
     let mut ctx = Ctx::new(dirs, db, "cli");
+    // 与 GUI 保持一致：设置页存过的代理先恢复到进程，命令行安装才走同一条网络路径。
+    heron_service::net::restore(&ctx)?;
     heron_service::clients::bootstrap(&mut ctx.db, &home)?;
 
     match cli.command {

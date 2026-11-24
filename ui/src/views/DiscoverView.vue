@@ -64,7 +64,7 @@ const visible = computed(() => {
   const client = clientFilter.value;
   return rows.value.filter((row) => {
     if (client === "other") {
-      if (!row.client_id || COMMON_CLIENTS.includes(row.client_id)) return false;
+      if (!row.client_id || COMMON_CLIENTS.value.includes(row.client_id)) return false;
     } else if (client !== "all" && row.client_id !== client) return false;
     if (!needle) return true;
     return [nameOf(row), descriptionOf(row), row.path, row.observed_slug ?? "", row.client_id ?? ""]
@@ -75,13 +75,18 @@ const visible = computed(() => {
 });
 
 // Agent tools that create their own directory to install skills. The dropdown lists the common ones
-// whether or not the scanner produced rows yet; unknown ids are grouped under "other".
-const COMMON_CLIENTS = [
-  "agents", "claude", "codex", "cursor", "opencode",
-  "workbuddy", "antigravity", "trae", "qoder", "grok", "cline", "copilot",
-];
-/** Static option list: all + common clients + the unknown bucket. */
-const clientOptions = ["all", ...COMMON_CLIENTS, "other"];
+// whether or not the scanner produced rows yet; unknown ids are grouped under "other". The backend
+// registry is the truth once it loads — the hardcoded list is only the pre-boot / failed-call fallback.
+const COMMON_CLIENTS = computed(() =>
+  store.clients.length
+    ? store.clients.map((c) => c.id)
+    : [
+        "agents", "claude", "codex", "cursor", "opencode",
+        "workbuddy", "antigravity", "trae", "qoder", "grok", "cline", "copilot",
+      ],
+);
+/** Option list: all + common clients + the unknown bucket. */
+const clientOptions = computed(() => ["all", ...COMMON_CLIENTS.value, "other"]);
 
 function clientOptionLabel(id: string): string {
   if (id === "all") return t("discover.allClients");

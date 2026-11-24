@@ -146,7 +146,9 @@ const queue = computed<QueueItem[]>(() => {
 const projections = computed(() => store.visibility.length);
 const live = computed(() => store.visibility.filter((v) => v.visibility.state === "visible").length);
 const liveRatio = computed(() => (projections.value ? Math.round((live.value / projections.value) * 100) : 0));
-const enabledTargets = computed(() => store.targets.filter((target) => target.enabled));
+// Counted the way the grid greys cards out: a disabled or absent-client target does not belong
+// in the 启用落点 readout either, so both use the one `isLiveTarget` rule instead of `enabled` alone.
+const enabledTargets = computed(() => store.targets.filter((target) => store.isLiveTarget(target)));
 const attentionRatio = computed(() =>
   projections.value ? ((store.hiddenCount + store.brokenLinks) / projections.value) * 100 : 0,
 );
@@ -219,20 +221,26 @@ onBeforeUnmount(() => {
   if (copiedTimer) window.clearTimeout(copiedTimer);
 });
 
-/** 状态 chip 只报后端给得出的三种事实；关掉的落点没有投影可谈，跟旧表格一样报「未被扫描」。 */
+/** 状态 chip 只报后端给得出的事实；presence 排在一切投影派生 chip 之前。 */
 const targetCards = computed(() =>
   store.targets.map((target) => {
     const rows = store.visibility.filter((v) => v.target_id === target.id);
     const broken = rows.filter((v) => v.visibility.state === "broken").length;
     const liveOnTarget = rows.filter((v) => v.visibility.state === "visible").length;
     const notScanned = { cls: "neutral", txt: t("visibility.not_scanned") };
-    const chip = !target.enabled
-      ? notScanned
-      : broken > 0
-        ? { cls: "bad", txt: t("overview.targets.chipBroken", { n: broken }) }
-        : liveOnTarget > 0
-          ? { cls: "good", txt: t("overview.targets.chipLive", { n: liveOnTarget }) }
-          : notScanned;
+    // Tri-state presence: `0` = probed and not on this machine, `null` = never probed and must
+    // render exactly like before (never grey cards right after an upgrade, before the first pass).
+    const detected = store.clientById[target.kind]?.detected ?? null;
+    const absent = detected === 0;
+    const chip = absent
+      ? { cls: "neutral", txt: t("overview.targets.chipAbsent") }
+      : !target.enabled
+        ? notScanned
+        : broken > 0
+          ? { cls: "bad", txt: t("overview.targets.chipBroken", { n: broken }) }
+          : liveOnTarget > 0
+            ? { cls: "good", txt: t("overview.targets.chipLive", { n: liveOnTarget }) }
+            : notScanned;
     return {
       id: target.id,
       kind: target.kind,
@@ -242,6 +250,7 @@ const targetCards = computed(() =>
       enabled: target.enabled,
       isDefault: target.is_default,
       live: liveOnTarget,
+      absent,
       chip,
     };
   }),
@@ -394,7 +403,14 @@ async function copyPath(path: string, id: string) {
       <span class="hint">{{ t("overview.targets.hint") }}</span>
     </div>
     <div class="tiles">
-      <div v-for="card in targetCards" :key="card.id" class="tile" @click="go('/projects')">
+      <div
+        v-for="card in targetCards"
+        :key="card.id"
+        class="tile"
+        :class="{ absent: card.absent }"
+        :title="card.absent ? t('overview.targets.absentHint') : undefined"
+        @click="go('/projects')"
+      >
         <div class="t-head">
           <span class="glyph" :style="glyphStyle(card.kind)">
             <AppIcon :name="clientIcon(card.kind)" :size="26" />
@@ -504,6 +520,9 @@ async function copyPath(path: string, id: string) {
   transition: border-color 0.15s, box-shadow 0.15s, transform 0.15s;
 }
 .tile:hover { border-color: var(--line-strong); box-shadow: var(--lift); transform: translateY(-1px); }
+/* 未检测到：只灰卡片本身与图标，chip 与文字必须保持可读；灰度只作用在 glyph 的图标上。 */
+.tile.absent { opacity: 0.55; }
+.tile.absent .glyph { filter: grayscale(1); }
 .t-head { display: flex; align-items: center; gap: 10px; min-width: 0; }
 .t-name { font-size: 14px; font-weight: 600; white-space: nowrap; }
 .t-def { margin-left: 6px; }

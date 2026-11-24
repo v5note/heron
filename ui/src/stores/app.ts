@@ -3,7 +3,7 @@
 import { defineStore } from "pinia";
 import { api, onEvent, type AdoptResult, type AppError } from "../api";
 import type {
-  DetectedRow, DoctorReport, ScanPhase, ScanProgress, SkillRow, TargetRow, UpgradeCandidate,
+  ClientRow, DetectedRow, DoctorReport, ScanPhase, ScanProgress, SkillRow, TargetRow, UpgradeCandidate,
   UpgradeOutcome, VisibilityReport,
 } from "../api/types";
 import { messageFor } from "../i18n";
@@ -201,6 +201,7 @@ export const useAppStore = defineStore("app", {
     skills: [] as SkillRow[],
     detected: [] as DetectedRow[],
     targets: [] as TargetRow[],
+    clients: [] as ClientRow[],
     visibility: [] as VisibilityReport[],
     upgrades: [] as UpgradeCandidate[],
     doctor: null as DoctorReport | null,
@@ -214,6 +215,21 @@ export const useAppStore = defineStore("app", {
     },
     unmanaged: (s) => s.detected.filter((d) => d.adopt_state === "candidate" && d.kind !== "nested-suspect"),
     nested: (s) => s.detected.filter((d) => d.kind === "nested-suspect"),
+    /** Client registry keyed by id; `target.kind` is that id. */
+    clientById(s): Record<string, ClientRow> {
+      const out: Record<string, ClientRow> = {};
+      for (const row of s.clients) out[row.id] = row;
+      return out;
+    },
+    /**
+     * Whether a target is live — the one presence rule, verbatim from `clients::target_live`:
+     * `enabled && (clientById[kind]?.detected ?? null) !== 0`. `detected` is tri-state and only an
+     * explicit `0` (probed, absent) is "not on this machine"; `null` — never probed, e.g. before the
+     * first scan after an upgrade — must render exactly like it did before, never greyed.
+     */
+    isLiveTarget(): (t: TargetRow) => boolean {
+      return (t) => t.enabled && (this.clientById[t.kind]?.detected ?? null) !== 0;
+    },
     upgradable: (s) => s.upgrades.filter((u) => u.state === "has_update" || u.state === "diverged"),
     /** Projection state per skill slug, in target order: what the row-level matrix renders. */
     visibilityBySlug(s): (slug: string) => { target: TargetRow; state: VisibilityState }[] {
@@ -349,7 +365,7 @@ export const useAppStore = defineStore("app", {
       }
     },
     async refreshAll() {
-      await Promise.all([this.loadSkills(), this.loadDetected(), this.loadTargets(), this.verify()]);
+      await Promise.all([this.loadSkills(), this.loadDetected(), this.loadTargets(), this.loadClients(), this.verify()]);
     },
     async loadSkills() {
       try {
@@ -374,6 +390,13 @@ export const useAppStore = defineStore("app", {
     async loadTargets() {
       try {
         this.targets = await api.targets();
+      } catch (e) {
+        this.fail(e);
+      }
+    },
+    async loadClients() {
+      try {
+        this.clients = await api.clients();
       } catch (e) {
         this.fail(e);
       }
@@ -445,6 +468,12 @@ export const useAppStore = defineStore("app", {
       scan.phase = phase;
       if (phase === "done") this.finishScan("done", scan.found, scan.truncated, numOr(raw?.limit, DIR_CEILING));
       else if (phase === "canceled") this.finishScan("canceled", scan.found, scan.truncated);
+      else if (phase === "prepare") {
+        // prepare re-runs `sync_catalog` and the presence probe: rows for clients added by an
+        // upgrade and their detected state only exist in these two lists, so both reload as a run starts.
+        void this.loadClients();
+        void this.loadTargets();
+      }
     },
     /** A batch of newly found skills: into the index, into the stream, and into the counts. */
     applyHits(raw: unknown) {
@@ -477,6 +506,10 @@ export const useAppStore = defineStore("app", {
         scan.lastFound = scan.found;
         scan.lastRoots = scan.rootTotal || scan.rootIndex;
         scan.lastTruncated = truncated;
+        // New clients only get rows (and presence) during the run itself: nothing else reloads the
+        // target grid after a scan, so the first finished pass has to land them here.
+        void this.loadClients();
+        void this.loadTargets();
         // 扫描完成后自动体检: the fresh inventory a just-finished scan wrote is exactly what a
         // check-up needs, so run one now when the setting is on. runDoctor owns `busy` for the
         // duration, which is what clears the "扫描中" pill rather than the flash timeout below.

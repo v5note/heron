@@ -1,0 +1,24 @@
+# GitHub Copilot — scan locations + presence rules.
+# Verified against code.visualstudio.com agent-skills and docs.github.com Copilot CLI (2026-11-23).
+# Accepted project roots: .github/skills, .claude/skills, .agents/skills; personal roots:
+# ~/.copilot/skills, ~/.claude/skills, ~/.agents/skills. We ship the Copilot-native pair; the other
+# two are already covered by the claude and agents clients.
+# `gh` is deliberately NOT a probe signal — it is installed far more widely than Copilot CLI.
+id = "copilot"
+display_name = "GitHub Copilot"
+priority = 100
+global_skills = ".copilot/skills"
+project_skills = ".github/skills"
+link_modes = ["symlink", "junction", "copy"]
+verified_at = "2026-11-23"
+verified_by = "doc"
+
+[native_scan]
+supported = false
+evidence = "VS Code has chat.agentSkillsLocations, but writing editor settings is unverified"
+
+[detect]
+dirs = ["~/.copilot"]
+
+[[detect.commands]]
+bin = "copilot"

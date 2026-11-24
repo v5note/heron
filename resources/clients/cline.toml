@@ -1,0 +1,20 @@
+# Cline — scan locations + presence rules.
+# Verified against docs.cline.bot/customization/skills (2026-11-23): global ~/.cline/skills,
+# project .cline/skills (legacy .clinerules/skills also read), plus .claude/skills compatibility.
+# WARNING: precedence is inverted vs most clients — the docs say the GLOBAL skill wins a name
+# collision. Also `~/.cline` can exist with only `data/` inside: skills are created lazily, so the
+# absence of a skills dir does not mean the client is absent.
+id = "cline"
+display_name = "Cline"
+priority = 90
+global_skills = ".cline/skills"
+project_skills = ".cline/skills"
+link_modes = ["symlink", "junction", "copy"]
+verified_at = "2026-11-23"
+verified_by = "doc"
+
+# No [native_scan] section: injection was never researched for this client.
+[detect]
+# A VS Code extension: its data dir lives under the editor's globalStorage, and ~/.cline appears
+# as soon as the extension has run. No CLI on PATH to probe.
+dirs = ["~/.cline", "~/Library/Application Support/Code/User/globalStorage/saoudrizwan.claude-dev"]

@@ -6,8 +6,8 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import type {
-  AdoptPlan, ConflictPayload, DetectedMeta, DetectedRow, DiffReport, DoctorReport, Drift, FavoriteRow, InstallPlan,
-  InstallPreview, LockFile, MarketInfo, MarketItem, NativeScanStatus, ScanReport, SkillRow,
+  AdoptPlan, ClientRow, ConflictPayload, DetectedMeta, DetectedRow, DiffReport, DoctorReport, Drift, FavoriteRow, InstallPlan,
+  InstallPreview, LockFile, MarketInfo, MarketItem, NativeScanStatus, RemoveOutcome, RemovePlan, ScanReport, SkillRow,
   TargetRow, UpgradeCandidate, UpgradeOutcome, VisibilityReport,
 } from "./types";
 
@@ -61,9 +61,17 @@ export const api = {
   ) => call<T>("adopt_paths", { paths, dryRun, keepOriginal, placement: placement ?? null }),
   skills: () => call<SkillRow[]>("skills_list"),
   targets: () => call<TargetRow[]>("targets_list"),
+  /** Client registry with per-machine presence: joins onto `targets` rows by `kind`. */
+  clients: () => call<ClientRow[]>("clients_list"),
   project: (slug: string, targetId: string, mode: string | null, dryRun: boolean) =>
     call<{ applied: boolean; path: string; mode: string }>("project_skill", { slug, targetId, mode, dryRun }),
   unproject: (slug: string, targetId: string) => call<void>("unproject_skill", { slug, targetId }),
+  /**
+   * Delete a skill from the library. `dryRun` answers with the plan — which client links are
+   * retracted and where the store copy is parked — so the dialog can state it before anything moves.
+   */
+  removeSkill: <T = RemovePlan | RemoveOutcome>(slug: string, dryRun: boolean) =>
+    call<T>("skill_remove", { slug, dryRun }),
   verify: () => call<VisibilityReport[]>("verify_visibility"),
   outdated: () => call<UpgradeCandidate[]>("outdated_list"),
   upgrade: (slugs: string[], dryRun: boolean, keepLocal: boolean) =>
@@ -75,6 +83,9 @@ export const api = {
     call<void>("market_set_enabled", { market, enabled }),
   marketSearch: (market: string, query: string) => call<MarketItem[]>("market_search", { market, query }),
   marketPlan: (market: string, key: string) => call<InstallPlan>("market_plan", { market, key }),
+  /** 设置页的代理：`null` / 空串 = 自动探测（环境变量 → git 配置 → 系统代理）。 */
+  netGetProxy: () => call<string | null>("net_get_proxy"),
+  netSetProxy: (value: string | null) => call<void>("net_set_proxy", { value }),
   favorites: () => call<FavoriteRow[]>("favorite_list"),
   favoriteAdd: (input: { name: string; url: string; description: string; market?: string | null }) =>
     call<FavoriteRow>("favorite_add", {

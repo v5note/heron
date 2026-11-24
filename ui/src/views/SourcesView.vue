@@ -58,6 +58,10 @@ const favorites = ref<FavoriteRow[]>([]);
 const seg = ref<"all" | "fav">("all");
 const openPlan = ref<Set<string>>(new Set());
 const busyKey = ref<string | null>(null);
+/** 收藏行 dry-run 预览缓存：id → 后端算出的真实落点（slug / commit / 子路径）。 */
+const favPreviews = reactive<Record<number, InstallPreview>>({});
+/** 哪一行正在真装（区分「解析中」与「安装中」两种按钮态）。 */
+const installingFav = ref<number | null>(null);
 
 // 收藏抽屉表单。
 const drawer = ref(false);
@@ -243,9 +247,10 @@ function mk(id: string) {
 }
 
 async function doInstall(url: string, subpath?: string, label?: string) {
-  await api.install(url, { subpath: subpath || undefined, dryRun: false });
+  const res = await api.install(url, { subpath: subpath || undefined, dryRun: false });
   store.toast("ok", t("sources.installed", { name: label || url }));
   await Promise.all([store.refreshAll(), loadInstalled()]);
+  return res;
 }
 
 /** 安装市场结果里的某一行：可安装直接克隆；guid 计划兜底打开浏览器。 */
@@ -268,8 +273,34 @@ async function installRow(row: ResultRow) {
 
 async function installFavorite(fav: FavoriteRow) {
   busyKey.value = `fav:${fav.id}`;
+  installingFav.value = fav.id;
   try {
-    await doInstall(fav.url, undefined, fav.name);
+    const res = await doInstall(fav.url, undefined, fav.name);
+    const cached = favPreviews[fav.id];
+    const slug = (res as { slug?: string })?.slug;
+    if (cached) favPreviews[fav.id] = { ...cached, slug: slug ?? cached.slug, existing: true };
+  } catch (e) {
+    store.fail(e);
+  } finally {
+    busyKey.value = null;
+    installingFav.value = null;
+  }
+}
+
+/**
+ * 收藏行的「预览 / 收起」：与市场行同款两步式。第一次展开才打后端 dry-run，
+ * 之后再点开复用缓存，不重复克隆。
+ */
+async function toggleFavPlan(fav: FavoriteRow) {
+  const key = `fav:${fav.id}`;
+  if (openPlan.value.has(key) || favPreviews[fav.id]) {
+    togglePlan(key);
+    return;
+  }
+  busyKey.value = key;
+  try {
+    favPreviews[fav.id] = (await api.install(fav.url, { dryRun: true })) as InstallPreview;
+    togglePlan(key);
   } catch (e) {
     store.fail(e);
   } finally {
@@ -328,8 +359,8 @@ const fvState = computed<"idle" | "repo" | "link" | "bad">(() =>
 function fillExample(kind: "github" | "gitee") {
   fv.url =
     kind === "github"
-      ? "https://github.com/anthropics/skills/tree/main/skills/pdf"
-      : "https://gitee.com/iflytek/skills/tree/master/skills/pdf";
+      ? "https://github.com/v5note/wechat-mp"
+      : "https://gitee.com/zyw/wechat-mp";
 }
 
 /** 「收进收藏」：从结果行预填抽屉；可安装行预填 git 仓库地址，一键安装才可用。 */
@@ -487,12 +518,42 @@ function planHtml(plan: InstallPlan): string {
   return `<span class="mut">${t("sources.planCmd")}</span> heron install <b>${esc(plan.url)}</b>${ref}${sub} <span class="mut">${t("sources.planNote")}</span>`;
 }
 
-/** 收藏是否已安装：按地址解析出的 slug 匹配本地库。 */
+/** 收藏安装后的落点：预览拿到的真实 slug 优先，否则退回地址解析的猜测。 */
+function favSlug(fav: FavoriteRow): string {
+  const p = favPreviews[fav.id];
+  if (p?.slug) return p.slug.toLowerCase();
+  const q = parseUrl(fav.url);
+  return q.kind === "repo" ? (q.slug || "").toLowerCase() : "";
+}
+
+/** 收藏是否已安装：按落点 slug 匹配本地库。 */
 function favInstalled(fav: FavoriteRow): boolean {
-  const p = parseUrl(fav.url);
-  if (p.kind !== "repo") return false;
-  const slug = (p.sub?.split("/").filter(Boolean).pop() || p.repo || "").toLowerCase();
+  const slug = favSlug(fav);
   return slug ? installed.value.has(slug) : false;
+}
+
+/** 收藏展开的安装计划：命令行 + 后端 dry-run 算出的真实落点。 */
+function favPlanHtml(fav: FavoriteRow): string {
+  const p = favPreviews[fav.id];
+  if (!p) return "";
+  const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  const R = (k: string, v: string, cls = "v") =>
+    `<span class="k">${esc(k)}</span><span class="${cls}">${esc(v)}</span>\n`;
+  const ref = p.ref_name
+    ? ` @ <b>${esc(p.ref_name)}</b>`
+    : ` <span class="mut">${t("sources.planDefaultRef")}</span>`;
+  const sub = p.selected
+    ? ` · ${t("sources.planSubpath")} <b>${esc(p.selected)}</b>`
+    : "";
+  return (
+    `<span class="mut">${t("sources.planCmd")}</span> heron install <b>${esc(fav.url)}</b>${ref}${sub} <span class="mut">${t("sources.planNote")}</span>\n` +
+    R(t("sources.planSlug"), p.slug) +
+    R(t("sources.vStoreDir"), "~/.heron/skills/" + p.slug, "to") +
+    R(t("sources.planCommit"), p.commit.slice(0, 8)) +
+    (p.existing
+      ? R(t("sources.vStatus"), t("sources.planExisting"), "bad")
+      : R(t("sources.vAction"), t("sources.vNewAction")))
+  );
 }
 
 function stagger(i: number): string {
@@ -838,15 +899,41 @@ function stagger(i: number): string {
               <svg viewBox="0 0 24 24"><path d="M4 7h16" /><path d="M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" /><path d="M6 7l1 13h10l1-13" /></svg>
             </button>
             <button
+              v-if="parseUrl(f.url).kind === 'repo'"
+              class="btn sm"
+              :class="{ primary: openPlan.has(`fav:${f.id}`) }"
+              :disabled="busyKey === `fav:${f.id}`"
+              @click="toggleFavPlan(f)"
+            >
+              {{
+                openPlan.has(`fav:${f.id}`)
+                  ? t("sources.collapse")
+                  : busyKey === `fav:${f.id}`
+                    ? t("sources.previewing")
+                    : t("sources.preview")
+              }}
+            </button>
+            <button
               class="btn sm primary"
               :disabled="parseUrl(f.url).kind !== 'repo' || busyKey === `fav:${f.id}`"
               :title="parseUrl(f.url).kind === 'repo' ? t('sources.oneClickInstall') : t('sources.needGitAddress')"
               @click="installFavorite(f)"
             >
               <svg viewBox="0 0 24 24"><path d="M12 4v12m0 0l-4-4m4 4l4-4" /><path d="M5 20h14" /></svg>
-              {{ t("sources.install") }}
+              {{
+                installingFav === f.id
+                  ? t("sources.installing")
+                  : favInstalled(f)
+                    ? t("sources.installAgain")
+                    : t("sources.install")
+              }}
             </button>
           </div>
+          <div
+            v-if="openPlan.has(`fav:${f.id}`)"
+            class="h-plan"
+            v-html="favPlanHtml(f)"
+          ></div>
         </div>
         <div v-if="!favorites.length" class="h-empty">
           {{ t("sources.favEmpty") }}<br />
@@ -865,7 +952,7 @@ function stagger(i: number): string {
     </div>
     <div class="h-paste">
       <div class="fi"><AppIcon name="code" :size="18" /></div>
-      <input v-model="paste" placeholder="https://github.com/anthropics/skills/tree/main/skills/pdf" @keyup.enter="installUrl" />
+      <input v-model="paste" placeholder="https://github.com/v5note/wechat-mp" @keyup.enter="installUrl" />
       <button class="btn sm" @click="previewUrl">{{ t("common.dryRun") }}</button>
       <button class="btn sm primary" :disabled="!paste.trim() || busyKey === 'paste'" @click="installUrl">
         {{ t("sources.install") }}
@@ -1061,6 +1148,9 @@ function stagger(i: number): string {
 .h-plan :deep(.hl) { color: var(--text); }
 .h-plan :deep(.to) { color: var(--accent); }
 .h-plan :deep(.mut) { color: var(--faint); }
+.h-plan :deep(.k) { color: var(--faint); display: inline-block; min-width: 9ch; }
+.h-plan :deep(.v) { color: var(--text); }
+.h-plan :deep(.bad) { color: var(--bad); }
 
 .badge.ok { display: inline-flex; align-items: center; gap: 4px; height: 19px; padding: 0 7px; border-radius: 999px; background: color-mix(in srgb, var(--good) 14%, transparent); color: var(--good); font-size: 11px; font-weight: 600; }
 .badge.ok svg { width: 11px; height: 11px; stroke: currentColor; fill: none; stroke-width: 2.4; }

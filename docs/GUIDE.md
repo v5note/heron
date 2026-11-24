@@ -163,35 +163,35 @@ heron project pdf --on claude:global --mode copy
 
 ```bash
 # 仓库里的某个子目录
-heron install https://github.com/anthropics/skills/tree/main/skills/pdf
+heron install https://github.com/v5note/wechat-mp
 
 # 简写：owner/repo#ref:path
-heron install github:anthropics/skills#main:skills/pdf
+heron install github:anthropics/skills#main:skills/wechat-mp
 ```
 
 先看它打算装什么：
 
 ```bash
-heron install https://github.com/anthropics/skills --subpath skills/pdf --dry-run
+heron install https://github.com/anthropics/skills --subpath skills/wechat-mp --dry-run
 ```
 
 如果仓库里有多个 Skill 而你没指定 `--subpath`，Heron 会**明确报错并列出候选**，不会替你猜：
 
 ```text
-error[E_SOURCE_AMBIGUOUS]: {"count":"2","examples":"skills/pdf, skills/tdd","reason":"multiple_skills"}
+error[E_SOURCE_AMBIGUOUS]: {"count":"2","examples":"skills/wechat-mp, skills/tdd","reason":"multiple_skills"}
 ```
 
 ### 通过市场
 
 ```bash
 heron market list
-heron market search skills_sh pdf
+heron market search skills_sh wechat-mp
 ```
 
 ```text
-+ anthropics/skills/pdf                    skills · pdf
-  https://www.skills.sh/anthropics/skills/pdf
-+ openai/skills/pdf                        skills · pdf
++ anthropics/skills/wechat-mp                    skills · wechat-mp
+  https://www.skills.sh/anthropics/skills/wechat-mp
++ openai/skills/wechat-mp                        skills · wechat-mp
 ```
 
 `+` 表示 Heron 能直接安装，`~` 表示只能打开浏览器（把 Git 地址粘回来用 `heron install`）。

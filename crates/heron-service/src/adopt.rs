@@ -69,15 +69,34 @@ pub enum EntryState {
 #[derive(Debug, Clone, serde::Serialize)]
 #[serde(tag = "action", rename_all = "snake_case")]
 pub enum AdoptStep {
-    CreateStore { slug: String, from: String },
-    Deduplicate { slug: String, already_at: String },
-    Backup { from: String, to: String },
-    LinkOriginalPath { path: String, target: String },
-    RegisterOnly { path: String },
+    CreateStore {
+        slug: String,
+        from: String,
+    },
+    Deduplicate {
+        slug: String,
+        already_at: String,
+    },
+    Backup {
+        from: String,
+        to: String,
+    },
+    LinkOriginalPath {
+        path: String,
+        target: String,
+    },
+    RegisterOnly {
+        path: String,
+    },
     /// Bind without moving: the library points at the directory the link already resolves to.
-    LiveBind { slug: String, at: String },
+    LiveBind {
+        slug: String,
+        at: String,
+    },
     /// Copying this entry into the store leaves the directory the link pointed at unreferenced.
-    SourceLeftBehind { path: String },
+    SourceLeftBehind {
+        path: String,
+    },
 }
 
 #[derive(Debug, Clone, serde::Serialize)]
@@ -314,13 +333,17 @@ pub fn execute(ctx: &mut Ctx, plan: &AdoptPlan, placement: AdoptPlacement) -> Re
         } else {
             "adopted"
         };
+        // `detected` never carries a description, so the library would show a bare name for every
+        // 收拢 skill. The store copy is the authoritative file at this point, whatever the
+        // placement was: adopt either just wrote it there or deduplicated onto one that exists.
+        let description = description_of(&dest.join("SKILL.md"));
         ctx.db.write(|tx| {
             skill::insert(
                 tx,
                 &SkillRow {
                     slug: slug.clone(),
                     display_name,
-                    description: String::new(),
+                    description,
                     tags: vec![],
                     status: "active".to_owned(),
                     origin: origin.to_owned(),
@@ -431,6 +454,50 @@ fn entry_path(row: &DetectedRow) -> PathBuf {
     }
 }
 
+/// The summary the library shows. `scan::describe` is reused rather than re-cutting the
+/// frontmatter rules here, and it is deliberately forgiving: an unreadable or sloppy file leaves
+/// the field empty instead of failing an adopt that has already touched the disk.
+fn description_of(entry_dir: &Path) -> String {
+    let md = if entry_dir.is_dir() {
+        entry_dir.join("SKILL.md")
+    } else {
+        entry_dir.to_path_buf()
+    };
+    crate::scan::describe(&[md.to_string_lossy().to_string()])
+        .into_iter()
+        .next()
+        .and_then(|meta| meta.description)
+        .unwrap_or_default()
+}
+
+/// Adopt registered the row without reading the file, so every skill 收拢 before that left the
+/// library with a name and no description. Fill the blanks from the content Heron already points
+/// at; the guarded update means a row that has a description is never touched, so re-running on
+/// an index that is already complete reads nothing and writes nothing.
+pub fn repair_descriptions(ctx: &mut Ctx) -> Result<usize> {
+    let mut filled = 0;
+    for row in skill::list(ctx.db.conn(), false)? {
+        if !row.description.trim().is_empty() {
+            continue;
+        }
+        let entry = match row.storage_path.as_deref() {
+            Some(path) => PathBuf::from(path),
+            None => ctx.skill_path(&row.slug),
+        };
+        let description = description_of(&entry);
+        if description.is_empty() {
+            continue;
+        }
+        if ctx
+            .db
+            .write(|tx| skill::fill_description(tx, &row.slug, &description))?
+        {
+            filled += 1;
+        }
+    }
+    Ok(filled)
+}
+
 /// A link we did not create records a choice the user already made about where the content lives.
 /// Copying such an entry into the store would leave that choice dangling, so binding in place is
 /// the default; identical content already in the store is the exception — deduplicating onto the
@@ -451,10 +518,7 @@ fn entry_state(ctx: &Ctx, content_dir: &Path) -> Result<EntryState> {
     if info.kind.is_link() {
         // The recorded target can be relative; the store check needs the path it really resolves to.
         let resolved = content_dir.canonicalize().ok();
-        if resolved
-            .as_ref()
-            .is_some_and(|p| points_into_store(ctx, p))
-        {
+        if resolved.as_ref().is_some_and(|p| points_into_store(ctx, p)) {
             return Ok(EntryState::HeronLink);
         }
         let target = resolved
@@ -484,7 +548,11 @@ fn points_into_store(ctx: &Ctx, resolved: &Path) -> bool {
 /// Provenance an installer recorded (or a link implied) must survive adoption. Turning a
 /// GitHub-installed entry into an anonymous local copy is what made every adopted skill look
 /// unserviceable in `outdated`.
-fn record_upstream(ctx: &mut Ctx, slug: &str, upstream: Option<&crate::npx_lock::Upstream>) -> Result<()> {
+fn record_upstream(
+    ctx: &mut Ctx,
+    slug: &str,
+    upstream: Option<&crate::npx_lock::Upstream>,
+) -> Result<()> {
     let Some(upstream) = upstream else {
         return Ok(());
     };
@@ -549,6 +617,8 @@ fn live_bind(ctx: &mut Ctx, plan: &AdoptPlan, slug: &str) -> Result<AdoptReport>
         .observed_slug
         .clone()
         .unwrap_or_else(|| slug.to_owned());
+    // 就地引用 keeps the user's own directory as the content, so that is the file to read from.
+    let description = description_of(&real.join("SKILL.md"));
     ctx.db.write(|tx| {
         if skill::get(tx.conn(), slug)?.is_none() {
             skill::insert(
@@ -556,7 +626,7 @@ fn live_bind(ctx: &mut Ctx, plan: &AdoptPlan, slug: &str) -> Result<AdoptReport>
                 &SkillRow {
                     slug: slug.to_owned(),
                     display_name: display_name.clone(),
-                    description: String::new(),
+                    description,
                     tags: vec![],
                     status: "active".to_owned(),
                     origin: "adopted".to_owned(),

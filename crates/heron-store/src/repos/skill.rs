@@ -56,6 +56,19 @@ pub fn set_storage_path(tx: &WriteTx<'_>, slug: &str, path: Option<&str>) -> Res
     Ok(())
 }
 
+/// Fill in a description an older adopt left blank. The `description = ''` guard is what makes
+/// this safe to run repeatedly: a value the library already owns is never overwritten.
+pub fn fill_description(tx: &WriteTx<'_>, slug: &str, description: &str) -> Result<bool> {
+    let changed = tx
+        .conn()
+        .execute(
+            "UPDATE skill SET description = ?2, updated_at = ?3 WHERE slug = ?1 AND description = ''",
+            params![slug, description, now_iso()],
+        )
+        .map_err(sql_err)?;
+    Ok(changed > 0)
+}
+
 pub fn get(conn: &rusqlite::Connection, slug: &str) -> Result<Option<SkillRow>> {
     conn.query_row(
         &format!("SELECT {COLUMNS} FROM skill WHERE slug = ?1"),
@@ -87,6 +100,17 @@ pub fn list(conn: &rusqlite::Connection, include_trashed: bool) -> Result<Vec<Sk
     let rows = stmt.query_map([], row_from).map_err(sql_err)?;
     rows.collect::<std::result::Result<Vec<_>, _>>()
         .map_err(sql_err)
+}
+
+/// Drop the index row outright. `version` and `source_binding` cascade with it, which is what
+/// frees the slug for a fresh install. `projection` deliberately has **no** cascade: the caller
+/// must take the client links back first, so deleting can never leave a dangling pointer behind.
+pub fn delete(tx: &WriteTx<'_>, slug: &str) -> Result<bool> {
+    let changed = tx
+        .conn()
+        .execute("DELETE FROM skill WHERE slug = ?1", params![slug])
+        .map_err(sql_err)?;
+    Ok(changed > 0)
 }
 
 pub fn set_status(tx: &WriteTx<'_>, slug: &str, status: &str) -> Result<()> {

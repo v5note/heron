@@ -115,6 +115,29 @@ export interface TargetRow {
   discover: string;
 }
 
+/**
+ * One `client` row (`clients_list`). Presence is tri-state: `null` means never probed (before the
+ * first scan after an upgrade) and must render exactly like a detected row — only `0` is "absent".
+ */
+export interface ClientRow {
+  id: string;
+  display_name: string;
+  global_paths: string[];
+  project_paths: string[];
+  link_modes: string[];
+  global_commands: string[];
+  project_commands: string[];
+  priority: number;
+  native_scan: string | null;
+  verified_at: string | null;
+  verified_by: string | null;
+  /** `null` = never probed, `0` = probed and not on this machine, `1` = detected. */
+  detected: number | null;
+  detected_at: string | null;
+  /** Probe hits, e.g. `["dir:~/.claude"]`; shown in tooltips so a miss is explainable. */
+  detect_evidence: string[];
+}
+
 export interface VisibilityReport {
   slug: string;
   target_id: string;
@@ -231,4 +254,24 @@ export interface NativeScanStatus {
   evidence: string;
   config_path: string | null;
   state: string;
+}
+
+/** What removing a skill would do, computed before anything moves. */
+export interface RemovePlan {
+  slug: string;
+  displayName: string;
+  /** Where the authoritative content lives today. */
+  content: string;
+  /** False for a skill that only borrows a directory the user owns: it is never moved. */
+  owned: boolean;
+  /** Client links that would be retracted. */
+  links: string[];
+  /** Trash destination, `null` when `owned` is false or the directory is already gone. */
+  trash: string | null;
+}
+
+export interface RemoveOutcome {
+  slug: string;
+  links: string[];
+  trash: string | null;
 }

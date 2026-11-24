@@ -336,7 +336,10 @@ fn progress_ticks_are_throttled_and_say_which_root_is_being_walked() {
     };
 
     let dirs = result.stats.dirs_visited;
-    assert!(dirs >= 6_000, "the tree is as wide as the test assumes: {dirs}");
+    assert!(
+        dirs >= 6_000,
+        "the tree is as wide as the test assumes: {dirs}"
+    );
     assert!(
         ticks.len() * 5 < dirs,
         "{ticks:?} is one progress event per directory"
@@ -347,8 +350,7 @@ fn progress_ticks_are_throttled_and_say_which_root_is_being_walked() {
     let interval_ms = PROGRESS_INTERVAL.as_millis() as usize;
     // 200-directory windows, 120ms windows, and the forced ticks at the two root boundaries and
     // at the end of the walk.
-    let allowed =
-        4 + dirs / PROGRESS_DIRS + started.elapsed().as_millis() as usize / interval_ms;
+    let allowed = 4 + dirs / PROGRESS_DIRS + started.elapsed().as_millis() as usize / interval_ms;
     assert!(
         ticks.len() <= allowed,
         "{} ticks is more than the {allowed} the limits allow",

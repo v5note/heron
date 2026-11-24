@@ -6,6 +6,9 @@ use crate::models::ClientRow;
 use crate::repos::{json_list, parse_list};
 use crate::sql_err;
 
+/// Writes the catalogue fields only. Presence has its own path ([`set_presence`]) so that
+/// re-bootstrapping the catalogue can never reset a detection verdict, and a detection write can
+/// never reset the catalogue. Do not add the presence columns to this statement.
 pub fn upsert(tx: &WriteTx<'_>, row: &ClientRow) -> Result<()> {
     tx.conn()
         .execute(
@@ -46,7 +49,8 @@ pub fn list(conn: &rusqlite::Connection) -> Result<Vec<ClientRow>> {
     let mut stmt = conn
         .prepare(
             "SELECT id, display_name, global_paths, project_paths, link_modes,
-                    global_commands, project_commands, priority, native_scan, verified_at, verified_by
+                    global_commands, project_commands, priority, native_scan, verified_at, verified_by,
+                    detected, detected_at, detect_evidence
              FROM client ORDER BY priority, id",
         )
         .map_err(sql_err)?;
@@ -64,6 +68,9 @@ pub fn list(conn: &rusqlite::Connection) -> Result<Vec<ClientRow>> {
                 native_scan: r.get(8)?,
                 verified_at: r.get(9)?,
                 verified_by: r.get(10)?,
+                detected: r.get(11)?,
+                detected_at: r.get(12)?,
+                detect_evidence: parse_list(Some(r.get(13)?)),
             })
         })
         .map_err(sql_err)?;
@@ -73,4 +80,21 @@ pub fn list(conn: &rusqlite::Connection) -> Result<Vec<ClientRow>> {
 
 pub fn get(conn: &rusqlite::Connection, id: &str) -> Result<Option<ClientRow>> {
     Ok(list(conn)?.into_iter().find(|c| c.id == id))
+}
+
+/// Narrow write of the presence verdict for one client. Deliberately touches only the three
+/// presence columns so it cannot clobber catalogue fields (see [`upsert`]'s comment).
+pub fn set_presence(
+    tx: &WriteTx<'_>,
+    id: &str,
+    detected: Option<bool>,
+    at: &str,
+    evidence: &[String],
+) -> Result<usize> {
+    tx.conn()
+        .execute(
+            "UPDATE client SET detected = ?2, detected_at = ?3, detect_evidence = ?4 WHERE id = ?1",
+            params![id, detected.map(|d| d as i64), at, json_list(evidence),],
+        )
+        .map_err(sql_err)
 }

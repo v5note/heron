@@ -16,6 +16,13 @@ pub struct ClientRow {
     pub native_scan: Option<String>,
     pub verified_at: Option<String>,
     pub verified_by: Option<String>,
+    /// Tri-state presence verdict from the last scan: `None` = never detected, `Some(0)` = not on
+    /// this machine, `Some(1)` = detected. Orthogonal to [`TargetRow::enabled`], which is a user
+    /// switch that detection must never write.
+    pub detected: Option<i64>,
+    pub detected_at: Option<String>,
+    /// Which signal matched, e.g. `dir:~/.claude`. Shown in the UI to make a misjudgement debuggable.
+    pub detect_evidence: Vec<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]

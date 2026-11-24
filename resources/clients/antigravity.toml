@@ -1,0 +1,26 @@
+# Antigravity (Google) — scan locations + presence rules.
+# Paths verified against antigravity.google/docs/skills (2026-11-23): global
+# ~/.gemini/config/skills (legacy ~/.gemini/antigravity/skills also honoured), default project
+# .agents/skills (legacy .agent/skills still read).
+# The global path is deliberately asymmetric, like opencode.
+# NO `apps` rule: the official docs never publish the .app bundle filename, so we do not guess one.
+# NOTE: project_skills intentionally equals the `agents` client's. `agents` has priority 10, this
+# one 120, so classification attributes a shared .agents/skills to `agents` — the honest outcome.
+id = "antigravity"
+display_name = "Antigravity"
+priority = 120
+global_skills = ".gemini/config/skills"
+project_skills = ".agents/skills"
+link_modes = ["symlink", "junction", "copy"]
+verified_at = "2026-11-23"
+verified_by = "doc"
+
+[native_scan]
+supported = false
+evidence = "extra roots are documented for the CLI only, not for the IDE"
+
+[detect]
+dirs = ["~/.gemini"]
+
+[[detect.commands]]
+bin = "agy"

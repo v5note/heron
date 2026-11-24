@@ -12,14 +12,17 @@
 pub mod adopt;
 pub mod clients;
 pub mod context;
+pub mod detect;
 pub mod diff;
 pub mod doctor;
 pub mod install;
 pub mod lockfile;
 pub mod native_scan;
+pub mod net;
 pub mod npx_lock;
 pub mod project;
 pub mod projects;
+pub mod remove;
 pub mod scan;
 pub mod upgrade;
 pub mod verify;

@@ -1,0 +1,24 @@
+# Grok (xAI Grok Build CLI) — scan locations + presence rules.
+# Verified against docs.x.ai/build/features/skills-plugins-marketplaces (2026-11-23). This is the
+# terminal coding agent, NOT the Grok chat app (which has no skills dir).
+# Discovery is broad: ./.grok/skills walked up to the repo root, ~/.grok/skills, enabled-plugin
+# skills/, plus arbitrary extra roots via `[skills] paths` in ~/.grok/config.toml. It also reads
+# .claude/skills and ~/.agents/skills, so a projection into claude may already be enough.
+id = "grok"
+display_name = "Grok Build"
+priority = 110
+global_skills = ".grok/skills"
+project_skills = ".grok/skills"
+link_modes = ["symlink", "junction", "copy"]
+verified_at = "2026-11-23"
+verified_by = "doc"
+
+[native_scan]
+supported = false
+evidence = "documented [skills] paths in ~/.grok/config.toml, but writing that file is unverified"
+
+[detect]
+dirs = ["~/.grok"]
+
+[[detect.commands]]
+bin = "grok"

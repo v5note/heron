@@ -1,0 +1,19 @@
+# WorkBuddy — scan locations + presence rules.
+# Global path is probe-verified on a real machine (dir exists and holds installed skills).
+# The vendor's CLI docs call the product "CodeBuddy" and use ~/.codebuddy/skills; the desktop app
+# actually reads ~/.workbuddy/skills, so global_skills follows the probe, not the docs.
+# project_skills is INFERRED from the naming convention — it only affects classification, never a
+# write, so it is allowed to be unverified.
+id = "workbuddy"
+display_name = "WorkBuddy"
+priority = 80
+global_skills = ".workbuddy/skills"
+project_skills = ".workbuddy/skills"
+link_modes = ["symlink", "junction", "copy"]
+verified_at = "2026-11-23"
+verified_by = "probe"
+
+# No [native_scan] section: injection was never researched for this client.
+[detect]
+dirs = ["~/.workbuddy"]
+apps = ["WorkBuddy.app"]

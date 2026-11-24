@@ -193,8 +193,8 @@ Skill 已经成为 AI 编码助手的核心资产：既承载个人方法论，�
 
 ### ADR-8　本地数据目录：遵循各家规范；Store 位于 Heron 自有目录 `~/.heron/skills`，`~/.agents` 仅作映射点
 
-* **决策**：使用 `directories` 约定解析用户数据 / 缓存 / 日志目录；Store 位于用户主目录下的 `~/.heron/skills`（Windows `%USERPROFILE%\.heron\skills`），数据目录（macOS `~/Library/Application Support/xin.v5ai.heron`，Windows `%LOCALAPPDATA%\v5ai\heron\data`）只放索引、缓存、备份、日志。
-* **理由**：Store 是全部 Skill 实体唯一的存放地，放在 Heron 自己的目录里既不依赖任何第三方客户端的版本行为，也不会落在扫描路径中（不会自己扫自己）；与 `npx skills` 拥有的 `~/.agents` 解耦；Windows 上索引与备份留在 `%LOCALAPPDATA%`，不参与 OneDrive 漫游，避免链接被云占位符化。
+* **决策**：使用 `directories` 约定解析用户数据 / 缓存 / 日志目录；Bundle identifier 取自有域名 `v5ai.xin` 的反向 DNS（`xin.v5ai` + 应用名 `heron` → `xin.v5ai.heron`），**不由仓库或 GitHub 账号派生**；Store 位于用户主目录下的 `~/.heron/skills`（Windows `%USERPROFILE%\.heron\skills`），数据目录（macOS `~/Library/Application Support/xin.v5ai.heron`，Windows `%LOCALAPPDATA%\v5ai\heron\data`）只放索引、缓存、备份、日志。
+* **理由**：Store 是全部 Skill 实体唯一的存放地，放在 Heron 自己的目录里既不依赖任何第三方客户端的版本行为，也不会落在扫描路径中（不会自己扫自己）；与 `npx skills` 拥有的 `~/.agents` 解耦；Windows 上索引与备份留在 `%LOCALAPPDATA%`，不参与 OneDrive 漫游，避免链接被云占位符化。标识按域名而非仓库派生，是因为域名代表产品的长期归属，而仓库位置随时可迁（换账号、换托管平台）——把标识绑在仓库上，一次迁移就会改变用户机器上的数据目录。因此更新源在 GitHub 账号 `v5note` 下（`https://github.com/v5note/heron/releases/latest/download/latest.json`）与标识 `xin.v5ai` 不一致，是有意为之：前者是发布渠道，后者是应用身份。
 * **后果**：用户历史资产集中在 `~/.agents`，**收拢流程（Adopt）必须是一等公民**，否则用户会感到"东西被搬走了"。指定 `--data-dir` 时该目录拥有 Heron 写入的一切，Store 也随之落到 `<data-dir>/.heron/skills`。
 * **投影目标（D10）**：Store 本身**不是**投影目标，也没有"默认目标"——`heron project <slug>` 必须用 `--on` 显式指定客户端目标。`~/.agents/skills` 是普通的可选映射点，按需开启且与 `npx skills` 共享所有权。详见 §10.15。
 
@@ -755,7 +755,7 @@ Heron
 
 ```text
 输入（例）：
-  · https://github.com/anthropics/skills/tree/main/skills/pdf
+  · https://github.com/v5note/wechat-mp
   · github:anthropics/skills#main:skills/pdf
   · /local/path/to/skill
   · 在来源浏览页勾选

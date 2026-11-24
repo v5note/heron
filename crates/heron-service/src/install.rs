@@ -8,6 +8,7 @@ use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 use heron_core::{ErrorCode, Slug, SlugPolicy};
+use heron_platform::dirs::Dirs;
 use heron_source::catalog::{self, Catalog, RepoFiles};
 use heron_source::url::{self, SourceKind};
 use heron_store::models::SkillRow;
@@ -55,11 +56,23 @@ struct Resolved {
     parsed: url::ParsedSource,
     catalog: Catalog,
     skill_dir: String,
+    /// The frontmatter `name` of the selected skill, when it is readable. A repository whose
+    /// skill sits at the root has no directory name to fall back on, so this is what keeps the
+    /// derived slug meaningful instead of the placeholder `root`.
+    skill_name: Option<String>,
     commit: String,
     ref_name: Option<String>,
 }
 
-fn resolve_remote(ctx: &Ctx, req: &InstallRequest) -> Result<Resolved> {
+/// What a request points at, decided without touching the network.
+struct Target {
+    parsed: url::ParsedSource,
+    remote: heron_git::RemoteUrl,
+    wanted_ref: Option<String>,
+    wanted_sub: Option<String>,
+}
+
+fn target(req: &InstallRequest) -> Result<Target> {
     let parsed = url::parse_source(&req.input)?;
     let (remote_url, ref_from_url, subpath_from_url) = match &parsed.kind {
         SourceKind::Git {
@@ -82,16 +95,36 @@ fn resolve_remote(ctx: &Ctx, req: &InstallRequest) -> Result<Resolved> {
                 .into())
         }
     };
+    Ok(Target {
+        parsed,
+        remote: heron_git::RemoteUrl::parse(&remote_url)?,
+        wanted_ref: req.ref_override.clone().or(ref_from_url),
+        wanted_sub: req.subpath_override.clone().or(subpath_from_url),
+    })
+}
 
-    let remote = heron_git::RemoteUrl::parse(&remote_url)?;
-    let mut repo = heron_git::CachedRepo::new(&ctx.dirs.sources_cache(), remote);
+/// The network stage on its own. `Dirs` is cloneable precisely so that a caller can spend the
+/// whole fetch budget outside its state lock: a blocked route then costs this install, and
+/// nothing else, while every other command stays responsive.
+pub fn prefetch(dirs: &Dirs, req: &InstallRequest) -> Result<()> {
+    let mut repo = heron_git::CachedRepo::new(&dirs.sources_cache(), target(req)?.remote);
+    repo.ensure()
+}
+
+fn resolve_remote(dirs: &Dirs, req: &InstallRequest) -> Result<Resolved> {
+    let t = target(req)?;
+    let mut repo = heron_git::CachedRepo::new(&dirs.sources_cache(), t.remote);
     repo.ensure()?;
 
-    let wanted_ref = req.ref_override.clone().or(ref_from_url);
-    let resolved_ref = repo.resolve(wanted_ref.as_deref())?;
+    let resolved_ref = repo.resolve(t.wanted_ref.as_deref())?;
     let commit = resolved_ref.commit.clone();
+    let Target {
+        parsed,
+        wanted_ref,
+        wanted_sub,
+        ..
+    } = t;
 
-    let wanted_sub = req.subpath_override.clone().or(subpath_from_url);
     let skill_dir = match wanted_sub.as_deref() {
         Some(sub) if !sub.is_empty() => {
             let normalized = sub.trim_matches('/').to_owned();
@@ -132,6 +165,7 @@ fn resolve_remote(ctx: &Ctx, req: &InstallRequest) -> Result<Resolved> {
             return Ok(Resolved {
                 parsed,
                 catalog,
+                skill_name: read_skill_name(&repo, &commit, &skill_dir),
                 skill_dir,
                 commit,
                 ref_name: wanted_ref,
@@ -156,10 +190,45 @@ fn resolve_remote(ctx: &Ctx, req: &InstallRequest) -> Result<Resolved> {
     Ok(Resolved {
         parsed,
         catalog,
+        skill_name: read_skill_name(&repo, &commit, &skill_dir),
         skill_dir,
         commit,
         ref_name: wanted_ref,
     })
+}
+
+/// The frontmatter `name` of the skill at `skill_dir`, best-effort: an unreadable or unparsable
+/// blob just means the caller falls back to the next slug candidate.
+fn read_skill_name(repo: &heron_git::CachedRepo, commit: &str, skill_dir: &str) -> Option<String> {
+    let path = if skill_dir.is_empty() {
+        "SKILL.md".to_owned()
+    } else {
+        format!("{skill_dir}/SKILL.md")
+    };
+    let text = repo.read_blob(commit, &path).ok()?;
+    heron_scan::parse_skill_md(text.as_bytes())
+        .0
+        .name
+        .map(|n| n.trim().to_owned())
+        .filter(|n| !n.is_empty())
+}
+
+/// The repository name from a git source URL (`owner/repo.git` → `repo`).
+fn repo_name(parsed: &url::ParsedSource) -> String {
+    let SourceKind::Git { url, .. } = &parsed.kind else {
+        return String::new();
+    };
+    let tail = url.trim_end_matches('/').rsplit('/').next().unwrap_or("");
+    tail.strip_suffix(".git").unwrap_or(tail).to_owned()
+}
+
+/// The first candidate that survives slug normalization.
+fn first_slug(candidates: impl IntoIterator<Item = String>) -> Option<String> {
+    candidates
+        .into_iter()
+        .filter(|c| !c.trim().is_empty())
+        .find_map(|c| Slug::derive(&c, SlugPolicy::Lenient).ok())
+        .map(|s| s.as_str().to_owned())
 }
 
 fn empty_catalog() -> Catalog {
@@ -171,17 +240,22 @@ fn empty_catalog() -> Catalog {
 
 /// Compute what an install would do without touching the store.
 pub fn preview(ctx: &Ctx, req: &InstallRequest) -> Result<InstallPreview> {
-    let resolved = resolve_remote(ctx, req)?;
-    let wanted_slug = req.as_slug.clone().unwrap_or_else(|| {
-        resolved
+    let resolved = resolve_remote(&ctx.dirs, req)?;
+    let slug = req.as_slug.clone().unwrap_or_else(|| {
+        let dir_tail = resolved
             .skill_dir
             .rsplit('/')
             .next()
-            .filter(|s| !s.is_empty())
-            .unwrap_or("root")
-            .to_owned()
+            .unwrap_or("")
+            .to_owned();
+        first_slug([
+            dir_tail,
+            resolved.skill_name.clone().unwrap_or_default(),
+            repo_name(&resolved.parsed),
+        ])
+        .unwrap_or_else(|| "root".to_owned())
     });
-    let slug = Slug::derive(&wanted_slug, SlugPolicy::Lenient)?
+    let slug = Slug::derive(&slug, SlugPolicy::Lenient)?
         .as_str()
         .to_owned();
     let existing = skill::get(ctx.db.conn(), &slug)?.is_some();
@@ -212,7 +286,7 @@ pub fn install(ctx: &mut Ctx, req: &InstallRequest) -> Result<InstallReport> {
             .into());
     }
 
-    let resolved = resolve_remote(ctx, req)?;
+    let resolved = resolve_remote(&ctx.dirs, req)?;
     let remote_url = match &resolved.parsed.kind {
         SourceKind::Git { url, .. } => url.clone(),
         _ => unreachable!("resolve_remote rejected non-git sources"),
@@ -352,3 +426,59 @@ pub fn store_root(ctx: &Ctx) -> PathBuf {
 
 #[allow(dead_code)]
 fn _p(_: &Path) {}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn git(raw: &str) -> url::ParsedSource {
+        url::ParsedSource {
+            original: raw.to_owned(),
+            kind: SourceKind::Git {
+                url: raw.to_owned(),
+                ref_name: None,
+                subpath: None,
+            },
+            skill_subpath: None,
+            candidates: vec![],
+            notes: vec![],
+        }
+    }
+
+    #[test]
+    fn repo_root_skill_uses_the_frontmatter_name() {
+        // The skill sits at the repository root: there is no directory name, so the previous
+        // behaviour silently produced the placeholder `root`.
+        let parsed = git("https://github.com/alchaincyf/huashu-design");
+        let got = first_slug([
+            String::new(),
+            "huashu-design".to_owned(),
+            repo_name(&parsed),
+        ]);
+        assert_eq!(got.as_deref(), Some("huashu-design"));
+    }
+
+    #[test]
+    fn repo_root_skill_falls_back_to_the_repository_name() {
+        let parsed = git("https://github.com/alchaincyf/huashu-design.git");
+        let got = first_slug([String::new(), String::new(), repo_name(&parsed)]);
+        assert_eq!(got.as_deref(), Some("huashu-design"));
+    }
+
+    #[test]
+    fn directory_name_wins_over_the_frontmatter() {
+        let parsed = git("https://github.com/v5note/wechat-mp");
+        let got = first_slug([
+            "pdf-tools".to_owned(),
+            "PDF Toolkit".to_owned(),
+            repo_name(&parsed),
+        ]);
+        assert_eq!(got.as_deref(), Some("pdf-tools"));
+    }
+
+    #[test]
+    fn nothing_usable_yields_no_slug_so_the_caller_keeps_root() {
+        assert_eq!(first_slug([String::new(), "、。".to_owned()]), None);
+        assert_eq!(repo_name(&git("")), "");
+    }
+}

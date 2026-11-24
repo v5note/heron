@@ -139,15 +139,7 @@ pub fn unproject(ctx: &mut Ctx, slug: &str, target_id: &str) -> Result<()> {
     let rows = projection::list_for_skill(ctx.db.conn(), slug)?;
     let mut removed = 0;
     for row in rows.into_iter().filter(|p| p.target_id == target_id) {
-        let mode = match row.mode.as_str() {
-            "copy" => ProjectionMode::Copy,
-            "pointer" => ProjectionMode::Pointer,
-            "junction" => ProjectionMode::Junction,
-            _ => ProjectionMode::Symlink,
-        };
-        let hash = row.content_hash.as_deref().map(heron_core::Hash::from_hex);
-        heron_projection::apply::remove_projection(&PathBuf::from(&row.path), mode, hash.as_ref())?;
-        ctx.db.write(|tx| projection::delete(tx, row.id))?;
+        remove_link(ctx, &row)?;
         removed += 1;
     }
     if removed == 0 {
@@ -157,6 +149,36 @@ pub fn unproject(ctx: &mut Ctx, slug: &str, target_id: &str) -> Result<()> {
             .into());
     }
     Ok(())
+}
+
+/// Take back **every** link a skill owns, across all targets. Used by `remove`: a skill cannot be
+/// deleted while pointers to it still sit in a client's skills directory. Unlike `unproject` an
+/// empty result is fine — the skill may simply never have been projected.
+pub fn unproject_all(ctx: &mut Ctx, slug: &str) -> Result<Vec<String>> {
+    let rows = projection::list_for_skill(ctx.db.conn(), slug)?;
+    let mut removed = Vec::with_capacity(rows.len());
+    for row in &rows {
+        remove_link(ctx, row)?;
+        removed.push(row.path.clone());
+    }
+    Ok(removed)
+}
+
+fn remove_link(ctx: &mut Ctx, row: &ProjectionRow) -> Result<()> {
+    let mode = mode_of(&row.mode);
+    let hash = row.content_hash.as_deref().map(heron_core::Hash::from_hex);
+    heron_projection::apply::remove_projection(&PathBuf::from(&row.path), mode, hash.as_ref())?;
+    ctx.db.write(|tx| projection::delete(tx, row.id))?;
+    Ok(())
+}
+
+fn mode_of(raw: &str) -> ProjectionMode {
+    match raw {
+        "copy" => ProjectionMode::Copy,
+        "pointer" => ProjectionMode::Pointer,
+        "junction" => ProjectionMode::Junction,
+        _ => ProjectionMode::Symlink,
+    }
 }
 
 fn load_target(ctx: &Ctx, target_id: &str) -> Result<TargetRow> {

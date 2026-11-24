@@ -43,19 +43,22 @@ fn payload_for(ctx: &Ctx) -> String {
     .to_string()
 }
 
+/// The clients the settings page can say something about: those whose table declares a
+/// `[native_scan]` verdict. A client without the section is not "unsupported", it is unresearched,
+/// and listing it would grow the page with every matrix entry while telling the user nothing.
 pub fn status() -> Result<Vec<NativeScanStatus>> {
     Ok(clients::builtin()?
         .into_iter()
-        .map(|c| {
-            let native = c.native_scan.clone();
-            NativeScanStatus {
+        .filter_map(|c| {
+            let native = c.native_scan?;
+            Some(NativeScanStatus {
                 client: c.id.clone(),
                 display_name: c.display_name.clone(),
-                supported: native.as_ref().map(|n| n.supported).unwrap_or(false),
-                evidence: native.map(|n| n.evidence).unwrap_or_default(),
+                supported: native.supported,
+                evidence: native.evidence,
                 config_path: None,
                 state: "absent".to_owned(),
-            }
+            })
         })
         .collect())
 }
@@ -243,9 +246,21 @@ mod tests {
     }
 
     #[test]
-    fn status_reports_every_client_as_unsupported_today() {
+    fn status_lists_only_clients_with_a_verdict() {
+        let matrix = clients::builtin().unwrap();
+        let declared = matrix.iter().filter(|c| c.native_scan.is_some()).count();
+        assert!(
+            declared < matrix.len(),
+            "a client we never researched must not pad the settings page"
+        );
         let rows = status().unwrap();
-        assert_eq!(rows.len(), 5);
+        assert_eq!(rows.len(), declared);
         assert!(rows.iter().all(|r| !r.supported && !r.evidence.is_empty()));
+        for id in ["trae", "qoder", "workbuddy", "cline"] {
+            assert!(
+                !rows.iter().any(|r| r.client == id),
+                "{id} declares nothing"
+            );
+        }
     }
 }

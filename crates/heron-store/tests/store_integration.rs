@@ -43,6 +43,9 @@ fn seed_client(tx: &heron_store::WriteTx<'_>, id: &str) -> heron_core::Result<()
             native_scan: None,
             verified_at: None,
             verified_by: None,
+            detected: None,
+            detected_at: None,
+            detect_evidence: vec![],
         },
     )
 }
@@ -69,10 +72,73 @@ fn migration_creates_schema_at_expected_version() {
         .unwrap();
     assert_eq!(version, SCHEMA_VERSION);
     assert_eq!(
-        version, 4,
-        "0001_init + 0002_client_commands + 0003_skill_storage + 0004_favorite"
+        version, 5,
+        "0001_init + 0002_client_commands + 0003_skill_storage + 0004_favorite + 0005_client_presence"
     );
     assert!(db.integrity_ok());
+}
+
+#[test]
+fn client_presence_writes_have_their_own_path() {
+    use heron_store::models::ClientRow;
+
+    let (_dir, mut db) = temp_db();
+    let seed = ClientRow {
+        id: "claude".to_owned(),
+        display_name: "Claude Code".to_owned(),
+        global_paths: vec![],
+        project_paths: vec![],
+        link_modes: vec!["symlink".to_owned()],
+        global_commands: vec![],
+        project_commands: vec![],
+        priority: 10,
+        native_scan: None,
+        verified_at: None,
+        verified_by: None,
+        // A catalogue write carrying a verdict must not persist it.
+        detected: Some(1),
+        detected_at: Some("2026-01-01T00:00:00.000Z".to_owned()),
+        detect_evidence: vec!["dir:~/.claude".to_owned()],
+    };
+    db.write(|tx| heron_store::repos::client::upsert(tx, &seed))
+        .unwrap();
+
+    let row = heron_store::repos::client::get(db.conn(), "claude")
+        .unwrap()
+        .unwrap();
+    assert_eq!(row.detected, None);
+    assert_eq!(row.detected_at, None);
+    assert!(row.detect_evidence.is_empty());
+
+    db.write(|tx| {
+        let n = heron_store::repos::client::set_presence(
+            tx,
+            "claude",
+            Some(false),
+            "2026-01-02T00:00:00.000Z",
+            &[],
+        )?;
+        assert_eq!(n, 1);
+        // Re-running the catalogue upsert must not reset the verdict either.
+        heron_store::repos::client::upsert(tx, &seed)
+    })
+    .unwrap();
+
+    let after = heron_store::repos::client::get(db.conn(), "claude")
+        .unwrap()
+        .unwrap();
+    assert_eq!(after.detected, Some(0), "upsert does not clobber presence");
+    assert_eq!(after.display_name, "Claude Code");
+
+    // Unknown ids affect no row.
+    db.write(|tx| {
+        assert_eq!(
+            0,
+            heron_store::repos::client::set_presence(tx, "nope", Some(true), "x", &[])?
+        );
+        Ok(())
+    })
+    .unwrap();
 }
 
 #[test]

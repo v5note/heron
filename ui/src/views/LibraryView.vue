@@ -10,7 +10,7 @@ import AppOverlay from "../components/AppOverlay.vue";
 import PageHeader from "../components/PageHeader.vue";
 import StateChip from "../components/StateChip.vue";
 import { api } from "../api";
-import type { SkillRow, TargetRow } from "../api/types";
+import type { RemoveOutcome, RemovePlan, SkillRow, TargetRow } from "../api/types";
 import { clientColor, clientIcon } from "../utils/clients";
 import { displayPath } from "../utils/paths";
 import { useAppStore } from "../stores/app";
@@ -63,8 +63,17 @@ const rows = computed(() => {
 
 const issueTotal = computed(() => store.skills.filter(hasIssue).length);
 
-const targets = computed(() => store.targets.filter((target) => target.enabled));
+// Same presence rule as the overview's greyed-out cards: a target whose client is not on this
+// machine is not a place projections can land, whatever its switch says.
+const targets = computed(() => store.targets.filter((target) => store.isLiveTarget(target)));
 const allSelected = computed(() => rows.value.length > 0 && selected.value.length === rows.value.length);
+
+// Fixed layout needs a hard floor. Auto layout let the target columns crush the name cell until
+// the description wrapped into a paragraph tall; declaring the widths and scrolling the card
+// instead keeps every row one line high. 40 checkbox + 210 name + 78 origin + 72 actions, then
+// 30px per client. Twelve clients still fits a normal window; the floor only bites when there are
+// so many that a sideways scroll genuinely beats crushing the name cell.
+const listMinWidth = computed(() => `${400 + targets.value.length * 30}px`);
 
 function toggle(path: string) {
   selected.value = selected.value.includes(path)
@@ -120,6 +129,47 @@ async function project(row: SkillRow, targetId: string, enabled: boolean) {
   } finally {
     busy.value = false;
   }
+}
+
+// Deleting a skill is the one irreversible-feeling action on this page, so it follows the same
+// three-step shape the service layer uses: ask for the plan, show it, only then execute. The plan
+// is what tells the user whether their own directory is touched (it never is — a live-bound skill
+// keeps its files, a store copy goes to `~/.heron/trash`).
+const removePlan = ref<RemovePlan | null>(null);
+const removing = ref(false);
+
+async function askRemove(skill: SkillRow) {
+  popOpen.value = false;
+  drawer.value = null;
+  try {
+    removePlan.value = await api.removeSkill<RemovePlan>(skill.slug, true);
+  } catch (e) {
+    store.fail(e);
+  }
+}
+
+async function confirmRemove() {
+  const plan = removePlan.value;
+  if (!plan) return;
+  removing.value = true;
+  try {
+    const outcome = await api.removeSkill<RemoveOutcome>(plan.slug, false);
+    removePlan.value = null;
+    selected.value = selected.value.filter((s) => s !== outcome.slug);
+    store.toast("ok", t("library.removed", { slug: outcome.slug, n: outcome.links.length }));
+    await store.refreshAll();
+  } catch (e) {
+    store.fail(e);
+  } finally {
+    removing.value = false;
+  }
+}
+
+// The header renders live targets; `visibilityBySlug` walks *enabled* ones, so iterating it in the
+// body let an enabled-but-not-installed client add an extra cell and shift every dot one column to
+// the left. Key the body off the same list the header uses.
+function stateAt(slug: string, targetId: string): string {
+  return store.visibilityBySlug(slug).find((e) => e.target.id === targetId)?.state ?? "unknown";
 }
 
 // Bulk projecting sits behind one popover: six inline "Project to X" buttons read as filters.
@@ -300,14 +350,26 @@ const drawerLive = computed(() => {
       <!-- List: scan the columns. -->
       <div v-show="view === 'list'" class="card lib-card">
         <p v-if="!rows.length" class="empty no-match">{{ t("library.noMatch") }}</p>
-        <table v-else class="table">
+        <table v-else class="table" :style="{ minWidth: listMinWidth }">
           <thead>
             <tr>
-              <th style="width: 34px"><input type="checkbox" :checked="allSelected" @change="toggleAll" /></th>
-              <th>{{ t("library.slug") }}</th>
-              <th>{{ t("library.origin") }}</th>
-              <th v-for="target in targets" :key="target.id" class="tcol">{{ target.kind }}</th>
-              <th />
+              <th class="c-check"><input type="checkbox" :checked="allSelected" @change="toggleAll" /></th>
+              <th class="c-slug">{{ t("library.slug") }}</th>
+              <th class="c-origin">{{ t("library.origin") }}</th>
+              <!-- One column per client, headed by its brand icon instead of its name: eleven
+                   names could never fit, and the icon is the same identity the drawer, the
+                   overview cards and 发现 all use. The name stays in the tooltip. -->
+              <th
+                v-for="target in targets"
+                :key="target.id"
+                class="tcol"
+                :title="target.kind"
+              >
+                <span class="t-icon" :style="{ color: clientColor(target.kind) }">
+                  <AppIcon :name="clientIcon(target.kind)" :size="14" />
+                </span>
+              </th>
+              <th class="actions" />
             </tr>
           </thead>
           <tbody>
@@ -318,21 +380,34 @@ const drawerLive = computed(() => {
               :class="{ selected: selected.includes(skill.slug) }"
               @click="openDrawer(skill)"
             >
-              <td @click.stop><input type="checkbox" :checked="selected.includes(skill.slug)" @change="toggle(skill.slug)" /></td>
-              <td>
-                <b>{{ skill.slug }}</b>
-                <div class="muted desc">{{ skill.description }}</div>
+              <td class="c-check" @click.stop><input type="checkbox" :checked="selected.includes(skill.slug)" @change="toggle(skill.slug)" /></td>
+              <td class="c-slug">
+                <b class="clip" :title="skill.slug">{{ skill.slug }}</b>
+                <div class="muted desc clip" :title="skill.description">{{ skill.description }}</div>
               </td>
-              <td>
+              <td class="c-origin">
                 <span v-if="originKnown(skill.origin)" class="chip plain" :class="originTone(skill.origin)">{{ originLabel(skill.origin) }}</span>
                 <span v-else class="mono">{{ skill.origin }}</span>
               </td>
-              <td v-for="entry in store.visibilityBySlug(skill.slug)" :key="entry.target.id" class="tcol">
-                <span class="matrix" :title="`${entry.target.kind} · ${t(`visibility.${entry.state}`)}`">
-                  <i class="dot" :class="entry.state" />
+              <td v-for="target in targets" :key="target.id" class="tcol">
+                <span class="matrix" :title="`${target.kind} · ${t(`visibility.${stateAt(skill.slug, target.id)}`)}`">
+                  <i class="dot" :class="stateAt(skill.slug, target.id)" />
                 </span>
               </td>
-              <td class="actions"><AppIcon name="chevron" :size="14" /></td>
+              <td class="actions">
+                <span class="row-acts">
+                  <button
+                    type="button"
+                    class="icon-btn row-del"
+                    :title="t('library.remove')"
+                    :disabled="busy || !!removePlan"
+                    @click.stop="askRemove(skill)"
+                  >
+                    <AppIcon name="trash" :size="13" />
+                  </button>
+                  <AppIcon name="chevron" :size="14" />
+                </span>
+              </td>
             </tr>
           </tbody>
         </table>
@@ -359,17 +434,26 @@ const drawerLive = computed(() => {
               <b class="g-name">{{ skill.slug }}</b>
               <span v-if="originKnown(skill.origin)" class="chip plain g-origin" :class="originTone(skill.origin)">{{ originLabel(skill.origin) }}</span>
               <span v-else class="mono g-origin">{{ skill.origin }}</span>
+              <button
+                type="button"
+                class="icon-btn g-del"
+                :title="t('library.remove')"
+                :disabled="busy || !!removePlan"
+                @click.stop="askRemove(skill)"
+              >
+                <AppIcon name="trash" :size="13" />
+              </button>
             </div>
             <p class="g-desc muted">{{ skill.description }}</p>
             <div class="g-matrix">
               <span
-                v-for="entry in store.visibilityBySlug(skill.slug)"
-                :key="entry.target.id"
+                v-for="target in targets"
+                :key="target.id"
                 class="g-t"
-                :title="`${entry.target.kind} · ${t(`visibility.${entry.state}`)}`"
+                :title="`${target.kind} · ${t(`visibility.${stateAt(skill.slug, target.id)}`)}`"
               >
-                <i class="dot" :class="entry.state" />
-                <em>{{ entry.target.kind }}</em>
+                <i class="dot" :class="stateAt(skill.slug, target.id)" />
+                <em>{{ target.kind }}</em>
               </span>
             </div>
           </div>
@@ -438,6 +522,64 @@ const drawerLive = computed(() => {
             <dd class="mono">{{ drawer.status }}</dd>
           </dl>
         </div>
+        <footer class="overlay-foot">
+          <button class="btn danger" :disabled="busy || removing || !!removePlan" @click="askRemove(drawer)">
+            {{ t("library.remove") }}
+          </button>
+          <span class="right">
+            <button class="btn" @click="drawer = null">{{ t("common.close") }}</button>
+          </span>
+        </footer>
+      </template>
+    </AppOverlay>
+
+    <!-- Deleting is the one action here that reaches outside the app, so the dialog spells out the
+         two things the user cannot guess: which client links come back, and where the files go. -->
+    <AppOverlay :open="!!removePlan" @close="removePlan = null">
+      <template v-if="removePlan">
+        <header class="overlay-head">
+          <div>
+            <h3>{{ t("library.removeTitle") }}</h3>
+            <p>{{ t("library.removeLead", { slug: removePlan.slug }) }}</p>
+          </div>
+          <button class="icon-btn" :title="t('common.close')" @click="removePlan = null">
+            <AppIcon name="close" :size="15" />
+          </button>
+        </header>
+        <div class="overlay-body">
+          <div class="rm-group">
+            <div class="rm-label">{{ t("library.removeLinks") }}</div>
+            <ul v-if="removePlan.links.length" class="rm-list">
+              <li v-for="link in removePlan.links" :key="link">
+                <span class="path" :title="link">{{ displayPath(link, store.home) }}</span>
+              </li>
+            </ul>
+            <p v-else class="rm-none muted">{{ t("library.removeNoLinks") }}</p>
+          </div>
+          <div class="rm-group">
+            <div class="rm-label">{{ t("library.removeContent") }}</div>
+            <div class="rm-move">
+              <span class="path" :title="removePlan.content">{{ displayPath(removePlan.content, store.home) }}</span>
+              <template v-if="removePlan.trash">
+                <span class="rm-arrow" aria-hidden="true">→</span>
+                <span class="path rm-dest" :title="removePlan.trash">{{ displayPath(removePlan.trash, store.home) }}</span>
+              </template>
+              <span v-else class="chip neutral plain">{{ t("library.removeKeptChip") }}</span>
+            </div>
+            <p class="rm-note muted">
+              {{ t(removePlan.trash ? "library.removeTrashedNote" : "library.removeExternalNote") }}
+            </p>
+          </div>
+        </div>
+        <footer class="overlay-foot">
+          <span class="muted">{{ t("library.removeCaveat") }}</span>
+          <span class="right">
+            <button class="btn" @click="removePlan = null">{{ t("common.cancel") }}</button>
+            <button class="btn danger" :disabled="removing" @click="confirmRemove">
+              {{ t("library.removeConfirm") }}
+            </button>
+          </span>
+        </footer>
       </template>
     </AppOverlay>
   </section>
@@ -474,13 +616,37 @@ const drawerLive = computed(() => {
 /* The global row-state rules piggyback on .striped; this table is deliberately not striped,
    so the hover/selected backgrounds are restated here at matching specificity. */
 .lib-card { padding: 0 4px; overflow-x: auto; }
-.lib-card .table { min-width: 720px; }
+/* Fixed layout, declared widths: under auto layout the target columns crushed the name cell until
+   each description wrapped into a paragraph-tall row. Widths are now small enough that the table
+   fits, with min-width (sized to targets.length) only as the last-resort floor. */
+.lib-card .table { table-layout: fixed; }
+/* The card is a fixed-height scroll region, and now that the header is a row of anonymous-looking
+   brand icons rather than readable names, it has to stay on screen while the rows move. */
+.lib-card .table thead th { position: sticky; top: 0; z-index: 1; background: var(--panel); }
+.c-check { width: 40px; padding-left: 12px; padding-right: 4px; }
+.c-origin { width: 78px; padding-left: 6px; padding-right: 6px; overflow: hidden; white-space: nowrap; }
+/* `.c-slug` deliberately has no width — under fixed layout it absorbs whatever is left. */
+.clip { display: block; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .table tbody tr.clickable:hover td { background: var(--raised); }
 .table tbody tr.selected td { background: var(--accent-weak); }
 .table tbody tr.selected.clickable:hover td { background: color-mix(in srgb, var(--accent-weak) 70%, var(--raised)); }
-.tcol { text-align: center; width: 74px; }
-.desc { font-size: 11.5px; margin-top: 2px; max-width: 460px; }
-.actions { text-align: right; color: var(--faint); }
+/* A 14px icon over an 8px dot is the entire column, so 30px is enough — and with a dozen clients
+   that is what keeps the table inside the card instead of sending it into a sideways scrollbar. */
+.tcol { width: 30px; text-align: center; }
+.lib-card .table th.tcol,
+.lib-card .table td.tcol { padding-left: 2px; padding-right: 2px; }
+/* No `vertical-align` here on purpose: the global `.table td` already centres every cell against
+   the row, and the two-line name cell is the tallest one, so it sets that height by itself. */
+.desc { font-size: 11.5px; margin-top: 2px; }
+/* `.icon-btn` is `display: grid` — a block box — so the trash and the chevron stacked into two
+   lines and the chevron landed a whole row below. The td stays a table-cell (fixed layout sizes
+   columns from it); only the two icons inside get centred on one line. */
+.row-acts { display: flex; align-items: center; justify-content: flex-end; gap: 2px; }
+.actions { width: 72px; padding: 9px 6px 9px 4px; white-space: nowrap; color: var(--faint); }
+.actions .row-del { opacity: 0; transition: opacity 0.12s; }
+/* The delete affordance is always in the layout (no column shift on hover) but only visible once
+   the row is the one you are looking at; keyboard focus reveals it too. */
+tr:hover .row-del, tr:focus-within .row-del, .row-del:focus-visible { opacity: 1; }
 /* The row chevron is a stroke, not a fill: an unfilled path would render as a solid triangle. */
 .actions svg { fill: none; stroke: currentColor; stroke-width: 1.6; }
 .no-match { padding: 24px 0; margin: 0; }
@@ -492,6 +658,9 @@ const drawerLive = computed(() => {
 .g-head { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .g-name { font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .g-origin { margin-left: auto; flex: none; }
+.g-del { flex: none; color: var(--faint); }
+.g-card:hover .g-del { color: var(--dim); }
+.g-del svg { fill: none; stroke: currentColor; stroke-width: 1.6; }
 .g-desc {
   margin: 0; font-size: 12px; line-height: 1.45; min-height: 35px;
   display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
@@ -543,4 +712,15 @@ const drawerLive = computed(() => {
 .kv { display: grid; grid-template-columns: 128px 1fr; gap: 8px 12px; font-size: 12.5px; margin: 0; }
 .kv dt { color: var(--dim); }
 .kv dd { margin: 0; }
+
+/* ---------- remove dialog ---------- */
+.rm-group + .rm-group { margin-top: 16px; }
+.rm-label { font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--faint); margin-bottom: 6px; }
+.rm-list { margin: 0; padding-left: 16px; font-size: 12.5px; line-height: 1.9; }
+.rm-list .path { display: inline-block; vertical-align: bottom; }
+.rm-none { margin: 0; font-size: 12.5px; }
+.rm-move { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 12.5px; }
+.rm-arrow { color: var(--accent); }
+.rm-dest { border-color: color-mix(in srgb, var(--accent) 35%, var(--line-strong)); }
+.rm-note { margin: 6px 0 0; font-size: 12px; }
 </style>

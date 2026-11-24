@@ -156,7 +156,9 @@ fn adopt_retries_after_a_store_copy_was_left_behind() -> Result<()> {
 
     // Adopting a second time from the same leftover directory is still safe.
     adopt::execute(&mut ctx, &plan, AdoptPlacement::KeepOriginal)?;
-    let state = detected::get(ctx.db.conn(), &row.path)?.unwrap().adopt_state;
+    let state = detected::get(ctx.db.conn(), &row.path)?
+        .unwrap()
+        .adopt_state;
     assert_eq!(state, "adopted");
     Ok(())
 }
@@ -387,6 +389,65 @@ fn client_directories_are_available_as_targets() -> Result<()> {
     let outcome = project::apply(&mut ctx, &req, &plan, &request)?;
     assert!(outcome.applied);
     assert!(env.home.join(".claude/skills/pdf/SKILL.md").is_file());
+    Ok(())
+}
+
+#[test]
+fn adopt_records_the_description_from_the_file() -> Result<()> {
+    // The library row is what the table renders; an adopt that never read the file left every
+    // 收拢 skill as a name with no summary.
+    let env = Env::new();
+    env.write_skill(".agents/skills/pdf", "pdf");
+    let mut ctx = env.ctx("cli");
+    env.scan(&mut ctx);
+    let row = find_row(&ctx, "pdf");
+    let plan = adopt::plan(&ctx, &row)?;
+    adopt::execute(&mut ctx, &plan, AdoptPlacement::KeepOriginal)?;
+
+    let skill = heron_store::repos::skill::get(ctx.db.conn(), "pdf")?.unwrap();
+    assert_eq!(skill.description, "test");
+    Ok(())
+}
+
+#[test]
+fn repair_descriptions_fills_rows_adopted_before_that_fix() -> Result<()> {
+    let env = Env::new();
+    let mut ctx = env.ctx("cli");
+    // The state an older app leaves behind: content in the store, index without a description.
+    let dest = ctx.skill_path("pdf");
+    fs::create_dir_all(&dest).unwrap();
+    fs::write(
+        dest.join("SKILL.md"),
+        "---\nname: pdf\ndescription: test\n---\n",
+    )
+    .unwrap();
+    ctx.db.write(|tx| {
+        heron_store::repos::skill::insert(
+            tx,
+            &heron_store::models::SkillRow {
+                slug: "pdf".into(),
+                display_name: "pdf".into(),
+                description: String::new(),
+                tags: vec![],
+                status: "active".into(),
+                origin: "adopted".into(),
+                storage_path: None,
+                created_at: String::new(),
+                updated_at: String::new(),
+            },
+        )
+    })?;
+
+    assert_eq!(adopt::repair_descriptions(&mut ctx)?, 1);
+    assert_eq!(
+        heron_store::repos::skill::get(ctx.db.conn(), "pdf")
+            .unwrap()
+            .unwrap()
+            .description,
+        "test"
+    );
+    // Idempotent, so it can ride along with every library read.
+    assert_eq!(adopt::repair_descriptions(&mut ctx)?, 0);
     Ok(())
 }
 

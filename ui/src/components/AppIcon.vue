@@ -6,7 +6,7 @@ export type IconName =
   | "overview" | "library" | "discover" | "sources" | "projects" | "upgrades" | "doctor" | "settings"
   | "sun" | "moon" | "auto" | "search" | "refresh" | "check" | "close" | "plus" | "external" | "alert" | "chevron" | "copy"
   | "grid" | "list" | "globe" | "spark" | "terminal" | "pointer" | "braces" | "home"
-  | "robot" | "rocket" | "star" | "cube" | "bolt" | "code" | "sparkles";
+  | "robot" | "rocket" | "star" | "cube" | "bolt" | "code" | "sparkles" | "trash";
 
 const PATHS: Record<IconName, string> = {
   overview: '<path d="M3 12h4l2.5-6 4 12 2.5-6H21"/>',
@@ -47,6 +47,7 @@ const PATHS: Record<IconName, string> = {
   bolt: '<path d="M13 4 6.5 13.5H11L10 20l6.5-9.5H12z"/>',
   code: '<path d="M8.5 8.5 4.5 12l4 3.5M15.5 8.5 19.5 12l-4 3.5"/>',
   sparkles: '<path d="M11 4.5c.6 3 1.4 3.8 4.4 4.4-3 .6-3.8 1.4-4.4 4.4-.6-3-1.4-3.8-4.4-4.4 3-.6 3.8-1.4 4.4-4.4z"/><path d="M17 14c.4 1.8.9 2.3 2.7 2.7-1.8.4-2.3.9-2.7 2.7-.4-1.8-.9-2.3-2.7-2.7 1.8-.4 2.3-.9 2.7-2.7z"/>',
+  trash: '<path d="M4.5 7h15"/><path d="M9.5 7V4.5h5V7"/><path d="M6.5 7l1 12.5h9l1-12.5"/><path d="M10 10.5v6M14 10.5v6"/>',
 };
 </script>
 

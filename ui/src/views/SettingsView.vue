@@ -19,6 +19,9 @@ const clients = ref<NativeScanStatus[]>([]);
 const update = ref<UpdateInfo | null>(null);
 const checking = ref(false);
 const progress = ref<string | null>(null);
+// 代理：空串 = 让 Heron 自动探测（环境变量 → git 配置 → 系统代理），非空则强制走这个地址。
+const proxy = ref("");
+const proxySaving = ref(false);
 // The running build's version, injected at build time from package.json (kept in step with
 // tauri.conf.json): "up to date" is only meaningful when it says up to date with what.
 const currentVersion = pkg.version;
@@ -46,6 +49,23 @@ async function openFolder(abs: string) {
     // Outside a Tauri window (browser dev) there is no file manager to open; say so, don't crash.
     store.toast("warn", t("settings.openFailed"));
     console.error(e);
+  }
+}
+
+/**
+ * 保存代理。后端会先校验格式再写库，并当场更新进程级配置，所以不需要重启；填空串就是清除，
+ * 交回给自动探测。回填一次服务端值，避免输入框里留着被 trim 掉的空格。
+ */
+async function saveProxy() {
+  proxySaving.value = true;
+  try {
+    await api.netSetProxy(proxy.value.trim() || null);
+    proxy.value = (await api.netGetProxy()) ?? "";
+    store.toast("ok", t("common.applied"));
+  } catch (e) {
+    store.fail(e);
+  } finally {
+    proxySaving.value = false;
   }
 }
 
@@ -132,6 +152,7 @@ onMounted(async () => {
   if (!store.ready) await store.init();
   try {
     clients.value = await api.nativeScanStatus();
+    proxy.value = (await api.netGetProxy()) ?? "";
   } catch (e) {
     store.fail(e);
   }
@@ -301,6 +322,24 @@ function changeProjection(event: Event) {
           <span class="mono">{{ store.platform || "—" }}</span>
         </div>
         <div class="row">
+          <span class="label">{{ t("settings.proxy") }}</span>
+          <span class="proxy-cell">
+            <span class="proxy-line">
+              <input
+                v-model="proxy"
+                class="mono"
+                type="text"
+                spellcheck="false"
+                :placeholder="t('settings.proxyAuto')"
+                :aria-label="t('settings.proxy')"
+                @keyup.enter="saveProxy"
+              />
+              <button class="btn sm" :disabled="proxySaving" @click="saveProxy">{{ t("settings.proxySave") }}</button>
+            </span>
+            <small class="row-hint">{{ t("settings.proxyHint") }}</small>
+          </span>
+        </div>
+        <div class="row">
           <span class="label">{{ t("settings.updates") }}</span>
           <span class="update">
             <span v-if="update">{{ t("settings.updateAvailable") }} {{ update.version }}</span>
@@ -448,6 +487,11 @@ function changeProjection(event: Event) {
   display: flex; flex-direction: column; align-items: flex-end; gap: 4px;
 }
 .row-hint { font-size: 11px; color: var(--faint); text-align: right; }
+
+/* 代理：一行放「输入框 + 应用按钮」，说明文字沿用其它设置行的右对齐 hint 贴在下方。 */
+.proxy-cell { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; width: 100%; }
+.proxy-line { display: flex; align-items: center; gap: 8px; width: 100%; }
+.proxy-line input { flex: 1; min-width: 0; height: 30px; padding: 0 8px; font-size: 12.5px; }
 
 /* A native <select> keeps its own 32px box; 30px matches the 30px buttons beside it so both centre
    on one line. Its text is drawn by the engine at the control's own height, so the control must not

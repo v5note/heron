@@ -563,12 +563,27 @@ fn http_get(url: &str) -> Result<String> {
     ))
 }
 
-fn http_get_once(url: &str) -> std::result::Result<String, String> {
-    let handle = ureq::AgentBuilder::new()
+/// ureq reads no proxy configuration of its own (our dependency does not enable
+/// `proxy-from-env`), so the proxy Heron resolved has to be handed to it here — otherwise market
+/// search and the marketplace manifests keep connecting directly and time out behind a system
+/// proxy, exactly like `git fetch` did before.
+fn http_agent() -> ureq::Agent {
+    let mut builder = ureq::AgentBuilder::new()
         .timeout(HTTP_TIMEOUT)
         .redirects(5)
-        .user_agent(concat!("heron/", env!("CARGO_PKG_VERSION")))
-        .build()
+        .user_agent(concat!("heron/", env!("CARGO_PKG_VERSION")));
+    if let Some(proxy) = heron_platform::proxy::resolve() {
+        // A spec ureq cannot speak (e.g. a bare SOCKS proxy it was built without) falls back to
+        // the direct route rather than failing every request.
+        if let Ok(parsed) = ureq::Proxy::new(&proxy.url) {
+            builder = builder.proxy(parsed);
+        }
+    }
+    builder.build()
+}
+
+fn http_get_once(url: &str) -> std::result::Result<String, String> {
+    let handle = http_agent()
         .get(url)
         .set(
             "Accept",
@@ -665,7 +680,8 @@ mod tests {
     fn modelscope_page_url_resolves_to_a_git_clone() {
         let m = ModelScope::default();
         assert_eq!(
-            m.install_plan("https://www.modelscope.cn/skills/alibaba/dashscope").unwrap(),
+            m.install_plan("https://www.modelscope.cn/skills/alibaba/dashscope")
+                .unwrap(),
             InstallPlan::Git {
                 url: "https://www.modelscope.cn/alibaba/dashscope.git".into(),
                 ref_name: None,

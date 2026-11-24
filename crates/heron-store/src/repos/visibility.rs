@@ -10,9 +10,7 @@ use crate::sql_err;
 
 pub fn list(conn: &rusqlite::Connection) -> Result<Vec<VisibilityRow>> {
     let mut stmt = conn
-        .prepare(
-            "SELECT projection_id, client_id, state, shadowed_by, checked_at FROM visibility",
-        )
+        .prepare("SELECT projection_id, client_id, state, shadowed_by, checked_at FROM visibility")
         .map_err(sql_err)?;
     let rows = stmt
         .query_map([], |r| {

@@ -159,6 +159,45 @@ fn install_from_a_repo_subdirectory() {
 }
 
 #[test]
+fn prefetch_fills_the_cache_that_preview_and_install_need() {
+    if !git_available() {
+        return;
+    }
+    let remote = Remote::new("v1");
+    let env = Env::new();
+    let ctx = env.ctx();
+    let req = InstallRequest {
+        input: remote.url(),
+        subpath_override: Some("skills/pdf".into()),
+        ..Default::default()
+    };
+    // The GUI runs this with no state lock held; afterwards the rest of the flow is local.
+    install::prefetch(&ctx.dirs, &req).unwrap();
+    let seeded = std::fs::read_dir(ctx.dirs.sources_cache())
+        .unwrap()
+        .flatten()
+        .any(|entry| entry.path().join("bare.git").join("HEAD").is_file());
+    assert!(seeded, "prefetch must populate the bare cache");
+    assert_eq!(install::preview(&ctx, &req).unwrap().slug, "pdf");
+}
+
+#[test]
+fn prefetch_reports_an_unreachable_remote_instead_of_hanging() {
+    let env = Env::new();
+    let ctx = env.ctx();
+    let req = InstallRequest {
+        input: "https://127.0.0.1:1/nope.git".into(),
+        ..Default::default()
+    };
+    let err = install::prefetch(&ctx.dirs, &req).unwrap_err();
+    assert_eq!(err.code(), "E_NETWORK");
+    assert_eq!(
+        err.as_msg().params.get("url").map(String::as_str),
+        Some("https://127.0.0.1:1/nope.git")
+    );
+}
+
+#[test]
 fn ambiguous_repo_without_subpath_is_reported() {
     if !git_available() {
         return;

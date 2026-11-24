@@ -15,3 +15,10 @@ verified_by = "doc"
 [native_scan]
 supported = false
 evidence = "no documented extra-skill-dir setting as of 2026-11-19"
+
+[detect]
+dirs = ["~/.cursor"]
+apps = ["Cursor.app"]
+
+[[detect.commands]]
+bin = "cursor"

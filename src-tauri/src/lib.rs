@@ -303,10 +303,7 @@ fn run_scan(
 
     let stats = &result.stats;
     let found = result.hits.len();
-    let _ = app.emit(
-        "scan://progress",
-        live_progress("persist", stats, found),
-    );
+    let _ = app.emit("scan://progress", live_progress("persist", stats, found));
     {
         let mut ctx = state.ctx.lock().unwrap();
         // A cancelled walk only saw part of the tree: pruning against that would delete the
@@ -320,10 +317,7 @@ fn run_scan(
     }
 
     let report = heron_service::scan::summarize(&result);
-    let _ = app.emit(
-        "scan://progress",
-        live_progress("summary", stats, found),
-    );
+    let _ = app.emit("scan://progress", live_progress("summary", stats, found));
     let _ = app.emit(
         "scan://progress",
         ScanDoneDto {
@@ -483,7 +477,10 @@ fn adopt_paths(
                     "{}: {} {}",
                     plan.detail.path,
                     msg.code,
-                    msg.params.get("detail").map(String::as_str).unwrap_or_default()
+                    msg.params
+                        .get("detail")
+                        .map(String::as_str)
+                        .unwrap_or_default()
                 ));
             }
         }
@@ -493,7 +490,11 @@ fn adopt_paths(
 
 #[tauri::command]
 fn skills_list(state: State<'_, AppState>) -> Result<Vec<heron_store::models::SkillRow>, Msg> {
-    let ctx = state.ctx.lock().unwrap();
+    let mut ctx = state.ctx.lock().unwrap();
+    // Rows adopted before adopt learned to read the file have an empty description. Filling them
+    // from the content on disk is a no-op once the index is complete, so it can ride along here
+    // instead of waiting for a repair the user has to think of.
+    heron_service::adopt::repair_descriptions(&mut ctx).map_err(err)?;
     heron_store::repos::skill::list(ctx.db.conn(), false).map_err(err)
 }
 
@@ -501,6 +502,14 @@ fn skills_list(state: State<'_, AppState>) -> Result<Vec<heron_store::models::Sk
 fn targets_list(state: State<'_, AppState>) -> Result<Vec<heron_store::models::TargetRow>, Msg> {
     let ctx = state.ctx.lock().unwrap();
     heron_store::repos::target::list(ctx.db.conn()).map_err(err)
+}
+
+/// The client matrix with the presence verdicts of the last scan, so the overview can grey out a
+/// landing point whose client is not on this machine without joining anything in the frontend.
+#[tauri::command]
+fn clients_list(state: State<'_, AppState>) -> Result<Vec<heron_store::models::ClientRow>, Msg> {
+    let ctx = state.ctx.lock().unwrap();
+    heron_store::repos::client::list(ctx.db.conn()).map_err(err)
 }
 
 #[tauri::command]
@@ -540,6 +549,24 @@ fn project_skill(
 fn unproject_skill(state: State<'_, AppState>, slug: String, target_id: String) -> Result<(), Msg> {
     let mut ctx = state.ctx.lock().unwrap();
     heron_service::project::unproject(&mut ctx, &slug, &target_id).map_err(err)
+}
+
+/// Delete a skill from the library. `dry_run` answers with the plan (links + trash path) so the
+/// dialog can tell the user exactly what will move before anything happens.
+#[tauri::command]
+fn skill_remove(
+    state: State<'_, AppState>,
+    slug: String,
+    dry_run: bool,
+) -> Result<serde_json::Value, Msg> {
+    let mut ctx = state.ctx.lock().unwrap();
+    let plan = heron_service::remove::plan(&ctx, &slug).map_err(err)?;
+    if dry_run {
+        return serde_json::to_value(&plan)
+            .map_err(|e| Msg::new("E_INTERNAL").with("detail", e.to_string()));
+    }
+    let outcome = heron_service::remove::apply(&mut ctx, &plan).map_err(err)?;
+    serde_json::to_value(&outcome).map_err(|e| Msg::new("E_INTERNAL").with("detail", e.to_string()))
 }
 
 #[tauri::command]
@@ -605,11 +632,13 @@ fn market_row(id: &str, enabled: bool) -> Option<heron_store::models::SourceRow>
         priority: 0,
         trusted: true,
         enabled,
-        capability: Some(match market.capability {
-            heron_source::Capability::Indexed => "indexed",
-            heron_source::Capability::Guided => "guided",
-        }
-        .to_owned()),
+        capability: Some(
+            match market.capability {
+                heron_source::Capability::Indexed => "indexed",
+                heron_source::Capability::Guided => "guided",
+            }
+            .to_owned(),
+        ),
         last_synced_at: None,
         last_commit: None,
         last_probe_ok: None,
@@ -628,7 +657,9 @@ fn bootstrap_markets(ctx: &mut heron_service::Ctx) {
             continue;
         }
         if let Some(row) = market_row(market.id, market.enabled_by_default) {
-            let _ = ctx.db.write(|tx| heron_store::repos::source::upsert(tx, &row));
+            let _ = ctx
+                .db
+                .write(|tx| heron_store::repos::source::upsert(tx, &row));
         }
     }
 }
@@ -701,7 +732,9 @@ fn favorite_add(
         name,
         url,
         description: description.trim().to_owned(),
-        market: market.map(|m| m.trim().to_owned()).filter(|m| !m.is_empty()),
+        market: market
+            .map(|m| m.trim().to_owned())
+            .filter(|m| !m.is_empty()),
         created_at: String::new(),
     };
     let mut ctx = state.ctx.lock().unwrap();
@@ -735,7 +768,10 @@ async fn market_search(
 }
 
 #[tauri::command]
-async fn market_plan(market: String, key: String) -> Result<heron_source::market::InstallPlan, Msg> {
+async fn market_plan(
+    market: String,
+    key: String,
+) -> Result<heron_source::market::InstallPlan, Msg> {
     // 同上：解析安装计划也可能发网络请求，移到 blocking 线程，避免卡住主线程。
     tauri::async_runtime::spawn_blocking(move || {
         let adapter = heron_source::adapter(&market).map_err(err)?;
@@ -743,6 +779,20 @@ async fn market_plan(market: String, key: String) -> Result<heron_source::market
     })
     .await
     .map_err(|e| Msg::new("E_INTERNAL").with("detail", e.to_string()))?
+}
+
+/// 设置页的代理输入框读当前值；`None` 表示「留空」，由 Heron 自动探测（环境变量 → git 配置 → 系统代理）。
+#[tauri::command]
+fn net_get_proxy(state: State<'_, AppState>) -> Result<Option<String>, Msg> {
+    let ctx = state.ctx.lock().unwrap();
+    heron_service::net::get(&ctx).map_err(err)
+}
+
+/// 写入并立即生效：存进数据库的同时更新进程级代理，之后的 git 拉取与市场搜索都会用它。
+#[tauri::command]
+fn net_set_proxy(state: State<'_, AppState>, value: Option<String>) -> Result<(), Msg> {
+    let ctx = state.ctx.lock().unwrap();
+    heron_service::net::set(&ctx, value.as_deref()).map_err(err)
 }
 
 #[tauri::command]
@@ -764,6 +814,10 @@ async fn install_skill(
     };
     tauri::async_runtime::spawn_blocking(move || {
         let state = app.state::<AppState>();
+        // fetch 阶段完全不碰状态锁：Dirs 是 Clone 的，先短暂取锁克隆出来就放开，
+        // 慢网络只拖住这一次安装，其它命令（列表、扫描、设置）照常响应。
+        let dirs = { state.ctx.lock().unwrap().dirs.clone() };
+        install::prefetch(&dirs, &request).map_err(err)?;
         let mut ctx = state.ctx.lock().unwrap();
         if dry_run {
             let preview = install::preview(&ctx, &request).map_err(err)?;
@@ -886,7 +940,12 @@ pub fn run() {
     let _ = dirs.ensure();
     let db = heron_store::db::Db::open(&dirs.db_path()).expect("index database");
     let mut ctx = Ctx::new(dirs, db, "gui");
+    // 把设置页里存过的代理值恢复到进程，否则第一次安装会用不上用户明明填好的代理。
+    let _ = heron_service::net::restore(&ctx);
     let _ = heron_service::clients::bootstrap(&mut ctx.db, &home);
+    // A release that added clients must show them before the first scan, otherwise the new rows
+    // only appear after the user happens to press 扫描 — and the grid silently keeps the old shape.
+    let _ = heron_service::clients::sync_catalog(&mut ctx.db, &home, false);
     bootstrap_markets(&mut ctx);
 
     tauri::Builder::default()
@@ -907,8 +966,10 @@ pub fn run() {
             adopt_paths,
             skills_list,
             targets_list,
+            clients_list,
             project_skill,
             unproject_skill,
+            skill_remove,
             verify_visibility,
             outdated_list,
             upgrade_skills,
@@ -918,6 +979,8 @@ pub fn run() {
             market_set_enabled,
             market_search,
             market_plan,
+            net_get_proxy,
+            net_set_proxy,
             favorite_list,
             favorite_add,
             favorite_remove,

@@ -270,6 +270,9 @@ a { color: var(--accent); }
 .btn.ghost { border-color: transparent; color: var(--dim); }
 .btn.ghost:hover { background: var(--raised); color: var(--text); }
 .btn.sm { height: 26px; padding: 0 9px; font-size: 12px; }
+/* The single tone reserved for an action that cannot be undone from inside the app. */
+.btn.danger { border-color: color-mix(in srgb, var(--bad) 45%, var(--line-strong)); color: var(--bad); }
+.btn.danger:hover { background: color-mix(in srgb, var(--bad) 14%, var(--bg)); }
 
 /* ---------- status chips ---------- */
 .chip {

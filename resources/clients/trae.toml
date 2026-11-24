@@ -1,0 +1,22 @@
+# Trae — scan locations + presence rules.
+# global_skills is doc-verified (docs.trae.ai/ide/skills, 2026-11-23).
+# NOTE: Trae CN is a separate build that appears to use ~/.trae-cn; that path has no official
+# source, so it is deliberately NOT shipped as a client. `trae` therefore reports "not detected"
+# on a Trae CN machine — honest rather than guessing a path we would write into.
+id = "trae"
+display_name = "Trae"
+priority = 60
+global_skills = ".trae/skills"
+project_skills = ".trae/skills"
+link_modes = ["symlink", "junction", "copy"]
+verified_at = "2026-11-23"
+verified_by = "doc"
+
+# No [native_scan] section: injection was never researched for this client, and the settings page
+# only lists clients we actually have a statement about.
+[detect]
+dirs = ["~/.trae"]
+apps = ["Trae.app"]
+
+[[detect.commands]]
+bin = "trae"
