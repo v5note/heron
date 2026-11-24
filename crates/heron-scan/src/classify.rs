@@ -64,6 +64,9 @@ pub struct ClientSpec {
 pub struct Classifier {
     clients: Vec<ClientSpec>,
     projects: Vec<PathBuf>,
+    /// Skill directories this app projected into a client's skills folder. They live in a scanned
+    /// location, but they are content the library already took over — not discoveries.
+    projections: Vec<PathBuf>,
     /// The directory names a client owns, e.g. `.claude`. Derived from the declared locations
     /// instead of being listed here, so a client added to the matrix is covered by nested-suspect
     /// detection on the same day it is added to the scan.
@@ -129,8 +132,19 @@ impl Classifier {
         Self {
             clients,
             projects,
+            projections: Vec::new(),
             client_dirs,
         }
+    }
+
+    /// Tell the classifier which skill directories Heron wrote itself, so a scan of `.claude/skills`
+    /// or `.agents/skills` does not present a projection as a skill waiting to be taken over.
+    pub fn with_projections(mut self, projections: Vec<PathBuf>) -> Self {
+        self.projections = projections
+            .into_iter()
+            .map(|p| heron_platform::paths::normalize(&p))
+            .collect();
+        self
     }
 
     pub fn clients(&self) -> &[ClientSpec] {
@@ -146,6 +160,16 @@ impl Classifier {
         let norm = heron_platform::paths::normalize(path);
         // Both a `SKILL.md` and a legacy `commands/*.md` live directly inside their directory.
         let dir = norm.parent()?.to_path_buf();
+
+        // A directory the library projected is content it owns already. Reporting it again would
+        // put the user's own copy back in front of them as something to take over.
+        if self
+            .projections
+            .iter()
+            .any(|p| heron_platform::paths::same_path_ci(p, &dir))
+        {
+            return None;
+        }
 
         // The path we compare against is the *skills directory*, not the item inside it.
         let skills_dir = self.skills_dir_of(&dir, is_command_file)?;
@@ -395,6 +419,20 @@ mod tests {
             .unwrap();
         assert_eq!(pcmd.kind, HitKind::LegacyCommand);
         assert_eq!(pcmd.scope, Scope::Project);
+    }
+
+    #[test]
+    fn a_projected_directory_is_not_a_discovery() {
+        let c = classifier().with_projections(vec![PathBuf::from("/home/u/.claude/skills/pdf")]);
+
+        // The library wrote this one, so it is already taken over.
+        assert!(c
+            .classify(Path::new("/home/u/.claude/skills/pdf/SKILL.md"), false)
+            .is_none());
+        // Everything else in the same skills directory is still a discovery.
+        assert!(c
+            .classify(Path::new("/home/u/.claude/skills/novel/SKILL.md"), false)
+            .is_some());
     }
 
     #[test]

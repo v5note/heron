@@ -100,7 +100,11 @@ pub fn apply(ctx: &mut Ctx, plan: &RemovePlan) -> Result<RemoveOutcome> {
     })?;
 
     let links = project::unproject_all(ctx, &plan.slug)?;
-    let moved = if plan.owned { move_to_trash(ctx, plan)? } else { None };
+    let moved = if plan.owned {
+        move_to_trash(ctx, plan)?
+    } else {
+        None
+    };
 
     ctx.db.write(|tx| {
         // `source_binding` and `version` cascade, which is what frees the slug for a reinstall.

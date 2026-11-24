@@ -3,7 +3,7 @@
 // hiding it behind a separate verify page; the drawer shows the same facts for one skill with the
 // projection switches inline. The page reads two ways — list for scanning columns, grid for
 // browsing cards — and a target-health strip keeps the per-client totals visible either way.
-import { computed, onBeforeUnmount, onMounted, ref } from "vue";
+import { computed, nextTick, onBeforeUnmount, onMounted, ref } from "vue";
 import { useI18n } from "vue-i18n";
 import AppIcon from "../components/AppIcon.vue";
 import AppOverlay from "../components/AppOverlay.vue";
@@ -34,7 +34,8 @@ function setView(v: ViewMode) {
   localStorage.setItem(VIEW_KEY, v);
 }
 
-// The five states the legend teaches; anything else (e.g. "unknown") is the grey baseline dot.
+// The five states the legend teaches, each a dot; `unknown` is the sixth and is not a state of a
+// link we placed, so it is taught separately as the dash (see `.dot.unknown` in style.css).
 const LEGEND = ["visible", "shadowed", "restart_required", "broken", "not_scanned"];
 
 onMounted(async () => {
@@ -44,9 +45,25 @@ onMounted(async () => {
 onBeforeUnmount(() => document.removeEventListener("mousedown", closePopOnOutside));
 
 // The "issues" predicate lives in one place so the segment count and the filtered rows can
-// never disagree.
+// never disagree. A dot with no report line behind it (`unknown`) only says "no link of ours
+// sits in that client" — that is an empty slot, not a fault, and counting it made every skill
+// that was never projected somewhere read as broken. Likewise a client that is not on this
+// machine is not a place the user can fix anything, so the predicate walks the same live
+// targets the columns do, and the row spells the remaining states out in words.
+const PROBLEM_STATES = ["shadowed", "restart_required", "broken", "not_scanned"];
+
+function issuesOf(skill: SkillRow) {
+  return store
+    .visibilityBySlug(skill.slug)
+    .filter((e) => store.isLiveTarget(e.target) && PROBLEM_STATES.includes(e.state));
+}
+
 function hasIssue(skill: SkillRow): boolean {
-  return store.visibilityBySlug(skill.slug).some((e) => e.state !== "visible");
+  return issuesOf(skill).length > 0;
+}
+
+function issueText(skill: SkillRow): string {
+  return issuesOf(skill).map((e) => `${e.target.kind} ${t(`visibility.${e.state}`)}`).join(" · ");
 }
 
 const rows = computed(() => {
@@ -122,7 +139,9 @@ async function project(row: SkillRow, targetId: string, enabled: boolean) {
     } else {
       await api.unproject(row.slug, targetId);
     }
-    await store.verify();
+    // Reload 发现 as well: a directory this projection just wrote is taken over, and the list
+    // opened before it happened still holds it as a candidate.
+    await Promise.all([store.verify(), store.loadDetected()]);
     store.toast("ok", t(enabled ? "common.enabled" : "common.disabled"));
   } catch (e) {
     store.fail(e);
@@ -180,9 +199,19 @@ function closePopOnOutside(event: MouseEvent) {
   if (popBox.value && !popBox.value.contains(event.target as Node)) popOpen.value = false;
 }
 
-function openDrawer(skill: SkillRow) {
+// Whether "更多" earns its place is a layout fact, not a string length — the same summary is two
+// lines in this drawer and one in a narrower one — so it is read off the rendered element.
+const descEl = ref<HTMLElement | null>(null);
+const descClipped = ref(false);
+const descOpen = ref(false);
+
+async function openDrawer(skill: SkillRow) {
   popOpen.value = false; // the drawer paints at the same layer as the menu — never let them overlap
   drawer.value = skill;
+  descOpen.value = false;
+  await nextTick();
+  const el = descEl.value;
+  descClipped.value = !!el && el.scrollHeight > el.clientHeight;
 }
 
 async function projectSelected(targetIds: string[]) {
@@ -196,7 +225,7 @@ async function projectSelected(targetIds: string[]) {
         await api.project(slug, targetId, store.projectionMode, false);
       }
     }
-    await store.verify();
+    await Promise.all([store.verify(), store.loadDetected()]);
     store.toast("ok", t("common.applied"));
     selected.value = [];
   } catch (e) {
@@ -259,17 +288,23 @@ function barPct(h: Health, n: number): string {
 // The report line carries the authoritative path (adopted skills project into the client's own
 // directory, which target.path alone would misstate); fall back to a joined guess only when the
 // skill was never verified for that target.
+// `visibilityBySlug` walks every *enabled* target, which is not the same list the header, the
+// matrix and the overview use — a client that is switched on but absent from this machine is not a
+// place a projection can land, so it must not appear here either (and must not inflate the count).
 const drawerRows = computed(() => {
   const skill = drawer.value;
   if (!skill) return [];
-  return store.visibilityBySlug(skill.slug).map((e) => {
-    const report = store.visibility.find((v) => v.slug === skill.slug && v.target_id === e.target.id);
-    return {
-      target: e.target,
-      state: e.state,
-      path: report?.path ?? `${e.target.path}/${skill.slug}`,
-    };
-  });
+  return store
+    .visibilityBySlug(skill.slug)
+    .filter((e) => store.isLiveTarget(e.target))
+    .map((e) => {
+      const report = store.visibility.find((v) => v.slug === skill.slug && v.target_id === e.target.id);
+      return {
+        target: e.target,
+        state: e.state,
+        path: report?.path ?? `${e.target.path}/${skill.slug}`,
+      };
+    });
 });
 
 const drawerLive = computed(() => {
@@ -384,6 +419,11 @@ const drawerLive = computed(() => {
               <td class="c-slug">
                 <b class="clip" :title="skill.slug">{{ skill.slug }}</b>
                 <div class="muted desc clip" :title="skill.description">{{ skill.description }}</div>
+                <div v-if="hasIssue(skill)" class="issue-line" :title="issueText(skill)">
+                  <span v-for="e in issuesOf(skill)" :key="e.target.id" class="issue">
+                    <i class="dot" :class="e.state" /><b>{{ e.target.kind }}</b>{{ t(`visibility.${e.state}`) }}
+                  </span>
+                </div>
               </td>
               <td class="c-origin">
                 <span v-if="originKnown(skill.origin)" class="chip plain" :class="originTone(skill.origin)">{{ originLabel(skill.origin) }}</span>
@@ -445,6 +485,11 @@ const drawerLive = computed(() => {
               </button>
             </div>
             <p class="g-desc muted">{{ skill.description }}</p>
+            <p v-if="hasIssue(skill)" class="issue-line g-issue" :title="issueText(skill)">
+              <span v-for="e in issuesOf(skill)" :key="e.target.id" class="issue">
+                <i class="dot" :class="e.state" /><b>{{ e.target.kind }}</b>{{ t(`visibility.${e.state}`) }}
+              </span>
+            </p>
             <div class="g-matrix">
               <span
                 v-for="target in targets"
@@ -482,7 +527,7 @@ const drawerLive = computed(() => {
         <span v-for="st in LEGEND" :key="st" class="k">
           <i class="dot" :class="st" />{{ t(`visibility.${st}`) }}
         </span>
-        <span class="grey"><i class="dot" />{{ t("visibility.unknown") }}</span>
+        <span class="unproj"><i class="dot unknown" />{{ t("visibility.unknown") }}</span>
         <span class="note">{{ t("library.legendNote") }}</span>
       </p>
     </template>
@@ -492,7 +537,15 @@ const drawerLive = computed(() => {
         <div class="overlay-head">
           <div>
             <h3>{{ drawer.slug }}</h3>
-            <p>{{ drawer.display_name }} · {{ drawer.description }}</p>
+            <p
+              ref="descEl"
+              class="hdesc"
+              :class="{ open: descOpen }"
+              :title="descOpen ? '' : drawer.description"
+            >{{ drawer.display_name }} · {{ drawer.description }}</p>
+            <button v-if="descClipped" class="hmore" @click="descOpen = !descOpen">
+              {{ descOpen ? t("library.collapse") : t("library.more") }}
+            </button>
           </div>
           <span class="mono hlive">{{ t("library.liveCount", { live: drawerLive.live, total: drawerLive.total }) }}</span>
           <button class="icon-btn" @click="drawer = null"><AppIcon name="close" :size="15" /></button>
@@ -638,6 +691,21 @@ const drawerLive = computed(() => {
 /* No `vertical-align` here on purpose: the global `.table td` already centres every cell against
    the row, and the two-line name cell is the tallest one, so it sets that height by itself. */
 .desc { font-size: 11.5px; margin-top: 2px; }
+/* The name column is the one flexible column, so a clipped summary would still run the whole
+   width of a wide window and every row reads as a paragraph. The cap keeps the glanceable part
+   near the name; the `title` on the same element carries the rest on hover. */
+.lib-card .desc { max-width: 34em; }
+/* The answer to "有问题 — 问题是什么？". Ten 8px dots asked the user to hover each one and read
+   the legend to find the fault; this line names the client and the state that fired the filter.
+   It only paints on rows that have a fault, so 全部 view keeps its two-line rhythm. */
+.issue-line {
+  display: flex; gap: 10px; align-items: center; margin-top: 3px;
+  font-size: 11.5px; color: var(--dim); white-space: nowrap; overflow: hidden;
+}
+.issue { display: inline-flex; align-items: center; gap: 4px; min-width: 0; }
+.issue .dot { width: 7px; height: 7px; }
+.issue b { font-weight: 600; color: var(--text); }
+.g-issue { margin: 0; }
 /* `.icon-btn` is `display: grid` — a block box — so the trash and the chevron stacked into two
    lines and the chevron landed a whole row below. The td stays a table-cell (fixed layout sizes
    columns from it); only the two icons inside get centred on one line. */
@@ -692,9 +760,25 @@ tr:hover .row-del, tr:focus-within .row-del, .row-del:focus-visible { opacity: 1
 .hnote.warn { color: var(--warn); }
 
 .legend { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin-top: 10px; font-size: 12px; }
-.legend .k, .legend .grey { display: inline-flex; align-items: center; gap: 6px; }
+.legend .k, .legend .unproj { display: inline-flex; align-items: center; gap: 6px; }
 .legend .note { color: var(--faint); }
 
+/* A frontmatter summary is a paragraph, and the drawer head is not a reading pane: logo-design's
+   alone was ten lines tall, pushing the switches that are the point of the drawer below the fold.
+   Two lines and a "更多" that hands the rest over on click; hovering still previews it meanwhile. */
+.hdesc {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+}
+/* `-webkit-line-clamp` only bites a `-webkit-box`, so leaving that display model is the expand. */
+.hdesc.open { display: block; }
+/* A text affordance, not a control. As a `.btn` it competed with the 启用/停用 buttons below, and
+   the padding needed to line the pill up with the summary left its hover background lopsided — the
+   global `button` reset already gives it no border, no background and no padding to misalign. */
+.hmore { margin-top: 4px; color: var(--accent); font-size: 12.5px; }
+.hmore:hover { text-decoration: underline; }
 .hlive { flex: none; color: var(--dim); }
 .tsec { font-size: 12px; font-weight: 600; letter-spacing: 0.02em; margin: 2px 0 8px; }
 .tlist { padding: 2px 4px; }

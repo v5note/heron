@@ -43,7 +43,20 @@ pub struct Proxy {
 }
 
 static OVERRIDE: RwLock<Option<String>> = RwLock::new(None);
+static DISABLED: RwLock<bool> = RwLock::new(false);
 static SYSTEM: OnceLock<Option<Proxy>> = OnceLock::new();
+
+/// Explicitly disable or re-enable proxy usage for the process. When disabled, `resolve`
+/// and `for_git` always yield `None`.
+pub fn set_disabled(disabled: bool) {
+    let mut slot = DISABLED.write().unwrap_or_else(|e| e.into_inner());
+    *slot = disabled;
+}
+
+/// Whether proxy usage has been explicitly turned off.
+pub fn is_disabled() -> bool {
+    *DISABLED.read().unwrap_or_else(|e| e.into_inner())
+}
 
 /// Applies the Settings value for the whole process. `None` (or empty) clears it.
 pub fn set_override(value: Option<&str>) {
@@ -62,6 +75,9 @@ pub fn override_value() -> Option<String> {
 
 /// The effective proxy for callers that read no proxy configuration of their own (ureq).
 pub fn resolve() -> Option<Proxy> {
+    if is_disabled() {
+        return None;
+    }
     if let Some(url) = override_value() {
         return Some(Proxy {
             url,
@@ -86,6 +102,9 @@ pub fn resolve() -> Option<Proxy> {
 /// The proxy that must be passed to `git` explicitly, because its own configuration cannot see
 /// it. `Env` and `GitConfig` are left alone: git honours them (including `no_proxy`) already.
 pub fn for_git() -> Option<String> {
+    if is_disabled() {
+        return None;
+    }
     resolve()
         .filter(|p| matches!(p.source, Source::Override | Source::System))
         .map(|p| p.url)
@@ -315,6 +334,25 @@ mod tests {
         assert_eq!(for_git().as_deref(), Some("http://127.0.0.1:7897"));
         set_override(Some("   "));
         assert_eq!(override_value(), None);
+        set_override(None);
+    }
+
+    #[test]
+    fn disabled_suppresses_resolution_and_git_args() {
+        set_override(Some("http://127.0.0.1:7897"));
+        assert!(resolve().is_some());
+        assert!(for_git().is_some());
+
+        set_disabled(true);
+        assert!(is_disabled());
+        assert_eq!(resolve(), None);
+        assert_eq!(for_git(), None);
+
+        set_disabled(false);
+        assert!(!is_disabled());
+        assert!(resolve().is_some());
+        assert!(for_git().is_some());
+
         set_override(None);
     }
 

@@ -204,6 +204,10 @@ export const useAppStore = defineStore("app", {
     clients: [] as ClientRow[],
     visibility: [] as VisibilityReport[],
     upgrades: [] as UpgradeCandidate[],
+    /** Whether `outdated_list` has answered at least once. An empty `upgrades` means either "no
+     * updates pending" or "never asked", and the 概览 queue needs to tell those apart without
+     * re-running the whole network + git sweep on every visit. */
+    upgradesLoaded: false,
     doctor: null as DoctorReport | null,
     toasts: [] as Toast[],
     scan: initialScan(),
@@ -598,6 +602,7 @@ export const useAppStore = defineStore("app", {
       this.busy = true;
       try {
         this.upgrades = await api.outdated();
+        this.upgradesLoaded = true;
       } catch (e) {
         this.fail(e);
       } finally {

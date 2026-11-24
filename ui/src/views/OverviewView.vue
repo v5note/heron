@@ -31,8 +31,11 @@ const { t } = useI18n();
 
 onMounted(() => {
   if (!store.ready) void store.init();
+  // Both reads below are expensive (the doctor hashes every managed directory, the upgrade sweep
+  // fetches every source and diffs every skill), so they run once per session — the same guard the
+  // doctor already had. A deliberate refresh lives on 更新 / 体检 pages.
   if (!store.doctor) void store.runDoctor();
-  void store.loadUpgrades();
+  if (!store.upgradesLoaded) void store.loadUpgrades();
 });
 
 function go(to: string) {

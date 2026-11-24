@@ -12,6 +12,8 @@ export const CLIENT_ICONS: Record<string, IconName> = {
   workbuddy: "robot",
   antigravity: "rocket",
   trae: "star",
+  // Trae CN 是同一家产品的国内构建，沿用星形表示同源，靠颜色区分两个落点。
+  "trae-cn": "star",
   qoder: "cube",
   grok: "bolt",
   cline: "code",
@@ -28,6 +30,7 @@ export const CLIENT_COLORS: Record<string, string> = {
   workbuddy: "#e64980",
   antigravity: "#1098ad",
   trae: "#4263eb",
+  "trae-cn": "#1971c2",
   qoder: "#d6336c",
   grok: "#e03131",
   cline: "#2f9e44",

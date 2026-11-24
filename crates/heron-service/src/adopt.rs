@@ -122,8 +122,43 @@ pub struct AdoptReport {
     pub errors: Vec<String>,
 }
 
+/// Fingerprints of the managed skills, taken once for a whole batch.
+///
+/// Deduplicating each row against the store meant re-hashing every skill directory per selected
+/// item — O(rows × skills) directory walks, which is what froze the UI on "收拢所选". One pass over
+/// the store feeds every plan in the batch instead.
+pub struct DedupIndex {
+    entries: Vec<(String, PathBuf, Hash)>,
+}
+
+impl DedupIndex {
+    /// Walk the store once and hash every managed skill directory.
+    pub fn build(ctx: &Ctx) -> Result<Self> {
+        let mut entries = Vec::new();
+        for existing in skill::list(ctx.db.conn(), false)? {
+            let dir = ctx.content_path(&existing);
+            if !dir.is_dir() {
+                continue;
+            }
+            if let Ok(fp) = heron_scan::fingerprint_dir(&dir, &FingerprintOptions::default()) {
+                entries.push((existing.slug.clone(), dir, fp.hash));
+            }
+        }
+        Ok(Self { entries })
+    }
+
+    fn find(&self, hash: &Hash) -> Option<&(String, PathBuf, Hash)> {
+        self.entries.iter().find(|(_, _, h)| h == hash)
+    }
+}
+
 /// Build the plan for one detected item without touching the disk.
 pub fn plan(ctx: &Ctx, row: &DetectedRow) -> Result<AdoptPlan> {
+    plan_with_index(ctx, row, &DedupIndex::build(ctx)?)
+}
+
+/// `plan` against a caller-supplied store fingerprint, so a batch of rows shares one store walk.
+pub fn plan_with_index(ctx: &Ctx, row: &DetectedRow, index: &DedupIndex) -> Result<AdoptPlan> {
     let issues: Vec<String> = if row.frontmatter_ok == Some(false) {
         vec!["frontmatter_invalid".to_owned()]
     } else {
@@ -157,22 +192,12 @@ pub fn plan(ctx: &Ctx, row: &DetectedRow) -> Result<AdoptPlan> {
         heron_scan::fingerprint_dir(&content_dir, &FingerprintOptions::default())?.hash
     };
 
-    // De-duplicate against an existing managed skill with identical content.
-    let mut duplicate_of = None;
-    let mut duplicate_at = None;
-    for existing in skill::list(ctx.db.conn(), false)? {
-        let existing_dir = ctx.content_path(&existing);
-        if !existing_dir.is_dir() {
-            continue;
-        }
-        if let Ok(fp) = heron_scan::fingerprint_dir(&existing_dir, &FingerprintOptions::default()) {
-            if fp.hash == hash {
-                duplicate_at = Some(existing_dir.to_string_lossy().to_string());
-                duplicate_of = Some(existing.slug.clone());
-                break;
-            }
-        }
-    }
+    // De-duplicate against an existing managed skill with identical content; the index hashed the
+    // store once for the whole batch, so this is a lookup instead of a re-walk.
+    let (duplicate_of, duplicate_at) = match index.find(&hash) {
+        Some((slug, dir, _)) => (Some(slug.clone()), Some(dir.to_string_lossy().to_string())),
+        None => (None, None),
+    };
 
     let suggested = suggest_placement(&entry, legacy, duplicate_of.is_some());
     let final_slug = duplicate_of

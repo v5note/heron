@@ -36,6 +36,10 @@ const BUILTIN_FILES: &[(&str, &str)] = &[
     ),
     ("trae", include_str!("../../../resources/clients/trae.toml")),
     (
+        "trae-cn",
+        include_str!("../../../resources/clients/trae-cn.toml"),
+    ),
+    (
         "qoder",
         include_str!("../../../resources/clients/qoder.toml"),
     ),

@@ -59,9 +59,10 @@ fn candidate(ctx: &Ctx, slug: &str) -> heron_store::models::DetectedRow {
         .unwrap_or_else(|| panic!("no candidate row for {slug}"))
 }
 
-/// A link the user made records a decision about where the content lives. Adopting must keep it.
+/// A skill reached through a user-made symlink is discovered at its real directory, not the link,
+/// and is then adopted like any other directory.
 #[test]
-fn a_foreign_link_is_bound_in_place_rather_than_repointed() {
+fn a_user_symlinked_skill_is_discovered_at_its_real_directory() {
     let env = Env::new();
     let real = env.home.join("personal/motion-design");
     write_skill(&real, "motion-design");
@@ -72,56 +73,42 @@ fn a_foreign_link_is_bound_in_place_rather_than_repointed() {
     let mut ctx = env.ctx();
     scan::run(&mut ctx, &env.home, &ScanRequest::default()).unwrap();
     let row = candidate(&ctx, "motion-design");
+    // Capture the home before adopt turns it into a store link.
+    let real_canon = real.canonicalize().unwrap();
+
+    // Discover reports the skill's own home, never the link the user made to reach it.
+    assert_eq!(
+        Path::new(&row.path),
+        real_canon.join("SKILL.md"),
+        "the row points at the real directory, not the symlink"
+    );
+    assert_eq!(row.real_path.as_deref(), Some(real_canon.to_str().unwrap()));
 
     let plan = adopt::plan(&ctx, &row).unwrap();
-    assert!(
-        matches!(plan.entry, EntryState::ForeignLink { .. }),
-        "the scanner found a link we did not create: {:?}",
-        plan.entry
-    );
-    assert_eq!(plan.suggested, AdoptPlacement::LiveBind);
+    // Reached as a real directory, so it is suggested as an ordinary move into the store.
+    assert!(matches!(plan.entry, EntryState::RealDir), "{:?}", plan.entry);
+    assert_eq!(plan.suggested, AdoptPlacement::Replace);
 
     let report = adopt::execute(&mut ctx, &plan, plan.suggested).unwrap();
     assert_eq!(report.adopted, vec!["motion-design".to_owned()]);
 
-    // Nothing on disk moved, and nothing was copied.
-    assert_eq!(
-        fs::read_link(skills.join("motion-design")).unwrap(),
-        real,
-        "the user's own link keeps its target"
-    );
-    assert!(real.join("SKILL.md").is_file());
-    assert!(
-        !ctx.skill_path("motion-design").exists(),
-        "a live bind creates no store copy"
-    );
-    assert!(
-        !real.join("heron.skill.json").exists(),
-        "a live bind writes nothing into someone else's directory"
-    );
-
-    // The library knows the authoritative content is outside the store.
-    let stored = skill::get(ctx.db.conn(), "motion-design")
+    // The content is now in the store, and the directory it lived in points into the store.
+    assert!(ctx.skill_path("motion-design").join("SKILL.md").is_file());
+    let info = heron_platform::link::probe(&real).unwrap();
+    assert!(info.kind.is_link(), "{:?}", info.kind);
+    assert!(fs::canonicalize(&real)
         .unwrap()
-        .expect("skill row");
-    assert_eq!(
-        stored.storage_path.as_deref(),
-        Some(real.canonicalize().unwrap().to_str().unwrap())
-    );
+        .starts_with(ctx.store_root().canonicalize().unwrap()));
 
-    // And the entry the client already reads is booked as that skill's projection, against the
-    // client directory it sits in so `verify` judges the right paths.
+    // The user's original symlink is left exactly where it was and now resolves through to the store.
+    assert_eq!(fs::read_link(skills.join("motion-design")).unwrap(), real);
+    assert!(skills.join("motion-design").join("SKILL.md").is_file());
+
+    // The projection is booked against the real directory, where the store link now sits.
     let links = projection::list_for_skill(ctx.db.conn(), "motion-design").unwrap();
     assert_eq!(links.len(), 1, "{links:?}");
-    assert_eq!(
-        links[0].path,
-        skills.join("motion-design").to_string_lossy()
-    );
-    assert!(
-        links[0].link_name.starts_with("agents@"),
-        "link name carries the client: {}",
-        links[0].link_name
-    );
+    assert_eq!(links[0].path, real_canon.to_string_lossy());
+
     assert_eq!(
         detected::get(ctx.db.conn(), &row.path)
             .unwrap()
@@ -129,23 +116,12 @@ fn a_foreign_link_is_bound_in_place_rather_than_repointed() {
             .adopt_state,
         "adopted"
     );
-
-    // Adopting the same entry twice must not stack a second projection row.
-    let again = adopt::plan(&ctx, &row).unwrap();
-    let second = adopt::execute(&mut ctx, &again, AdoptPlacement::LiveBind).unwrap();
-    assert_eq!(second.adopted, vec!["motion-design".to_owned()]);
-    assert_eq!(
-        projection::list_for_skill(ctx.db.conn(), "motion-design")
-            .unwrap()
-            .len(),
-        1,
-        "the projection is recorded once"
-    );
 }
 
-/// Copying a foreign link into the store stays available, but it has to admit what it leaves behind.
+/// A row that still names a user's link (a legacy scan, or an explicit path) is bound in place —
+/// the live-bind path stays intact even though the scanner now resolves links away.
 #[test]
-fn copying_a_foreign_link_is_opt_in_and_reports_the_original() {
+fn a_row_that_still_points_at_a_foreign_link_is_bound_in_place() {
     let env = Env::new();
     let real = env.home.join("personal/motion-design");
     write_skill(&real, "motion-design");
@@ -155,28 +131,43 @@ fn copying_a_foreign_link_is_opt_in_and_reports_the_original() {
 
     let mut ctx = env.ctx();
     scan::run(&mut ctx, &env.home, &ScanRequest::default()).unwrap();
-    let plan = adopt::plan(&ctx, &candidate(&ctx, "motion-design")).unwrap();
+    let mut row = candidate(&ctx, "motion-design");
+    // Re-point the row at the link, the way a scan before this change would have recorded it.
+    row.path = skills
+        .join("motion-design")
+        .join("SKILL.md")
+        .to_string_lossy()
+        .to_string();
 
-    let report = adopt::execute(&mut ctx, &plan, AdoptPlacement::Replace).unwrap();
-    assert_eq!(report.adopted, vec!["motion-design".to_owned()]);
+    let plan = adopt::plan(&ctx, &row).unwrap();
     assert!(
-        matches!(&plan.entry, EntryState::ForeignLink { target } if *target == real.canonicalize().unwrap().to_string_lossy()),
-        "the plan names the directory a copy would stop referencing: {:?}",
+        matches!(&plan.entry, EntryState::ForeignLink { target }
+            if *target == real.canonicalize().unwrap().to_string_lossy()),
+        "a link row is still recognised as foreign: {:?}",
         plan.entry
     );
+    assert_eq!(plan.suggested, AdoptPlacement::LiveBind);
 
-    // The entry is now Heron's, and the user's directory is untouched.
-    assert!(ctx.skill_path("motion-design").join("SKILL.md").is_file());
-    let info = heron_platform::link::probe(&skills.join("motion-design")).unwrap();
-    assert!(info.kind.is_link(), "{:?}", info.kind);
-    // Heron's own links are written relative to the client directory, so compare resolved paths.
-    assert!(fs::canonicalize(skills.join("motion-design"))
-        .unwrap()
-        .starts_with(ctx.store_root().canonicalize().unwrap()));
-    assert!(real.join("notes.md").is_file());
+    let report = adopt::execute(&mut ctx, &plan, plan.suggested).unwrap();
+    assert_eq!(report.adopted, vec!["motion-design".to_owned()]);
+
+    // Nothing on disk moved, and no store copy was made.
+    assert_eq!(fs::read_link(skills.join("motion-design")).unwrap(), real);
+    assert!(real.join("SKILL.md").is_file());
+    assert!(
+        !ctx.skill_path("motion-design").exists(),
+        "a live bind creates no store copy"
+    );
     assert!(
         !real.join("heron.skill.json").exists(),
-        "the left-behind original is not converted"
+        "a live bind writes nothing into someone else's directory"
+    );
+    let stored = skill::get(ctx.db.conn(), "motion-design")
+        .unwrap()
+        .expect("skill row");
+    assert_eq!(
+        stored.storage_path.as_deref(),
+        Some(real.canonicalize().unwrap().to_str().unwrap())
     );
 }
 

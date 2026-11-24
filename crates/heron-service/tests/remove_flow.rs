@@ -84,12 +84,20 @@ fn remove_retracts_every_link_and_parks_the_store_copy_in_the_trash() {
     // Two clients both hold a link: removal must clear both, not just the one the user clicked.
     project(&mut ctx, "pdf", "codex:global");
     project(&mut ctx, "pdf", "claude:global");
-    assert_eq!(projection::list_for_skill(ctx.db.conn(), "pdf").unwrap().len(), 2);
+    assert_eq!(
+        projection::list_for_skill(ctx.db.conn(), "pdf")
+            .unwrap()
+            .len(),
+        2
+    );
 
     let plan = remove::plan(&ctx, "pdf").unwrap();
     assert!(plan.owned, "the content is a store copy");
     assert_eq!(plan.links.len(), 2);
-    let trash = plan.trash.clone().expect("store copy has a trash destination");
+    let trash = plan
+        .trash
+        .clone()
+        .expect("store copy has a trash destination");
 
     let outcome = remove::apply(&mut ctx, &plan).unwrap();
     assert_eq!(outcome.links.len(), 2);
@@ -98,7 +106,9 @@ fn remove_retracts_every_link_and_parks_the_store_copy_in_the_trash() {
     // Links are gone from disk and from the index.
     assert!(!env.home.join(".codex/skills/pdf").exists());
     assert!(!env.home.join(".claude/skills/pdf").exists());
-    assert!(projection::list_for_skill(ctx.db.conn(), "pdf").unwrap().is_empty());
+    assert!(projection::list_for_skill(ctx.db.conn(), "pdf")
+        .unwrap()
+        .is_empty());
 
     // The store copy moved aside instead of vanishing.
     assert!(!ctx.skill_path("pdf").exists());
@@ -109,7 +119,11 @@ fn remove_retracts_every_link_and_parks_the_store_copy_in_the_trash() {
     let bindings: i64 = ctx
         .db
         .conn()
-        .query_row("SELECT COUNT(*) FROM source_binding WHERE slug = 'pdf'", [], |r| r.get(0))
+        .query_row(
+            "SELECT COUNT(*) FROM source_binding WHERE slug = 'pdf'",
+            [],
+            |r| r.get(0),
+        )
         .unwrap();
     assert_eq!(bindings, 0);
 }
@@ -117,14 +131,23 @@ fn remove_retracts_every_link_and_parks_the_store_copy_in_the_trash() {
 #[test]
 fn remove_of_a_live_bound_skill_never_touches_the_users_directory() {
     let env = Env::new();
-    let real = fs::canonicalize(&env.home).unwrap().join("personal/motion-design");
+    let real = fs::canonicalize(&env.home)
+        .unwrap()
+        .join("personal/motion-design");
     write_skill(&real, "motion-design");
     fs::create_dir_all(env.home.join(".agents/skills")).unwrap();
     std::os::unix::fs::symlink(&real, env.home.join(".agents/skills/motion-design")).unwrap();
 
     let mut ctx = env.ctx();
     scan::run(&mut ctx, &env.home, &ScanRequest::default()).unwrap();
-    let row = candidate(&ctx, "motion-design");
+    let mut row = candidate(&ctx, "motion-design");
+    // Live-bind only applies to a row that still names the user's link: the scanner now resolves
+    // the link to the real directory, so re-point the row the way a pre-change scan would have.
+    row.path = env
+        .home
+        .join(".agents/skills/motion-design/SKILL.md")
+        .to_string_lossy()
+        .to_string();
     let plan = adopt::plan(&ctx, &row).unwrap();
     adopt::execute(&mut ctx, &plan, AdoptPlacement::LiveBind).unwrap();
     assert_eq!(
@@ -138,8 +161,13 @@ fn remove_of_a_live_bound_skill_never_touches_the_users_directory() {
     assert!(plan.trash.is_none());
 
     remove::apply(&mut ctx, &plan).unwrap();
-    assert!(skill::get(ctx.db.conn(), "motion-design").unwrap().is_none());
-    assert!(real.join("SKILL.md").is_file(), "the user's content survives");
+    assert!(skill::get(ctx.db.conn(), "motion-design")
+        .unwrap()
+        .is_none());
+    assert!(
+        real.join("SKILL.md").is_file(),
+        "the user's content survives"
+    );
     assert!(real.join("notes.md").is_file());
 }
 
@@ -154,7 +182,10 @@ fn remove_frees_the_slug_for_a_fresh_index_entry() {
     adopt::execute(&mut ctx, &plan, AdoptPlacement::KeepOriginal).unwrap();
 
     let plan = remove::plan(&ctx, "PDF").unwrap();
-    assert_eq!(plan.slug, "pdf", "a differently-cased request finds the row");
+    assert_eq!(
+        plan.slug, "pdf",
+        "a differently-cased request finds the row"
+    );
     remove::apply(&mut ctx, &plan).unwrap();
 
     // Re-registering under the same slug is what a reinstall does; the primary key must be free.

@@ -416,7 +416,10 @@ fn detected_list(
     let rows = if wanted == "all" {
         heron_store::repos::detected::list_all(ctx.db.conn())
     } else {
+        // Skills the library projected into a client directory are already taken over: they stay
+        // out of the discovery list even when an earlier scan indexed them.
         heron_store::repos::detected::list_by_state(ctx.db.conn(), &wanted)
+            .and_then(|rows| heron_service::scan::without_projection_outputs(&ctx, rows))
     };
     rows.map_err(err)
 }
@@ -427,27 +430,49 @@ fn detected_meta(paths: Vec<String>) -> Vec<heron_service::scan::DetectedMeta> {
 }
 
 #[tauri::command]
-fn adopt_paths(
-    state: State<'_, AppState>,
+async fn adopt_paths(
+    app: tauri::AppHandle,
     paths: Vec<String>,
     dry_run: bool,
     keep_original: bool,
     placement: Option<String>,
 ) -> Result<serde_json::Value, Msg> {
-    let mut ctx = state.ctx.lock().unwrap();
+    // A non-`async` command runs on the thread that owns the window, so walking the store here
+    // would freeze the UI for the duration of both clicks (preview and confirm). Do the disk work
+    // on a blocking thread and hold `Ctx` only inside it — the same fix `scan` already uses.
+    let work = tauri::async_runtime::spawn_blocking(move || {
+        let state = app.state::<AppState>();
+        let mut ctx = state.ctx.lock().unwrap();
+        adopt_paths_inner(&mut ctx, &paths, dry_run, keep_original, placement.as_deref())
+    });
+    work
+        .await
+        .map_err(|e| Msg::new("E_INTERNAL").with("detail", e.to_string()))?
+}
+
+fn adopt_paths_inner(
+    ctx: &mut Ctx,
+    paths: &[String],
+    dry_run: bool,
+    keep_original: bool,
+    placement: Option<&str>,
+) -> Result<serde_json::Value, Msg> {
     let rows =
         heron_store::repos::detected::list_by_state(ctx.db.conn(), "candidate").map_err(err)?;
+    // Hash the store once for the whole batch, so dedup is a lookup per row instead of re-walking
+    // every skill directory for every selection.
+    let index = adopt::DedupIndex::build(ctx).map_err(err)?;
     let mut plans = Vec::new();
-    for path in &paths {
+    for path in paths {
         if let Some(row) = rows.iter().find(|r| &r.path == path) {
-            plans.push(adopt::plan(&ctx, row).map_err(err)?);
+            plans.push(adopt::plan_with_index(ctx, row, &index).map_err(err)?);
         }
     }
     if dry_run {
         return serde_json::to_value(&plans)
             .map_err(|e| Msg::new("E_INTERNAL").with("detail", e.to_string()));
     }
-    let placement = match placement.as_deref() {
+    let placement = match placement {
         Some(value) => Some(adopt::AdoptPlacement::parse(value).ok_or_else(|| {
             Msg::new("E_INTERNAL").with("detail", format!("unknown placement {value}"))
         })?),
@@ -465,7 +490,7 @@ fn adopt_paths(
         let how = placement.unwrap_or(plan.suggested);
         // One failing path must not swallow the rest of the selection. Swallowing the error only
         // ever showed up as "nothing happened": an empty toast and an unchanged list.
-        match adopt::execute(&mut ctx, plan, how) {
+        match adopt::execute(ctx, plan, how) {
             Ok(outcome) => {
                 report.adopted.extend(outcome.adopted);
                 report.skipped.extend(outcome.skipped);
@@ -575,11 +600,37 @@ fn verify_visibility(state: State<'_, AppState>) -> Result<Vec<verify::VerifyRep
     verify::verify(&mut ctx, None).map_err(err)
 }
 
+/// Answer on the main thread, do the work on a blocking one.
+///
+/// A non-`async` command runs inside the IPC handler, i.e. on the thread that owns the window, so
+/// anything slow there freezes the UI — the same mistake `scan` already fixed by returning before
+/// the walk. Checks that touch the filesystem or spawn git belong behind `spawn_blocking`; the
+/// `AppHandle` is how the worker thread gets back to the shared `Ctx`.
+async fn with_ctx<T, F>(app: tauri::AppHandle, f: F) -> Result<T, Msg>
+where
+    T: Send + 'static,
+    F: FnOnce(&Ctx) -> Result<T, HeronError> + Send + 'static,
+{
+    let work = tauri::async_runtime::spawn_blocking(move || {
+        let state = app.state::<AppState>();
+        let ctx = state.ctx.lock().unwrap();
+        f(&ctx)
+    });
+    let result = work
+        .await
+        .map_err(|e| Msg::new("E_INTERNAL").with("detail", e.to_string()))?;
+    result.map_err(err)
+}
+
 #[tauri::command]
-fn outdated_list(state: State<'_, AppState>) -> Result<Vec<upgrade::UpgradeCandidate>, Msg> {
-    let ctx = state.ctx.lock().unwrap();
-    upgrade::refresh_sources(&ctx).map_err(err)?;
-    upgrade::outdated(&ctx, heron_core::PinPolicy::Semver).map_err(err)
+async fn outdated_list(app: tauri::AppHandle) -> Result<Vec<upgrade::UpgradeCandidate>, Msg> {
+    with_ctx(app, |ctx| {
+        // Network and per-skill git: every enabled source is fetched and every managed skill
+        // directory is opened and diffed against HEAD. Minutes of work for a large library.
+        upgrade::refresh_sources(ctx)?;
+        upgrade::outdated(ctx, heron_core::PinPolicy::Semver)
+    })
+    .await
 }
 
 #[tauri::command]
@@ -610,9 +661,13 @@ fn rollback_skill(state: State<'_, AppState>, slug: String, to: String) -> Resul
 }
 
 #[tauri::command]
-fn doctor_run(state: State<'_, AppState>) -> Result<doctor::DoctorReport, Msg> {
-    let ctx = state.ctx.lock().unwrap();
-    doctor::run(&ctx).map_err(err)
+async fn doctor_run(app: tauri::AppHandle) -> Result<doctor::DoctorReport, Msg> {
+    with_ctx(app, |ctx| {
+        // Hashes every managed skill directory to find duplicate content, and probes every
+        // projection path. Filesystem-bound, so it cannot run in the IPC handler.
+        doctor::run(ctx)
+    })
+    .await
 }
 
 /// A `source` row for a built-in market, used both to seed the table and to persist a toggle.
@@ -781,18 +836,22 @@ async fn market_plan(
     .map_err(|e| Msg::new("E_INTERNAL").with("detail", e.to_string()))?
 }
 
-/// 设置页的代理输入框读当前值；`None` 表示「留空」，由 Heron 自动探测（环境变量 → git 配置 → 系统代理）。
+/// 设置页的代理配置：读取保存的代理地址、启用状态与实际生效地址。
 #[tauri::command]
-fn net_get_proxy(state: State<'_, AppState>) -> Result<Option<String>, Msg> {
+fn net_get_proxy(state: State<'_, AppState>) -> Result<heron_service::net::ProxyConfig, Msg> {
     let ctx = state.ctx.lock().unwrap();
     heron_service::net::get(&ctx).map_err(err)
 }
 
 /// 写入并立即生效：存进数据库的同时更新进程级代理，之后的 git 拉取与市场搜索都会用它。
 #[tauri::command]
-fn net_set_proxy(state: State<'_, AppState>, value: Option<String>) -> Result<(), Msg> {
+fn net_set_proxy(
+    state: State<'_, AppState>,
+    url: Option<String>,
+    enabled: bool,
+) -> Result<heron_service::net::ProxyConfig, Msg> {
     let ctx = state.ctx.lock().unwrap();
-    heron_service::net::set(&ctx, value.as_deref()).map_err(err)
+    heron_service::net::set(&ctx, url.as_deref(), enabled).map_err(err)
 }
 
 #[tauri::command]

@@ -6,33 +6,83 @@
 
 use heron_core::{ErrorCode, HeronError, Result};
 use heron_platform::proxy;
+use serde::{Deserialize, Serialize};
 
 use crate::Ctx;
 
 /// The kv key holding the Settings value.
-const KEY: &str = "network.proxy";
+const KEY_URL: &str = "network.proxy";
+const KEY_ENABLED: &str = "network.proxy.enabled";
 
-/// The Settings value, if one was typed. `None` means Heron auto-detects (environment, git
-/// config, then the operating system's own proxy setting).
-pub fn get(ctx: &Ctx) -> Result<Option<String>> {
-    Ok(ctx.db.kv_get(KEY)?.filter(|value| !value.trim().is_empty()))
+/// The proxy configuration state exposed to the UI and callers.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ProxyConfig {
+    /// The custom proxy URL configured by the user, if any.
+    pub url: Option<String>,
+    /// Whether network proxy usage is enabled.
+    pub enabled: bool,
+    /// The actual effective proxy URL currently in use (None if disabled or direct).
+    pub current: Option<String>,
 }
 
-/// Validates, stores and immediately applies the Settings value; empty clears it.
-pub fn set(ctx: &Ctx, value: Option<&str>) -> Result<()> {
-    let value = value.map(str::trim).filter(|value| !value.is_empty());
-    if let Some(value) = value {
-        validate(value)?;
+/// The Settings value, if one was typed, along with whether proxy is active.
+pub fn get(ctx: &Ctx) -> Result<ProxyConfig> {
+    let url = ctx
+        .db
+        .kv_get(KEY_URL)?
+        .filter(|value| !value.trim().is_empty());
+    let enabled_str = ctx.db.kv_get(KEY_ENABLED)?;
+    let enabled = enabled_str.as_deref() != Some("false");
+    let current = if enabled {
+        proxy::resolve().map(|p| p.url)
+    } else {
+        None
+    };
+    Ok(ProxyConfig {
+        url,
+        enabled,
+        current,
+    })
+}
+
+/// Validates, stores and immediately applies the Settings value and enabled state.
+pub fn set(ctx: &Ctx, url: Option<&str>, enabled: bool) -> Result<ProxyConfig> {
+    let url = url.map(str::trim).filter(|value| !value.is_empty());
+    if let Some(url) = url {
+        validate(url)?;
     }
-    ctx.db.kv_set(KEY, value.unwrap_or_default())?;
-    proxy::set_override(value);
-    Ok(())
+    ctx.db.kv_set(KEY_URL, url.unwrap_or_default())?;
+    ctx.db
+        .kv_set(KEY_ENABLED, if enabled { "true" } else { "false" })?;
+    if enabled {
+        proxy::set_disabled(false);
+        proxy::set_override(url);
+    } else {
+        proxy::set_disabled(true);
+        proxy::set_override(None);
+    }
+    let current = if enabled {
+        proxy::resolve().map(|p| p.url)
+    } else {
+        None
+    };
+    Ok(ProxyConfig {
+        url: url.map(str::to_owned),
+        enabled,
+        current,
+    })
 }
 
 /// Applies the stored value before the first request of a process.
 pub fn restore(ctx: &Ctx) -> Result<()> {
-    let value = get(ctx)?;
-    proxy::set_override(value.as_deref());
+    let cfg = get(ctx)?;
+    if cfg.enabled {
+        proxy::set_disabled(false);
+        proxy::set_override(cfg.url.as_deref());
+    } else {
+        proxy::set_disabled(true);
+        proxy::set_override(None);
+    }
     Ok(())
 }
 
@@ -115,41 +165,70 @@ mod tests {
     fn the_setting_is_stored_applied_and_cleared() {
         let _serial = GLOBAL.lock().unwrap_or_else(|e| e.into_inner());
         let (_tmp, ctx) = ctx();
-        assert_eq!(get(&ctx).unwrap(), None);
+        let initial = get(&ctx).unwrap();
+        assert_eq!(initial.url, None);
+        assert!(initial.enabled);
 
-        set(&ctx, Some("  http://127.0.0.1:7897 ")).unwrap();
-        assert_eq!(get(&ctx).unwrap().as_deref(), Some("http://127.0.0.1:7897"));
+        let cfg = set(&ctx, Some("  http://127.0.0.1:7897 "), true).unwrap();
+        assert_eq!(cfg.url.as_deref(), Some("http://127.0.0.1:7897"));
+        assert!(cfg.enabled);
+        assert_eq!(cfg.current.as_deref(), Some("http://127.0.0.1:7897"));
         assert_eq!(
             proxy::override_value().as_deref(),
             Some("http://127.0.0.1:7897")
         );
+        assert!(!proxy::is_disabled());
 
-        set(&ctx, Some("")).unwrap();
-        assert_eq!(get(&ctx).unwrap(), None);
+        // Disabling preserves the URL but turns off the process override
+        let disabled_cfg = set(&ctx, Some("http://127.0.0.1:7897"), false).unwrap();
+        assert_eq!(disabled_cfg.url.as_deref(), Some("http://127.0.0.1:7897"));
+        assert!(!disabled_cfg.enabled);
+        assert_eq!(disabled_cfg.current, None);
         assert_eq!(proxy::override_value(), None);
+        assert!(proxy::is_disabled());
+
+        // Clearing the URL while enabled falls back to auto-detect
+        let cleared = set(&ctx, Some(""), true).unwrap();
+        assert_eq!(cleared.url, None);
+        assert!(cleared.enabled);
+        assert_eq!(proxy::override_value(), None);
+        assert!(!proxy::is_disabled());
 
         // A rejected value leaves both the database and the process untouched.
-        set(&ctx, Some("http://127.0.0.1:7897")).unwrap();
-        set(&ctx, Some("ftp://nope")).unwrap_err();
-        assert_eq!(get(&ctx).unwrap().as_deref(), Some("http://127.0.0.1:7897"));
+        set(&ctx, Some("http://127.0.0.1:7897"), true).unwrap();
+        set(&ctx, Some("ftp://nope"), true).unwrap_err();
+        assert_eq!(
+            get(&ctx).unwrap().url.as_deref(),
+            Some("http://127.0.0.1:7897")
+        );
         assert_eq!(
             proxy::override_value().as_deref(),
             Some("http://127.0.0.1:7897")
         );
 
         proxy::set_override(None);
+        proxy::set_disabled(false);
     }
 
     #[test]
     fn restore_applies_the_persisted_value() {
         let _serial = GLOBAL.lock().unwrap_or_else(|e| e.into_inner());
         let (_tmp, ctx) = ctx();
-        ctx.db.kv_set(KEY, "http://127.0.0.1:8118").unwrap();
+        ctx.db.kv_set(KEY_URL, "http://127.0.0.1:8118").unwrap();
+        ctx.db.kv_set(KEY_ENABLED, "true").unwrap();
         restore(&ctx).unwrap();
         assert_eq!(
             proxy::override_value().as_deref(),
             Some("http://127.0.0.1:8118")
         );
+        assert!(!proxy::is_disabled());
+
+        ctx.db.kv_set(KEY_ENABLED, "false").unwrap();
+        restore(&ctx).unwrap();
+        assert_eq!(proxy::override_value(), None);
+        assert!(proxy::is_disabled());
+
         proxy::set_override(None);
+        proxy::set_disabled(false);
     }
 }

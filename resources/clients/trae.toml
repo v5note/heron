@@ -1,8 +1,7 @@
 # Trae — scan locations + presence rules.
 # global_skills is doc-verified (docs.trae.ai/ide/skills, 2026-11-23).
-# NOTE: Trae CN is a separate build that appears to use ~/.trae-cn; that path has no official
-# source, so it is deliberately NOT shipped as a client. `trae` therefore reports "not detected"
-# on a Trae CN machine — honest rather than guessing a path we would write into.
+# NOTE: Trae CN is a separate build with its own ~/.trae-cn directory and ships as its own entry
+# (trae-cn.toml), so `trae` reports "not detected" on a machine that only has the CN build.
 id = "trae"
 display_name = "Trae"
 priority = 60

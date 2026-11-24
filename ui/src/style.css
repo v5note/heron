@@ -291,12 +291,21 @@ a { color: var(--accent); }
 /* One dot per projection target: the state vocabulary lives on the bare .dot so tables,
    card grids and the legend all speak the same language. .matrix only sets density.
    Rings use inset box-shadow, not border, so the dot keeps its diameter across sizes.
-   An unstyled state (e.g. unknown) reads as a solid grey dot: nothing of ours is in place there. */
+   An unstyled state reads as a solid grey dot. */
 .dot { position: relative; display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: var(--faint); flex: none; }
 .dot.visible { background: var(--good); }
 .dot.shadowed { background: var(--warn); }
 .dot.broken { background: var(--bad); }
 .dot.not_scanned { background: transparent; box-shadow: inset 0 0 0 1px var(--line-strong); }
+/* `unknown` means no link of ours sits in that client at all — an empty slot, not a reading.
+   Drawing it as a dot made it a colour question, and 生效中 (#5c7a2e) against the grey baseline
+   (#7a7368) is barely one: same weight, same mutedness, on a beige ground. Absence gets a shape
+   instead — a short dash in the same box, so the columns stay aligned at both dot densities. */
+.dot.unknown { background: transparent; box-shadow: none; }
+.dot.unknown::after {
+  content: ""; position: absolute; left: 10%; right: 10%; top: 50%; height: 2px;
+  margin-top: -1px; border-radius: 1px; background: var(--faint);
+}
 /* Link is in place but the client only picks it up after a restart: a warn ring with a core,
    so it is neither "live" (solid) nor "wrong" (bad). classify() emits this for session-rescan
    clients (claude) until a later verify confirms the landing, then it fades to visible.

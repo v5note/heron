@@ -6,8 +6,8 @@ use std::path::PathBuf;
 
 use heron_scan::classify::{Classifier, HitKind};
 use heron_scan::walker::{collect_roots, scan_monitored, ScanMonitor, ScanOptions, ScanResult};
-use heron_store::models::DetectedUpsert;
-use heron_store::repos::{detected, target};
+use heron_store::models::{DetectedRow, DetectedUpsert};
+use heron_store::repos::{detected, projection, target};
 
 use crate::{clients, Ctx, Result};
 
@@ -109,7 +109,13 @@ pub fn prepare_with(
             projects.push(root.clone());
         }
     }
-    let classifier = Classifier::new(specs, projects);
+    // This app's own projections sit inside the scanned client directories. Telling the classifier
+    // where they are keeps a taken-over skill out of the discovery list.
+    let projected: Vec<PathBuf> = projection::list_all(ctx.db.conn())?
+        .into_iter()
+        .map(|row| PathBuf::from(row.path))
+        .collect();
+    let classifier = Classifier::new(specs, projects).with_projections(projected);
 
     let mut options = ScanOptions {
         extra_excludes: req.extra_excludes.clone(),
@@ -130,6 +136,30 @@ pub fn prepare_with(
 /// monitor's cancel flag is raised.
 pub fn walk(plan: &ScanPlan, monitor: &mut ScanMonitor<'_>) -> Result<ScanResult> {
     scan_monitored(&plan.classifier, &plan.options, monitor)
+}
+
+/// Drop the rows a scan indexed for a directory Heron projected itself.
+///
+/// A scan no longer reports those, but the index can still hold rows written before the projection
+/// was recorded — an older build, or a projection made on this machine after the last walk. They are
+/// managed content, so the discovery list must not offer them again.
+pub fn without_projection_outputs(ctx: &Ctx, rows: Vec<DetectedRow>) -> Result<Vec<DetectedRow>> {
+    let projected = projection::list_all(ctx.db.conn())?;
+    if projected.is_empty() {
+        return Ok(rows);
+    }
+    Ok(rows
+        .into_iter()
+        .filter(|row| {
+            let Some(dir) = std::path::Path::new(&row.path).parent() else {
+                return true;
+            };
+            let dir = heron_platform::paths::normalize(dir);
+            !projected
+                .iter()
+                .any(|p| heron_platform::paths::same_path_ci(std::path::Path::new(&p.path), &dir))
+        })
+        .collect())
 }
 
 /// Stage 3: write what the walk found.

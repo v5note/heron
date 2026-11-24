@@ -82,7 +82,7 @@ const COMMON_CLIENTS = computed(() =>
     ? store.clients.map((c) => c.id)
     : [
         "agents", "claude", "codex", "cursor", "opencode",
-        "workbuddy", "antigravity", "trae", "qoder", "grok", "cline", "copilot",
+        "workbuddy", "antigravity", "trae", "trae-cn", "qoder", "grok", "cline", "copilot",
       ],
 );
 /** Option list: all + common clients + the unknown bucket. */

@@ -5,7 +5,7 @@ import AppIcon from "../components/AppIcon.vue";
 import PageHeader from "../components/PageHeader.vue";
 import StateChip from "../components/StateChip.vue";
 import { api } from "../api";
-import type { NativeScanStatus } from "../api/types";
+import type { NativeScanStatus, ProxyConfig } from "../api/types";
 import { checkForUpdate, installUpdate, type UpdateInfo } from "../api/updater";
 import { setLocale, type Locale } from "../i18n";
 import { useAppStore, type ProjectionMode, type ThemeId } from "../stores/app";
@@ -19,9 +19,38 @@ const clients = ref<NativeScanStatus[]>([]);
 const update = ref<UpdateInfo | null>(null);
 const checking = ref(false);
 const progress = ref<string | null>(null);
-// 代理：空串 = 让 Heron 自动探测（环境变量 → git 配置 → 系统代理），非空则强制走这个地址。
-const proxy = ref("");
+// 代理配置：包含用户保存的地址、是否启用以及实际生效的地址
+const proxyInput = ref("");
+const proxyConfig = ref<ProxyConfig>({ url: null, enabled: true, current: null });
 const proxySaving = ref(false);
+
+const isUsingProxy = computed(() => {
+  return proxyConfig.value.enabled && proxyConfig.value.current !== null;
+});
+
+const isInputDirty = computed(() => {
+  return proxyInput.value.trim() !== (proxyConfig.value.url ?? "");
+});
+
+const proxyButtonLabel = computed(() => {
+  if (isInputDirty.value || !proxyConfig.value.enabled) {
+    return t("settings.proxyEnable");
+  }
+  return t("settings.proxyDisable");
+});
+
+const proxyStatusText = computed(() => {
+  if (!proxyConfig.value.enabled) {
+    return t("settings.proxyStatusDisabled");
+  }
+  if (proxyConfig.value.url) {
+    return t("settings.proxyStatusActive", { url: proxyConfig.value.url });
+  }
+  if (proxyConfig.value.current) {
+    return t("settings.proxyStatusAuto", { url: proxyConfig.value.current });
+  }
+  return t("settings.proxyStatusDirect");
+});
 // The running build's version, injected at build time from package.json (kept in step with
 // tauri.conf.json): "up to date" is only meaningful when it says up to date with what.
 const currentVersion = pkg.version;
@@ -53,19 +82,37 @@ async function openFolder(abs: string) {
 }
 
 /**
- * 保存代理。后端会先校验格式再写库，并当场更新进程级配置，所以不需要重启；填空串就是清除，
- * 交回给自动探测。回填一次服务端值，避免输入框里留着被 trim 掉的空格。
+ * 启用或停用代理。
+ * - 当输入内容有未保存的修改时，点击「启用」保存并应用新地址；
+ * - 当内容未修改时，在「启用」与「停用」状态之间切换，停用时保留输入框中的配置，方便下次一键恢复。
  */
-async function saveProxy() {
+async function toggleProxy() {
   proxySaving.value = true;
   try {
-    await api.netSetProxy(proxy.value.trim() || null);
-    proxy.value = (await api.netGetProxy()) ?? "";
-    store.toast("ok", t("common.applied"));
+    const trimmed = proxyInput.value.trim();
+    if (isInputDirty.value) {
+      const cfg = await api.netSetProxy(trimmed || null, true);
+      proxyConfig.value = cfg;
+      proxyInput.value = cfg.url ?? "";
+      store.toast("ok", t("common.enabled"));
+      return;
+    }
+
+    const nextEnabled = !proxyConfig.value.enabled;
+    const cfg = await api.netSetProxy(trimmed || null, nextEnabled);
+    proxyConfig.value = cfg;
+    proxyInput.value = cfg.url ?? "";
+    store.toast("ok", t(nextEnabled ? "common.enabled" : "common.disabled"));
   } catch (e) {
     store.fail(e);
   } finally {
     proxySaving.value = false;
+  }
+}
+
+async function onProxyEnter() {
+  if (isInputDirty.value || !proxyConfig.value.enabled) {
+    await toggleProxy();
   }
 }
 
@@ -152,7 +199,9 @@ onMounted(async () => {
   if (!store.ready) await store.init();
   try {
     clients.value = await api.nativeScanStatus();
-    proxy.value = (await api.netGetProxy()) ?? "";
+    const cfg = await api.netGetProxy();
+    proxyConfig.value = cfg;
+    proxyInput.value = cfg.url ?? "";
   } catch (e) {
     store.fail(e);
   }
@@ -326,17 +375,23 @@ function changeProjection(event: Event) {
           <span class="proxy-cell">
             <span class="proxy-line">
               <input
-                v-model="proxy"
+                v-model="proxyInput"
                 class="mono"
                 type="text"
                 spellcheck="false"
                 :placeholder="t('settings.proxyAuto')"
                 :aria-label="t('settings.proxy')"
-                @keyup.enter="saveProxy"
+                @keyup.enter="onProxyEnter"
               />
-              <button class="btn sm" :disabled="proxySaving" @click="saveProxy">{{ t("settings.proxySave") }}</button>
+              <button class="btn sm" :disabled="proxySaving" @click="toggleProxy">
+                {{ proxyButtonLabel }}
+              </button>
             </span>
-            <small class="row-hint">{{ t("settings.proxyHint") }}</small>
+            <small class="row-hint">
+              <span class="proxy-status" :class="isUsingProxy ? 'active' : 'inactive'">{{ proxyStatusText }}</span>
+              <span class="dot-sep">·</span>
+              <span>{{ t("settings.proxyHint") }}</span>
+            </small>
           </span>
         </div>
         <div class="row">
@@ -488,10 +543,13 @@ function changeProjection(event: Event) {
 }
 .row-hint { font-size: 11px; color: var(--faint); text-align: right; }
 
-/* 代理：一行放「输入框 + 应用按钮」，说明文字沿用其它设置行的右对齐 hint 贴在下方。 */
+/* 代理：一行放「输入框 + 启用/停用按钮」，说明文字沿用其它设置行的右对齐 hint 贴在下方。 */
 .proxy-cell { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; width: 100%; }
 .proxy-line { display: flex; align-items: center; gap: 8px; width: 100%; }
 .proxy-line input { flex: 1; min-width: 0; height: 30px; padding: 0 8px; font-size: 12.5px; }
+.proxy-status.active { color: var(--good); font-weight: 500; }
+.proxy-status.inactive { color: var(--dim); }
+.dot-sep { margin: 0 4px; opacity: 0.5; }
 
 /* A native <select> keeps its own 32px box; 30px matches the 30px buttons beside it so both centre
    on one line. Its text is drawn by the engine at the control's own height, so the control must not

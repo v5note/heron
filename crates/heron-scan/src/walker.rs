@@ -321,6 +321,8 @@ fn report(
 
 fn classify_skill(dir: &Path, classifier: &Classifier) -> Option<Hit> {
     let skill_md = dir.join("SKILL.md");
+    // Classify on the path as encountered: `Classifier::classify` matches projection links by that
+    // path, so Heron's own projections are suppressed here before we ever consider resolving.
     let classification = classifier.classify(&skill_md, false)?;
     let (frontmatter, issues) = crate::parse::parse_file(&skill_md).ok()?;
     let slug = frontmatter
@@ -329,9 +331,19 @@ fn classify_skill(dir: &Path, classifier: &Classifier) -> Option<Hit> {
         .and_then(|n| heron_core::Slug::derive(n, heron_core::SlugPolicy::Lenient).ok())
         .map(|s| s.as_str().to_owned())
         .or_else(|| classifier.slug_for(&skill_md, &classification));
+    let real_dir = std::fs::canonicalize(dir).unwrap_or_else(|_| dir.to_path_buf());
+    // A skill reached through a user-made symlink (its real directory lives outside the scanned
+    // roots) is reported at that real directory, not at the link: Discover shows the skill's own
+    // home, and adopting it then treats it as an ordinary directory. A symlink that survives the
+    // projection filter above is always the user's, never one Heron created.
+    let path = if is_symlink(dir) {
+        real_dir.join("SKILL.md")
+    } else {
+        skill_md.clone()
+    };
     Some(Hit {
-        path: skill_md.clone(),
-        real_path: std::fs::canonicalize(dir).unwrap_or_else(|_| dir.to_path_buf()),
+        path,
+        real_path: real_dir,
         kind: classification.kind,
         client: classification.client,
         scope: Some(classification.scope),
@@ -340,6 +352,13 @@ fn classify_skill(dir: &Path, classifier: &Classifier) -> Option<Hit> {
         frontmatter: Some(frontmatter),
         issues,
     })
+}
+
+/// True when `path` itself is a symbolic link (an intermediate component being a link does not count).
+fn is_symlink(path: &Path) -> bool {
+    std::fs::symlink_metadata(path)
+        .map(|meta| meta.file_type().is_symlink())
+        .unwrap_or(false)
 }
 
 fn classify_command(file: &Path, classifier: &Classifier) -> Option<Hit> {

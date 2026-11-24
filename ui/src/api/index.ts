@@ -7,7 +7,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import type {
   AdoptPlan, ClientRow, ConflictPayload, DetectedMeta, DetectedRow, DiffReport, DoctorReport, Drift, FavoriteRow, InstallPlan,
-  InstallPreview, LockFile, MarketInfo, MarketItem, NativeScanStatus, RemoveOutcome, RemovePlan, ScanReport, SkillRow,
+  InstallPreview, LockFile, MarketInfo, MarketItem, NativeScanStatus, ProxyConfig, RemoveOutcome, RemovePlan, ScanReport, SkillRow,
   TargetRow, UpgradeCandidate, UpgradeOutcome, VisibilityReport,
 } from "./types";
 
@@ -83,9 +83,10 @@ export const api = {
     call<void>("market_set_enabled", { market, enabled }),
   marketSearch: (market: string, query: string) => call<MarketItem[]>("market_search", { market, query }),
   marketPlan: (market: string, key: string) => call<InstallPlan>("market_plan", { market, key }),
-  /** 设置页的代理：`null` / 空串 = 自动探测（环境变量 → git 配置 → 系统代理）。 */
-  netGetProxy: () => call<string | null>("net_get_proxy"),
-  netSetProxy: (value: string | null) => call<void>("net_set_proxy", { value }),
+  /** 设置页的代理配置：读取保存的代理地址、启用状态与实际生效地址。 */
+  netGetProxy: () => call<ProxyConfig>("net_get_proxy"),
+  netSetProxy: (url: string | null, enabled: boolean) =>
+    call<ProxyConfig>("net_set_proxy", { url, enabled }),
   favorites: () => call<FavoriteRow[]>("favorite_list"),
   favoriteAdd: (input: { name: string; url: string; description: string; market?: string | null }) =>
     call<FavoriteRow>("favorite_add", {

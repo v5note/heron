@@ -275,3 +275,9 @@ export interface RemoveOutcome {
   links: string[];
   trash: string | null;
 }
+
+export interface ProxyConfig {
+  url: string | null;
+  enabled: boolean;
+  current: string | null;
+}

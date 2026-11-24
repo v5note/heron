@@ -1,0 +1,38 @@
+# Trae CN — scan locations + presence rules.
+# The mainland build of Trae: a separate application (CFBundleName "Trae CN", id cn.trae.app) that
+# keeps its own state under ~/.trae-cn, so the `trae` entry cannot stand in for it and the two must
+# not answer for each other.
+#
+# global_skills is probe-verified against the installed bundle rather than the vendor site:
+# "Trae CN.app/Contents/Resources/app/out/vs/workbench/workbench.desktop.main.js" matches
+# `/.trae-cn/skills/` beside `.trae-cn/rules/` and `.trae-cn/commands/`, mirroring the `.trae/` set.
+# The directory is absent until the first skill is added, so presence comes from ~/.trae-cn itself.
+#
+# ~/.trae-cn/builtin_skills is deliberately NOT a location: Trae ships those skills and refreshes
+# them on update, so a projection there would be deleted by the next upgrade and would make "is this
+# mine?" unanswerable. Only the user-level directory is a place a projection may land.
+id = "trae-cn"
+display_name = "Trae CN"
+priority = 65
+global_skills = ".trae-cn/skills"
+project_skills = ".trae-cn/skills"
+link_modes = ["symlink", "junction", "copy"]
+verified_at = "2026-11-24"
+verified_by = "probe"
+
+# No `global_commands`: `.trae-cn/commands` exists in the bundle, but whether Trae CN consumes it as
+# skills (the D9 takeover claude gets) was never tested, and a wrong guess would import files the
+# client ignores. No [native_scan] section either: injection is unresearched for this build.
+[detect]
+# `dirs` are literal apart from a leading `~`, and `apps` are joined onto /Applications by exact
+# name — which is what keeps the two Trae entries apart: "Trae CN.app" never matches "Trae.app", and
+# ~/.trae-cn is a sibling of ~/.trae, not something under it.
+dirs = ["~/.trae-cn"]
+apps = ["Trae CN.app"]
+# The CLI the bundle ships is `Contents/Resources/app/bin/trae-cn`; a machine with it on PATH runs
+# Trae CN regardless of what the home directory looks like.
+# `args` must be written out: detect.rs hands it to the probe verbatim, and a bare `trae-cn` — like a
+# bare `code` — opens the editor and sits there until the timeout kills it.
+[[detect.commands]]
+bin = "trae-cn"
+args = ["--version"]
