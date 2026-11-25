@@ -7,7 +7,7 @@ use crate::repos::{json_list, parse_list};
 use crate::sql_err;
 
 const COLUMNS: &str =
-    "slug, display_name, description, tags, status, origin, storage_path, created_at, updated_at";
+    "slug, display_name, description, tags, status, origin, storage_path, subpath, created_at, updated_at";
 
 fn row_from(r: &rusqlite::Row<'_>) -> rusqlite::Result<SkillRow> {
     Ok(SkillRow {
@@ -18,8 +18,9 @@ fn row_from(r: &rusqlite::Row<'_>) -> rusqlite::Result<SkillRow> {
         status: r.get(4)?,
         origin: r.get(5)?,
         storage_path: r.get(6)?,
-        created_at: r.get(7)?,
-        updated_at: r.get(8)?,
+        subpath: r.get(7)?,
+        created_at: r.get(8)?,
+        updated_at: r.get(9)?,
     })
 }
 
@@ -27,8 +28,8 @@ pub fn insert(tx: &WriteTx<'_>, row: &SkillRow) -> Result<()> {
     let now = now_iso();
     tx.conn()
         .execute(
-            "INSERT INTO skill (slug, display_name, description, tags, status, origin, storage_path, created_at, updated_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+            "INSERT INTO skill (slug, display_name, description, tags, status, origin, storage_path, subpath, created_at, updated_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
             params![
                 row.slug,
                 row.display_name,
@@ -37,6 +38,7 @@ pub fn insert(tx: &WriteTx<'_>, row: &SkillRow) -> Result<()> {
                 row.status,
                 row.origin,
                 row.storage_path,
+                row.subpath,
                 if row.created_at.is_empty() { &now } else { &row.created_at },
                 if row.updated_at.is_empty() { &now } else { &row.updated_at },
             ],

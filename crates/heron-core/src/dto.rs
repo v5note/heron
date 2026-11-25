@@ -172,8 +172,8 @@ mod tests {
 
     #[test]
     fn token_estimate_rounds_up() {
-        // "pdf" (3) + "Extract text" (12) = 15 chars / 3.5 = 4.28 -> 5
-        assert_eq!(estimate_tokens("pdf", "Extract text"), 5);
+        // "wechat-mp" (3) + "Extract text" (12) = 15 chars / 3.5 = 4.28 -> 5
+        assert_eq!(estimate_tokens("wechat-mp", "Extract text"), 5);
         assert_eq!(estimate_tokens("a", ""), 1);
     }
 
@@ -208,8 +208,8 @@ mod tests {
     #[test]
     fn skill_summary_is_serializable() {
         let s = SkillSummary {
-            slug: "pdf".into(),
-            name: "pdf".into(),
+            slug: "wechat-mp".into(),
+            name: "wechat-mp".into(),
             description: "Extract text".into(),
             version: Some("1.4.0".into()),
             status: SkillStatus::Active,

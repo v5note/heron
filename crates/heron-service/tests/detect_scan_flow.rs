@@ -244,6 +244,7 @@ fn a_projection_is_not_offered_as_a_discovery() {
                     status: "active".into(),
                     origin: "store".into(),
                     storage_path: None,
+                    subpath: None,
                     created_at: String::new(),
                     updated_at: String::new(),
                 },

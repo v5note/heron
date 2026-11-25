@@ -84,6 +84,9 @@ pub fn prepare_with(
     // Fill in clients a newer binary added, so this very scan has rows to put verdicts on and the
     // grid does not lose a card it has not measured yet.
     clients::sync_catalog(&mut ctx.db, home, false)?;
+    // A landing point whose directory no longer exists is a dead card and a broken link; the only
+    // code that ever made one is retired, so the rows it left behind are dropped here.
+    clients::prune_phantom_targets(&mut ctx.db)?;
 
     // Detection runs *before* the roots are collected: a client discovered for the first time today
     // is scanned today, in the same pass that decided it exists.

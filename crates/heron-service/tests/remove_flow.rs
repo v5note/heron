@@ -197,6 +197,7 @@ fn remove_frees_the_slug_for_a_fresh_index_entry() {
         status: "active".to_owned(),
         origin: "store".to_owned(),
         storage_path: None,
+        subpath: None,
         created_at: String::new(),
         updated_at: String::new(),
     };

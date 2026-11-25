@@ -113,6 +113,15 @@ fn a_user_symlinked_skill_is_discovered_at_its_real_directory() {
     assert_eq!(links.len(), 1, "{links:?}");
     assert_eq!(links[0].path, real_canon.to_string_lossy());
 
+    // But no landing point is invented for the directory the content really sits in: such a card
+    // points somewhere no client reads, and it turns into a broken link the moment that third-party
+    // checkout is deleted. The entry is booked against the client's own skills directory instead.
+    let targets = heron_store::repos::target::list(ctx.db.conn()).unwrap();
+    assert!(
+        targets.iter().all(|t| t.discover != "manual"),
+        "adopt registered a directory no client reads: {targets:?}"
+    );
+
     assert_eq!(
         detected::get(ctx.db.conn(), &row.path)
             .unwrap()

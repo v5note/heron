@@ -856,16 +856,20 @@ Heron
 ### 9.3 Catalog 优先级
 
 ```text
-1. .claude-plugin/marketplace.json   （兼容 Claude marketplace）
+1. .claude-plugin/marketplace.json   （兼容 Claude marketplace，多插件清单）
 2. heron.source.toml                 （Heron 原生）
-3. 直接扫描仓库中的 SKILL.md         （兜底，支持 max_depth 与排除）
+3. .claude-plugin/plugin.json        （兼容 Claude 单插件清单，`skills[]` 声明即源）
+4. 直接扫描仓库中的 SKILL.md         （兜底，支持 max_depth 与排除）
 ```
 
 * **兼容层映射规则**：
   * `plugins[].name` → 包名；
   * `plugins[].source` 为相对路径 → 该目录下 `skills/*` 即为其 Skill；
   * `plugins[].source` 为 `github` / `url` / `git-subdir`（含 ref / sha）→ 记为"外部包"，Phase 1 展示并标记为需二次拉取；
-  * plugin 的 `version` 若存在，作为 Skill 版本来源。
+  * plugin 的 `version` 若存在，作为 Skill 版本来源；
+  * `plugin.json` 的 `skills[]` 相对路径直接作为 Skill 目录，指向不存在 `SKILL.md` 的条目跳过。
+* **兜底扫描排除客户端投影副本**：顶层点目录（`.trae/`、`.claude/`、`.doubao/` …）下的 `SKILL.md`
+  视为作者预先投影的副本，仅在仓库中没有其它候选时才采用——投影是 Heron 的职责，不该被当成来源。
 * **Heron 原生格式**（简洁、面向 Skill）：
 
 ```toml

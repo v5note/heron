@@ -25,6 +25,10 @@ const MIGRATIONS: &[(&str, &str)] = &[
         "0005_client_presence",
         include_str!("migrations/0005_client_presence.sql"),
     ),
+    (
+        "0006_skill_subpath",
+        include_str!("migrations/0006_skill_subpath.sql"),
+    ),
 ];
 
 pub const SCHEMA_VERSION: i64 = MIGRATIONS.len() as i64;

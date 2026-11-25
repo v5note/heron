@@ -10,6 +10,6 @@ pub mod url;
 
 pub use catalog::{Catalog, CatalogItem, CatalogSource};
 pub use heron_core::{HeronError, Msg, Result};
-pub use layout::{detect as detect_layout, detect_local as detect_layout_local, find_project_root, SkillLayout};
+pub use layout::{detect as detect_layout, SkillLayout};
 pub use market::{adapter, Capability, InstallPlan, MarketAdapter, MarketInfo, MARKETS};
 pub use url::{parse_source, ParsedSource, SourceKind};

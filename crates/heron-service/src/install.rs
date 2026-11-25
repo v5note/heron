@@ -40,6 +40,10 @@ pub struct InstallPreview {
     pub ref_name: Option<String>,
     /// True when the skill already exists and installing again would upgrade it.
     pub existing: bool,
+    /// The skill cannot stand alone outside its repository (e.g. `huashu-motion`, whose `bin/om`
+    /// reaches `../../..` for `cli/`): the install exports the whole checkout instead of lifting
+    /// the skill directory out of it.
+    pub whole_repo: bool,
 }
 
 #[derive(Debug, Clone, serde::Serialize)]
@@ -55,7 +59,14 @@ pub struct InstallReport {
 struct Resolved {
     parsed: url::ParsedSource,
     catalog: Catalog,
-    skill_dir: String,
+    /// Which skill directory the source points at. `None` means the repository holds several and
+    /// the author never declared which is theirs — a question for the user, answered by the
+    /// candidate picker, not something to decide silently. Only `preview` may proceed without one;
+    /// every install path goes through `chosen`.
+    skill_dir: Option<String>,
+    /// Whether `skill_dir` can be lifted out of the repository or needs the whole checkout.
+    /// Meaningless while `skill_dir` is `None`, where it stays at its default.
+    layout: heron_source::SkillLayout,
     /// The frontmatter `name` of the selected skill, when it is readable. A repository whose
     /// skill sits at the root has no directory name to fall back on, so this is what keeps the
     /// derived slug meaningful instead of the placeholder `root`.
@@ -64,8 +75,7 @@ struct Resolved {
     ref_name: Option<String>,
 }
 
-/// What a request points at, decided without touching the network.
-struct Target {
+/// What a request points at, decided without touching the network.struct Target {
     parsed: url::ParsedSource,
     remote: heron_git::RemoteUrl,
     wanted_ref: Option<String>,
@@ -125,14 +135,18 @@ fn resolve_remote(dirs: &Dirs, req: &InstallRequest) -> Result<Resolved> {
         ..
     } = t;
 
-    let skill_dir = match wanted_sub.as_deref() {
+    let (skill_dir, layout) = match wanted_sub.as_deref() {
         Some(sub) if !sub.is_empty() => {
             let normalized = sub.trim_matches('/').to_owned();
-            catalog::resolve_skill_dir(Some(&normalized), &empty_catalog(), &|p| {
-                repo.tree(&commit, p)
-                    .map(|e| e.iter().any(|f| f.path == "SKILL.md"))
-                    .unwrap_or(false)
-            })?
+            let skill_dir =
+                catalog::resolve_skill_dir(Some(&normalized), &empty_catalog(), &|p| {
+                    repo.tree(&commit, p)
+                        .map(|e| e.iter().any(|f| f.path == "SKILL.md"))
+                        .unwrap_or(false)
+                })?;
+            let files = tree_files(&repo, &commit);
+            let layout = detect_layout(&repo, &commit, &skill_dir, &files);
+            (skill_dir, layout)
         }
         _ => {
             let tree = repo.tree(&commit, "")?;
@@ -141,16 +155,22 @@ fn resolve_remote(dirs: &Dirs, req: &InstallRequest) -> Result<Resolved> {
                 .filter(|e| e.kind == heron_git::TreeEntryKind::File && !e.path.contains(".git"))
                 .map(|e| e.path.clone())
                 .collect();
-            let contents: BTreeMap<String, String> =
-                ["heron.source.toml", ".claude-plugin/marketplace.json"]
-                    .iter()
-                    .filter(|p| files.iter().any(|f| f == *p))
-                    .filter_map(|p| {
-                        repo.read_blob(&commit, p)
-                            .ok()
-                            .map(|c| ((*p).to_owned(), c))
-                    })
-                    .collect();
+            // Only the manifests are read as blobs: `catalog::load` needs their content, while the
+            // scan beneath it only ever needs the path list. Forgetting an entry here silently
+            // demotes that catalog to the scan fallback, because `read` would return `None`.
+            let contents: BTreeMap<String, String> = [
+                "heron.source.toml",
+                ".claude-plugin/marketplace.json",
+                ".claude-plugin/plugin.json",
+            ]
+            .iter()
+            .filter(|p| files.iter().any(|f| f == *p))
+            .filter_map(|p| {
+                repo.read_blob(&commit, p)
+                    .ok()
+                    .map(|c| ((*p).to_owned(), c))
+            })
+            .collect();
             let read = |p: &str| contents.get(p).cloned();
             let files_ref = RepoFiles {
                 files: &files,
@@ -162,11 +182,13 @@ fn resolve_remote(dirs: &Dirs, req: &InstallRequest) -> Result<Resolved> {
                     .map(|e| e.iter().any(|f| f.path == "SKILL.md"))
                     .unwrap_or(false)
             })?;
+            let layout = detect_layout(&repo, &commit, &skill_dir, &files);
             return Ok(Resolved {
                 parsed,
                 catalog,
                 skill_name: read_skill_name(&repo, &commit, &skill_dir),
                 skill_dir,
+                layout,
                 commit,
                 ref_name: wanted_ref,
             });
@@ -192,9 +214,33 @@ fn resolve_remote(dirs: &Dirs, req: &InstallRequest) -> Result<Resolved> {
         catalog,
         skill_name: read_skill_name(&repo, &commit, &skill_dir),
         skill_dir,
+        layout,
         commit,
         ref_name: wanted_ref,
     })
+}
+
+/// All blobs in the commit tree, ignoring git-internal paths.
+fn tree_files(repo: &heron_git::CachedRepo, commit: &str) -> Vec<String> {
+    repo.tree(commit, "")
+        .map(|tree| {
+            tree.iter()
+                .filter(|e| e.kind == heron_git::TreeEntryKind::File && !e.path.contains(".git"))
+                .map(|e| e.path.clone())
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+/// Can the skill at `skill_dir` be lifted out of the checkout, or does it reference siblings?
+/// `files` must be the repository-wide blob list from `tree_files`.
+fn detect_layout(
+    repo: &heron_git::CachedRepo,
+    commit: &str,
+    skill_dir: &str,
+    files: &[String],
+) -> heron_source::SkillLayout {
+    heron_source::detect_layout(skill_dir, files, &|p| repo.read_blob(commit, p).ok())
 }
 
 /// The frontmatter `name` of the skill at `skill_dir`, best-effort: an unreadable or unparsable
@@ -272,6 +318,7 @@ pub fn preview(ctx: &Ctx, req: &InstallRequest) -> Result<InstallPreview> {
         commit: resolved.commit,
         ref_name: resolved.ref_name,
         existing,
+        whole_repo: resolved.layout.whole_repo(),
     })
 }
 
@@ -294,14 +341,25 @@ pub fn install(ctx: &mut Ctx, req: &InstallRequest) -> Result<InstallReport> {
     let remote = heron_git::RemoteUrl::parse(&remote_url)?;
     let repo = heron_git::CachedRepo::new(&ctx.dirs.sources_cache(), remote.clone());
 
-    // Extract into a staging dir first so a bad download never reaches the store.
+    // Extract into a staging dir first so a bad download never reaches the store. A whole-repo
+    // skill keeps its checkout intact: the store directory IS the repository root and the entry
+    // lives at `skill_dir` inside it, exactly like a plain `git clone` would leave it.
+    let whole_repo = resolved.layout.whole_repo();
     let staging_root = ctx.dirs.data.join("staging");
     std::fs::create_dir_all(&staging_root).ok();
     let staging = staging_root.join(format!("{}-{}", preview.slug, &resolved.commit[..8]));
     let _ = std::fs::remove_dir_all(&staging);
-    repo.checkout_subdir(&resolved.commit, &resolved.skill_dir, &staging)?;
+    repo.checkout_subdir(
+        &resolved.commit,
+        if whole_repo { "" } else { &resolved.skill_dir },
+        &staging,
+    )?;
 
-    let skill_md = staging.join("SKILL.md");
+    let skill_md = if whole_repo {
+        staging.join(&resolved.skill_dir).join("SKILL.md")
+    } else {
+        staging.join("SKILL.md")
+    };
     if !skill_md.is_file() {
         let _ = std::fs::remove_dir_all(&staging);
         return Err(ErrorCode::Frontmatter
@@ -363,7 +421,13 @@ pub fn install(ctx: &mut Ctx, req: &InstallRequest) -> Result<InstallReport> {
     meta.source = Some(heron_vcs::repo::MetaSource {
         url: remote.url.clone(),
         ref_name: resolved.ref_name.clone(),
-        subpath: Some(resolved.skill_dir.clone()),
+        // Whole-repo: the store directory is the versioned root already, so upstream paths are
+        // relative to it without a prefix. Skill layout keeps the lifted-out subtree marker.
+        subpath: if whole_repo {
+            None
+        } else {
+            Some(resolved.skill_dir.clone())
+        },
     });
     let vrepo = heron_vcs::SkillRepo::open(&dest);
     vrepo.init(&meta)?;
@@ -395,6 +459,13 @@ pub fn install(ctx: &mut Ctx, req: &InstallRequest) -> Result<InstallReport> {
                 status: "active".to_owned(),
                 origin: "store".to_owned(),
                 storage_path: None,
+                // The DB records the inner entry point for whole-repo installs; upgrades and
+                // projection both resolve `content_path + subpath` from here.
+                subpath: if whole_repo {
+                    Some(resolved.skill_dir.clone())
+                } else {
+                    None
+                },
                 created_at: String::new(),
                 updated_at: String::new(),
             },

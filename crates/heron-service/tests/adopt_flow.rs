@@ -432,6 +432,7 @@ fn repair_descriptions_fills_rows_adopted_before_that_fix() -> Result<()> {
                 status: "active".into(),
                 origin: "adopted".into(),
                 storage_path: None,
+                subpath: None,
                 created_at: String::new(),
                 updated_at: String::new(),
             },

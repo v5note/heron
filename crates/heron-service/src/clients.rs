@@ -8,7 +8,7 @@ use std::path::{Path, PathBuf};
 
 use heron_store::db::Db;
 use heron_store::models::{ClientRow, TargetRow};
-use heron_store::repos::{client, target};
+use heron_store::repos::{client, projection, target};
 use serde::Deserialize;
 
 use crate::Result;
@@ -290,6 +290,50 @@ pub fn apply_presence(db: &mut Db, detection: &crate::detect::Detection) -> Resu
     })
 }
 
+/// Forget the landing points that stopped being a directory on this machine.
+///
+/// A target is a place a client reads; once the directory is gone the card is noise in the overview
+/// and its projection is a link nothing can be verified through. This is the tidy-up for the one
+/// history a phantom row has: adopt booking the *resolved* directory behind a foreign link — inside
+/// somebody else's repository — and that repository then being deleted (see
+/// `crate::adopt::ensure_target_for_dir`, which no longer does it).
+///
+/// Conservative on purpose, because removing a target cascades to its projections and their cached
+/// verdicts: only rows adopt wrote are considered (`discover = 'manual'`; the catalogue and the
+/// project scan both write `'auto'`), and only when nothing is left on disk. An entry that still
+/// exists — even as a broken link the user can repair — is never touched.
+pub fn prune_phantom_targets(db: &mut Db) -> Result<usize> {
+    let projections = projection::list_all(db.conn())?;
+    let mut gone: Vec<String> = Vec::new();
+    for t in target::list(db.conn())? {
+        if t.discover != "manual" || entry_exists(Path::new(&t.path)) {
+            continue;
+        }
+        if projections
+            .iter()
+            .any(|p| p.target_id == t.id && entry_exists(Path::new(&p.path)))
+        {
+            continue;
+        }
+        gone.push(t.id);
+    }
+    if gone.is_empty() {
+        return Ok(0);
+    }
+    db.write(|tx| {
+        for id in &gone {
+            target::remove(tx, id)?;
+        }
+        Ok(())
+    })?;
+    Ok(gone.len())
+}
+
+/// Anything at all sitting at this path: a directory, a file, or a link — even a dangling one.
+fn entry_exists(path: &Path) -> bool {
+    std::fs::symlink_metadata(path).is_ok()
+}
+
 /// Is this landing point live: switched on by the user *and* not reported absent by the last scan?
 ///
 /// The single definition for the whole workspace, deliberately mirroring the three-state rule: an
@@ -322,6 +366,8 @@ pub fn loaded_specs(db: &Db) -> Result<Vec<heron_scan::classify::ClientSpec>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use heron_store::models::{ProjectionRow, SkillRow};
+    use heron_store::repos::skill;
 
     #[test]
     fn builtin_matrix_parses_from_toml() {
@@ -539,6 +585,123 @@ mod tests {
         assert_eq!(
             client::get(db.conn(), "claude").unwrap().unwrap().detected,
             Some(0)
+        );
+    }
+
+    /// The shape adopt used to write: a `manual` target for a directory no client reads.
+    fn phantom(db: &mut Db, id: &str, dir: &Path, link: Option<&Path>) {
+        let target_row = TargetRow {
+            id: id.to_owned(),
+            kind: "agents".to_owned(),
+            scope: "global".to_owned(),
+            project_path: None,
+            path: dir.to_string_lossy().to_string(),
+            enabled: true,
+            is_default: false,
+            discover: "manual".to_owned(),
+        };
+        db.write(|tx| {
+            if skill::get(tx.conn(), "huashu-design")?.is_none() {
+                skill::insert(
+                    tx,
+                    &SkillRow {
+                        slug: "huashu-design".to_owned(),
+                        display_name: "huashu-design".to_owned(),
+                        description: String::new(),
+                        tags: vec![],
+                        status: "active".to_owned(),
+                        origin: "adopted".to_owned(),
+                        storage_path: None,
+                        subpath: None,
+                        created_at: String::new(),
+                        updated_at: String::new(),
+                    },
+                )?;
+            }
+            target::upsert(tx, &target_row)?;
+            if let Some(link) = link {
+                projection::insert(
+                    tx,
+                    &ProjectionRow {
+                        slug: "huashu-design".to_owned(),
+                        target_id: id.to_owned(),
+                        link_name: "huashu-design".to_owned(),
+                        path: link.to_string_lossy().to_string(),
+                        mode: "symlink".to_owned(),
+                        ..Default::default()
+                    },
+                )?;
+            }
+            Ok(())
+        })
+        .unwrap();
+    }
+
+    #[test]
+    fn a_manual_target_with_nothing_left_on_disk_is_forgotten() {
+        let tmp = tempfile::tempdir().unwrap();
+        let mut db = Db::open(&tmp.path().join("heron.db")).unwrap();
+        bootstrap(&mut db, &tmp.path().join("home")).unwrap();
+        let catalogue = target::list(db.conn()).unwrap().len();
+
+        // The third-party checkout is gone: neither the skills dir nor the link inside it exists.
+        let vanished = tmp.path().join("huashu-motion/skills");
+        phantom(
+            &mut db,
+            "agents:phantom",
+            &vanished,
+            Some(&vanished.join("huashu-design")),
+        );
+        assert_eq!(target::list(db.conn()).unwrap().len(), catalogue + 1);
+
+        assert_eq!(prune_phantom_targets(&mut db).unwrap(), 1);
+        assert!(target::get(db.conn(), "agents:phantom").unwrap().is_none());
+        assert!(
+            projection::list_all(db.conn())
+                .unwrap()
+                .iter()
+                .all(|p| p.target_id != "agents:phantom"),
+            "the broken link went with the landing point that made it"
+        );
+        // `sync_catalog` rows are the matrix's, never a phantom's collateral.
+        assert_eq!(target::list(db.conn()).unwrap().len(), catalogue);
+        // Idempotent: a second scan finds nothing to do.
+        assert_eq!(prune_phantom_targets(&mut db).unwrap(), 0);
+    }
+
+    #[test]
+    fn pruning_only_forgets_rows_adopt_wrote_and_only_when_the_disk_agrees() {
+        let tmp = tempfile::tempdir().unwrap();
+        let mut db = Db::open(&tmp.path().join("heron.db")).unwrap();
+        let home = tmp.path().join("home");
+        std::fs::create_dir_all(home.join(".agents/skills")).unwrap();
+        bootstrap(&mut db, &home).unwrap();
+        let want = builtin().unwrap().len();
+
+        // A live-bound directory that is still there.
+        let present = tmp.path().join("my-workspace/skills");
+        std::fs::create_dir_all(&present).unwrap();
+        phantom(&mut db, "agents:present", &present, None);
+
+        // Gone as a landing point, but the link recorded against it is still an entry on disk:
+        // that is the user's broken link to repair, not a row to erase.
+        let gone_dir = tmp.path().join("third-party/skills");
+        let kept_link = tmp.path().join("elsewhere/huashu-design");
+        std::fs::create_dir_all(kept_link.parent().unwrap()).unwrap();
+        std::fs::write(&kept_link, "SKILL.md").unwrap();
+        phantom(&mut db, "agents:gone-dir", &gone_dir, Some(&kept_link));
+        assert_eq!(target::list(db.conn()).unwrap().len(), want + 2);
+
+        assert_eq!(prune_phantom_targets(&mut db).unwrap(), 0);
+        assert!(target::get(db.conn(), "agents:present").unwrap().is_some());
+        assert!(target::get(db.conn(), "agents:gone-dir").unwrap().is_some());
+        assert!(
+            target::get(db.conn(), "agents:global").unwrap().is_some(),
+            "the catalogue's own landing point is never a phantom"
+        );
+        assert!(
+            std::fs::symlink_metadata(&present).is_ok(),
+            "no file was touched"
         );
     }
 }

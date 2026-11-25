@@ -224,7 +224,7 @@
     "subtitle": "一次搜索问遍已启用的来源，能装的直接装，需要逛的带关键词打开",
     "sourcesLabel": "来源",
     "toggleHint": "点击启用 / 停用这个来源",
-    "searchAllPlaceholder": "搜索全部来源里的 Skill，例如 pdf、code review…",
+    "searchAllPlaceholder": "搜索全部来源里的 Skill，例如 wechat-mp、code-review…",
     "searchAll": "搜索全部来源",
     "queryHits": "本次查询打到",
     "idleHint": "输入关键词并搜索，结果会按来源分组显示在这里；下面的来源可在浏览器中打开。",

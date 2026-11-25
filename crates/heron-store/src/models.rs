@@ -36,6 +36,9 @@ pub struct SkillRow {
     /// Authoritative content directory when it lives outside the store: a skill adopted from a link
     /// the user maintains elsewhere (adopt · 就地引用). `None` means `store/<slug>`.
     pub storage_path: Option<String>,
+    /// Whole-repository skills record the entry directory (where `SKILL.md` lives) relative to
+    /// the versioned root, e.g. `skills/huashu-motion`. `None` = the root itself is the skill.
+    pub subpath: Option<String>,
     pub created_at: String,
     pub updated_at: String,
 }

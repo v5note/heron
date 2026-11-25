@@ -327,7 +327,7 @@ mod tests {
 
     #[test]
     fn serde_roundtrip() {
-        let m = ErrorCode::SlugConflict.msg().with("slug", "pdf");
+        let m = ErrorCode::SlugConflict.msg().with("slug", "wechat-mp");
         let json = serde_json::to_string(&m).unwrap();
         let back: Msg = serde_json::from_str(&json).unwrap();
         assert_eq!(m, back);

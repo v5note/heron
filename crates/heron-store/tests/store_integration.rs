@@ -72,8 +72,8 @@ fn migration_creates_schema_at_expected_version() {
         .unwrap();
     assert_eq!(version, SCHEMA_VERSION);
     assert_eq!(
-        version, 5,
-        "0001_init + 0002_client_commands + 0003_skill_storage + 0004_favorite + 0005_client_presence"
+        version, 6,
+        "0001_init + 0002_client_commands + 0003_skill_storage + 0004_favorite + 0005_client_presence + 0006_skill_subpath"
     );
     assert!(db.integrity_ok());
 }
@@ -276,6 +276,7 @@ fn projections_require_existing_target_and_cascade() {
                 status: "active".into(),
                 origin: "store".into(),
                 storage_path: None,
+                subpath: None,
                 created_at: String::new(),
                 updated_at: String::new(),
             },
