@@ -1,6 +1,8 @@
 //! Project discovery (decision D3: automatic **and** manual).
 //!
-//! A project root is registered when the scanner sees a `<proj>/.<client>/skills` directory.
+//! A project root is registered when the scanner sees a `<proj>/.<client>/skills` directory. The
+//! home directory itself is never a root: the `.<client>/skills` it holds are the global landing
+//! points the client catalogue already registers.
 //! Registration is a **record**, not a permission: nothing is projected into a project until the
 //! user enables it, because project skills often come from somebody else's repository.
 
@@ -37,6 +39,11 @@ fn walk(dir: &Path, home: &Path, max_depth: usize, depth: usize, out: &mut Vec<D
     if depth > max_depth {
         return;
     }
+    // $HOME itself is never a project root. The `.<client>/skills` it holds are the global landing
+    // points the catalogue already registers, so treating home as a project wrote a second,
+    // disabled landing point on the very same path — two identical cards in the overview. Home is
+    // still a place to look: the projects live in the ordinary directories under it.
+    let is_home = depth == 0 && dir == home;
     let mut clients = Vec::new();
     if let Ok(entries) = std::fs::read_dir(dir) {
         for entry in entries.flatten() {
@@ -49,17 +56,13 @@ fn walk(dir: &Path, home: &Path, max_depth: usize, depth: usize, out: &mut Vec<D
             }
         }
     }
-    if !clients.is_empty() {
+    if !clients.is_empty() && !is_home {
         out.push(DiscoveredProject {
             root: dir.to_path_buf(),
             clients: clients.clone(),
             already_registered: false,
         });
         // A project root is a boundary: do not descend into it looking for nested projects.
-        return;
-    }
-    // Never walk the home directory itself beyond the first level of client dirs.
-    if depth == 0 && dir == home {
         return;
     }
     if let Ok(entries) = std::fs::read_dir(dir) {
@@ -162,6 +165,32 @@ mod tests {
             1,
             "the outer project is the boundary: {found:?}"
         );
+    }
+
+    #[test]
+    fn home_is_never_reported_as_a_project_root() {
+        let tmp = tempfile::tempdir().unwrap();
+        let home = tmp.path().join("home");
+        // The global landing points sit here. They are the catalogue's, not a project's, and
+        // registering home used to write a second landing point on the same path.
+        std::fs::create_dir_all(home.join(".claude/skills")).unwrap();
+        std::fs::create_dir_all(home.join(".agents/skills")).unwrap();
+        std::fs::create_dir_all(home.join("work/proj-a/.codex/skills")).unwrap();
+
+        // Scanning home must not report home itself, yet it still descends two levels to the
+        // project inside it.
+        let from_home = discover(&home, &[home.clone()], 3);
+        assert_eq!(
+            from_home.len(),
+            1,
+            "home must not show up as a project to register"
+        );
+        assert_eq!(from_home[0].root, home.join("work/proj-a"));
+        assert_eq!(from_home[0].clients, vec!["codex".to_owned()]);
+        // A root *under* home is still searched normally.
+        let found = discover(&home, &[home.join("work")], 3);
+        assert_eq!(found.len(), 1);
+        assert_eq!(found[0].clients, vec!["codex".to_owned()]);
     }
 
     #[test]

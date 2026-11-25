@@ -6,6 +6,7 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { useRouter } from "vue-router";
+import ActionPill from "../components/ActionPill.vue";
 import AppIcon from "../components/AppIcon.vue";
 import PageHeader from "../components/PageHeader.vue";
 import ScanPill from "../components/ScanPill.vue";
@@ -41,6 +42,14 @@ onMounted(() => {
 function go(to: string) {
   void router.push(to);
 }
+
+/** 体检 pill 的结果尾巴：跑完 1.8s 内说结果，之后回到原来的标签。 */
+const doctorResult = computed(() => {
+  const run = store.doctorRun;
+  if (run.failed) return t("doctor.failed");
+  if (!run.flash) return "";
+  return run.flash.kind === "done" ? t("doctor.result", { n: run.flash.findings }) : t("doctor.canceledShort");
+});
 
 /* ---------------- 决定队列 ---------------- */
 
@@ -308,11 +317,28 @@ async function copyPath(path: string, id: string) {
   <section>
     <PageHeader :title="t('overview.title')" :lead="t('overview.lead')">
       <template #actions>
-        <!-- 扫描在这里就有主控件；体检自己带请求锁，两次体检真的不能叠着跑。 -->
+        <!-- 扫描和体检都是任务，不是请求：各自的 pill 读 store 里的那份在跑状态，
+             `busy` 只锁 adopt / 升级这类点两下会真的坏事的命令。 -->
         <ScanPill primary :label="t('overview.quickScan')" />
-        <button class="btn" :disabled="store.busy" @click="store.runDoctor()">
-          <AppIcon name="doctor" :size="14" />{{ t("overview.quickDoctor") }}
-        </button>
+        <ActionPill
+          :label="t('overview.quickDoctor')"
+          :running-label="t('doctor.running')"
+          :cancel-label="t('doctor.cancelHint')"
+          :canceling-label="t('doctor.canceling')"
+          :result-text="doctorResult"
+          :result-kind="store.doctorRun.flash?.kind ?? 'done'"
+          :findings-label="t('doctor.findings', { n: store.doctorRun.findings })"
+          :done="store.doctorRun.done"
+          :total="store.doctorRun.total"
+          :percent="store.doctorRun.percent"
+          :running="store.doctorRun.running"
+          :cancel-requested="store.doctorRun.cancelRequested"
+          :failed="store.doctorRun.failed"
+          icon="doctor"
+          :min-width="210"
+          @run="store.runDoctor()"
+          @cancel="store.cancelDoctor()"
+        />
       </template>
     </PageHeader>
 

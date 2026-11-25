@@ -1,10 +1,10 @@
 // Shared application state. Views read from here; every mutation goes through the Rust API.
 
 import { defineStore } from "pinia";
-import { api, onEvent, type AdoptResult, type AppError } from "../api";
+import { api, onEvent, type AdoptResult, type AppError, type CancelAck, type StartAck } from "../api";
 import type {
-  ClientRow, DetectedRow, DoctorReport, ScanPhase, ScanProgress, SkillRow, TargetRow, UpgradeCandidate,
-  UpgradeOutcome, VisibilityReport,
+  ClientRow, DetectedRow, DoctorDone, DoctorProgress, DoctorReport, Msg, ScanPhase, ScanProgress,
+  SkillRow, TargetRow, UpgradeCandidate, UpgradeOutcome, VerifyDone, VerifyProgress, VisibilityReport,
 } from "../api/types";
 import { messageFor } from "../i18n";
 
@@ -61,6 +61,33 @@ export interface ScanTask {
   newDelays: Record<string, number>;
 }
 
+/**
+ * The one in-flight 校验 or 体检, in the shape both backends push.
+ *
+ * The same reasoning that put `scan` apart from `busy` applies here: these are jobs, not requests.
+ * They outlive a click, they stream counts, and what they replace (`visibility`, `doctor`) is only
+ * swapped by a terminal event's payload — so they own this state, and both `verify()` and
+ * `runDoctor()` settle on it instead of holding the global request lock.
+ */
+export interface ActionRun {
+  running: boolean;
+  /** The phase the last push named. A terminal phase in a *progress* push does not settle the run. */
+  phase: string;
+  done: number;
+  total: number;
+  /** `null` while the backend gives no estimate — the pill shows an indeterminate bar, not a guess. */
+  percent: number | null;
+  findings: number;
+  /** A stop was asked for; the run still ends on the backend's terminal event, never on this flag. */
+  cancelRequested: boolean;
+  /** `Date.now()` at the start, so a pill can arm its cancel affordance and tail on elapsed time. */
+  startedAt: number;
+  /** The short result tail after a run settles; `null` while idle, working or failed. */
+  flash: { kind: "done" | "canceled"; findings: number } | null;
+  /** The run errored: the pill shows ✗ for 3s, `fail()` has already toasted what broke. */
+  failed: boolean;
+}
+
 const THEME_KEY = "heron.theme";
 const COLOR_MODE_KEY = "heron.colorMode";
 const PROJECTION_MODE_KEY = "heron.projectionMode";
@@ -75,6 +102,18 @@ let toastId = 0;
 let railTimer: number | undefined;
 let flashTimer: number | undefined;
 let scanWatching = false;
+// Which of the two streamed jobs a handler is talking about; each has its own state, waiters and
+// tail timers, and one set of handlers serves both.
+type RunKey = "verify" | "doctor";
+/** Resolved by whichever terminal event, error or rejected invoke ends the run. */
+const runWaiters: Record<RunKey, (() => void)[]> = { verify: [], doctor: [] };
+const runFlashTimers: Record<RunKey, number | undefined> = { verify: undefined, doctor: undefined };
+const runFailTimers: Record<RunKey, number | undefined> = { verify: undefined, doctor: undefined };
+// How long a run may go without a single push before we stop waiting for one that is never coming.
+// Generous on purpose: the point is not to time out slow work, it is to not hang the boot refresh
+// (`refreshAll` awaits `verify()`) because a job died without saying so.
+const RUN_SILENCE_MS = 30_000;
+const runWatchdogs: Record<RunKey, number | undefined> = { verify: undefined, doctor: undefined };
 // Whether the 打开时自动扫描 launch pass has already run this session. `init` can be called more
 // than once (every view guards on `ready`, but App.vue calls it unconditionally on mount), and a
 // machine-wide walk should start exactly once at boot — not again on each re-init.
@@ -86,6 +125,13 @@ function initialScan(): ScanTask {
     currentRoot: "", dirsVisited: 0, found: 0, percent: null, truncated: false, flash: null,
     railSub: 0, lastAt: 0, lastFound: 0, lastRoots: 0, lastTruncated: false,
     newCount: 0, newPaths: [], newDelays: {},
+  };
+}
+
+function initialRun(phase = ""): ActionRun {
+  return {
+    running: false, phase, done: 0, total: 0, percent: null, findings: 0,
+    cancelRequested: false, startedAt: 0, flash: null, failed: false,
   };
 }
 
@@ -211,6 +257,9 @@ export const useAppStore = defineStore("app", {
     doctor: null as DoctorReport | null,
     toasts: [] as Toast[],
     scan: initialScan(),
+    /** The two streamed jobs; the pills, the 体检 page and `await store.verify()` read only these. */
+    verifyRun: initialRun("prepare"),
+    doctorRun: initialRun("detected"),
   }),
   getters: {
     /** The light/dark actually on screen: the pinned choice, or the system's while on `system`. */
@@ -405,12 +454,156 @@ export const useAppStore = defineStore("app", {
         this.fail(e);
       }
     },
-    async verify() {
+    /**
+     * Check visibility — awaited, and streamed.
+     *
+     * The promise settles when the run reaches a terminal state, because 库 and 项目页 do
+     * `await store.verify()` and then read `store.visibility`: a caller must never be handed the
+     * previous pass's rows as if they were this answer.
+     */
+    async verify(): Promise<void> {
+      return this.startRun("verify", api.verifyStart);
+    },
+    /** Ask for the check to stop; the run still ends on the backend's terminal event, not here. */
+    async cancelVerify(): Promise<void> {
+      return this.cancelRun("verify", api.verifyCancel);
+    },
+    /**
+     * The one path both streamed jobs take: join what is already running, or start and wait.
+     *
+     * The invoke only answers whether the job was handed over (`StartAck`); every number, the result
+     * itself and the end of the run come from the events, which is why this awaits a promise that the
+     * event handlers resolve rather than the command's return value.
+     */
+    async startRun(key: RunKey, start: () => Promise<StartAck>): Promise<void> {
+      // Single flight, and it is the pill's too: a click while a run is in flight joins it, it never
+      // queues a second job behind the one already reading the same files.
+      if (this.runOf(key).running) return this.waitRun(key);
+      // In flight *before* the invoke is awaited: an event can land first, and a run not yet marked
+      // running would have its payload — and its settle — dropped, leaving the caller waiting forever.
+      Object.assign(this.runOf(key), initialRun(key === "verify" ? "prepare" : "detected"), {
+        running: true, startedAt: Date.now(),
+      });
+      this.armWatchdog(key);
+      let ack: StartAck | undefined;
       try {
-        this.visibility = await api.verify();
+        ack = await start();
       } catch (e) {
+        // A rejected invoke started nothing, so nobody else can ever settle this: fail here instead.
+        return this.failRun(key, e);
+      }
+      if (!ack?.started && !ack?.running) {
+        // `started: false, running: true` means a run exists and its events are the answer; an ack
+        // that promises neither is a refusal, and a refusal must not hang the caller either.
+        return this.failRun(key, { code: "E_INTERNAL", params: { detail: `${key} did not start` }, retryable: true });
+      }
+      return this.waitRun(key);
+    },
+    async cancelRun(key: RunKey, cancel: () => Promise<CancelAck>): Promise<void> {
+      const run = this.runOf(key);
+      if (!run.running || run.cancelRequested) return;
+      run.cancelRequested = true;
+      try {
+        await cancel();
+      } catch (e) {
+        // The stop never landed: go back to a live run rather than wait for a cancel that will not come.
+        run.cancelRequested = false;
         this.fail(e);
       }
+    },
+    /** The state behind a run key: the pills and the 体检 page bind to one of these two objects. */
+    runOf(key: RunKey): ActionRun {
+      return key === "verify" ? this.verifyRun : this.doctorRun;
+    },
+    waitRun(key: RunKey): Promise<void> {
+      // Settled already (or nothing is running): resolve now instead of registering a waiter nobody
+      // will ever resolve.
+      if (!this.runOf(key).running) return Promise.resolve();
+      return new Promise<void>((resolve) => runWaiters[key].push(resolve));
+    },
+    settleWaiters(key: RunKey) {
+      const waiters = runWaiters[key];
+      runWaiters[key] = [];
+      for (const resolve of waiters) resolve();
+    },
+    /** Re-armed by every push: one quiet half-minute of a dead job, not a slow one. */
+    armWatchdog(key: RunKey) {
+      clearTimeout(runWatchdogs[key]);
+      runWatchdogs[key] = setTimeout(() => {
+        this.failRun(key, { code: "E_INTERNAL", params: { detail: `${key} stopped reporting` }, retryable: true });
+      }, RUN_SILENCE_MS);
+    },
+    /** A `*://progress` push: counts and a phase only, never a result. */
+    applyRunProgress(key: RunKey, raw: VerifyProgress | DoctorProgress) {
+      const run = this.runOf(key);
+      if (!run.running) return;
+      if (typeof raw?.phase === "string" && raw.phase) run.phase = raw.phase;
+      run.done = numOr(raw?.done, run.done);
+      run.total = numOr(raw?.total, run.total);
+      run.findings = numOr(raw?.findings, run.findings);
+      run.percent = typeof raw?.percent === "number" && Number.isFinite(raw.percent) ? raw.percent : null;
+      this.armWatchdog(key);
+    },
+    /** The rows are the result of 校验; nothing but this push replaces what is on screen. */
+    finishVerify(raw: VerifyDone) {
+      // A stopped pass only carries the rows it actually looked at, so those get merged in:
+      // replacing the list would drop verdicts that are still correct and let the rail's 待处理
+      // count fall to whatever this partial run happened to reach. A full pass replaces, because
+      // projections that no longer exist have to leave the list with them.
+      if (raw?.phase === "canceled" && this.visibility.length > 0) {
+        const key = (r: VisibilityReport) => `${r.slug}|${r.target_id}`;
+        const byKey = new Map(this.visibility.map((r) => [key(r), r]));
+        for (const row of raw.rows ?? []) byKey.set(key(row), row);
+        this.visibility = [...byKey.values()];
+      } else if (raw?.rows) this.visibility = raw.rows;
+      this.settleRun("verify", raw?.phase === "canceled" ? "canceled" : "done",
+        numOr(raw?.findings, this.verifyRun.findings));
+    },
+    finishDoctor(raw: DoctorDone) {
+      const report = raw?.report;
+      const canceled = raw?.phase === "canceled" || report?.canceled === true;
+      if (report && Array.isArray(report.issues)) {
+        // Normalised, so the page can trust `canceled` even if an older build left it out.
+        this.doctor = { issues: report.issues, canceled };
+      }
+      this.settleRun("doctor", canceled ? "canceled" : "done", numOr(raw?.findings, this.doctorRun.findings));
+    },
+    settleRun(key: RunKey, kind: "done" | "canceled", findings: number) {
+      const run = this.runOf(key);
+      // Once only: a second terminal push (a late `phase: "done"` progress, a retried event) must not
+      // re-flash the pill or resolve the waiters a second time.
+      if (!run.running) return;
+      run.running = false;
+      run.cancelRequested = false;
+      run.failed = false;
+      run.percent = null;
+      run.phase = kind;
+      run.findings = Math.max(Math.round(findings), 0);
+      run.flash = { kind, findings: run.findings };
+      clearTimeout(runWatchdogs[key]);
+      this.settleWaiters(key);
+      clearTimeout(runFlashTimers[key]);
+      runFlashTimers[key] = setTimeout(() => { this.runOf(key).flash = null; }, 1800);
+    },
+    /**
+     * An errored run. `fail()` toasts what broke; the pill carries the ✗ for 3s so the control that
+     * was clicked says so too, and the waiters settle because no further event is coming.
+     */
+    failRun(key: RunKey, error: unknown): void {
+      const run = this.runOf(key);
+      // A run this window does not consider live (an error that arrives after the terminal push, or
+      // while nothing is running) must not put a ✗ on an idle control.
+      if (!run.running) return;
+      run.running = false;
+      run.cancelRequested = false;
+      run.percent = null;
+      run.flash = null;
+      run.failed = true;
+      clearTimeout(runWatchdogs[key]);
+      this.settleWaiters(key);
+      this.fail(error);
+      clearTimeout(runFailTimers[key]);
+      runFailTimers[key] = setTimeout(() => { this.runOf(key).failed = false; }, 3000);
     },
     /**
      * Start (or refuse to stack) the one machine-wide walk.
@@ -515,8 +708,9 @@ export const useAppStore = defineStore("app", {
         void this.loadClients();
         void this.loadTargets();
         // 扫描完成后自动体检: the fresh inventory a just-finished scan wrote is exactly what a
-        // check-up needs, so run one now when the setting is on. runDoctor owns `busy` for the
-        // duration, which is what clears the "扫描中" pill rather than the flash timeout below.
+        // check-up needs, so run one now when the setting is on. It is a job with its own `doctorRun`
+        // state, so nothing here waits for it and the 体检 controls show it running exactly as if the
+        // user had clicked 运行体检 themselves.
         if (this.autoDoctor) void this.runDoctor();
       }
       scan.flash = { kind, found: scan.found };
@@ -551,6 +745,14 @@ export const useAppStore = defineStore("app", {
       await Promise.all([
         onEvent<ScanProgress>("scan://progress", (payload) => this.applyProgress(payload)),
         onEvent<unknown>("scan://hit", (payload) => this.applyHits(payload)),
+        // The two streamed jobs ride the same bus and the same lifetime: their pills live in the
+        // topbar and on pages that come and go, so nothing may subscribe them per view.
+        onEvent<VerifyProgress>("verify://progress", (payload) => this.applyRunProgress("verify", payload)),
+        onEvent<VerifyDone>("verify://done", (payload) => this.finishVerify(payload)),
+        onEvent<Msg>("verify://error", (payload) => this.failRun("verify", payload)),
+        onEvent<DoctorProgress>("doctor://progress", (payload) => this.applyRunProgress("doctor", payload)),
+        onEvent<DoctorDone>("doctor://done", (payload) => this.finishDoctor(payload)),
+        onEvent<Msg>("doctor://error", (payload) => this.failRun("doctor", payload)),
       ]);
     },
     /**
@@ -628,15 +830,15 @@ export const useAppStore = defineStore("app", {
       }
       return outcomes;
     },
-    async runDoctor() {
-      this.busy = true;
-      try {
-        this.doctor = await api.doctor();
-      } catch (e) {
-        this.fail(e);
-      } finally {
-        this.busy = false;
-      }
+    /**
+     * Run the check-up: the same streamed job as `verify()`, so `busy` stays what it always meant —
+     * the lock on the request-shaped commands that genuinely cannot be clicked twice.
+     */
+    async runDoctor(): Promise<void> {
+      return this.startRun("doctor", api.doctorStart);
+    },
+    async cancelDoctor(): Promise<void> {
+      return this.cancelRun("doctor", api.doctorCancel);
     },
   },
 });

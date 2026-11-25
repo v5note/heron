@@ -295,8 +295,8 @@ const SOURCES = [
 /* ---- 市场示例结果（原型演示数据，字段与真实搜索结果一致） ---- */
 const RESULTS = {
   skills_sh:[
-    {name:'pdf', owner:'anthropics/skills', sum:'抽取、合并、填写 PDF 表单，含扫描件与 OCR 的常用流程', ver:'1.4.2', dl:'18.2k',
-     page:'https://www.skills.sh/anthropics/skills/pdf', git:'https://github.com/anthropics/skills', sub:'pdf'},
+    {name:'wechat-mp', owner:'anthropics/skills', sum:'公众号内容工坊：排版、发文与配图生成，含贴图与长文两种产出', ver:'1.4.2', dl:'18.2k',
+     page:'https://www.skills.sh/anthropics/skills/wechat-mp', git:'https://github.com/anthropics/skills', sub:'wechat-mp'},
     {name:'code-review', owner:'anthropics/skills', sum:'按仓库既有规范逐文件审阅，输出分级的意见清单', ver:'0.7.3', dl:'9,140',
      page:'https://www.skills.sh/anthropics/skills/code-review', git:'https://github.com/anthropics/skills', sub:'code-review'},
     {name:'docx', owner:'anthropics/skills', sum:'读写 .docx，保留批注与修订记录，生成规范报告', ver:'0.9.0', dl:'12.7k',
@@ -325,8 +325,8 @@ const RESULTS = {
      page:'https://www.modelscope.cn/skills/modelscope-ai/skills/model-lookup', git:'https://github.com/modelscope-ai/skills', sub:'model-lookup'},
     {name:'dataset-inspect', owner:'modelscope-ai/data', sum:'读数据集卡片与样本，输出字段分布与缺失率', ver:'0.3.2', dl:'5,820',
      page:'https://www.modelscope.cn/skills/modelscope-ai/data/dataset-inspect', git:'https://github.com/modelscope-ai/data', sub:'dataset-inspect'},
-    {name:'pdf-extractor', owner:'modelscope-ai/tools', sum:'版面对象抽取，保留表格与阅读顺序', ver:'1.0.1', dl:'2,044',
-     page:'https://www.modelscope.cn/skills/modelscope-ai/tools/pdf-extractor', git:'https://github.com/modelscope-ai/tools', sub:'pdf-extractor'}
+    {name:'wechat-mp-extract', owner:'modelscope-ai/tools', sum:'把 Word 与网页正文导入成公众号草稿，保留表格与阅读顺序', ver:'1.0.1', dl:'2,044',
+     page:'https://www.modelscope.cn/skills/modelscope-ai/tools/wechat-mp-extract', git:'https://github.com/modelscope-ai/tools', sub:'wechat-mp-extract'}
   ]
 };
 
@@ -335,7 +335,7 @@ const WEB_RESULTS = {
   qoder:[
     {name:'frontend-design', owner:'qoder/marketplace', sum:'网页里给出的设计稿转组件流程，未公开仓库地址', url:'https://qoder.com/zh/marketplace/frontend-design'},
     {name:'unit-test-gen', owner:'qoder/marketplace', sum:'按 IDE 上下文生成单测，条目页未标注 git 来源', url:'https://qoder.com/zh/marketplace/unit-test-gen'},
-    {name:'pdf', owner:'qoder/marketplace', sum:'与 skills.sh 同名，需自行确认上游仓库后再安装', url:'https://qoder.com/zh/marketplace?q=pdf'}
+    {name:'wechat-mp', owner:'qoder/marketplace', sum:'与 skills.sh 同名，需自行确认上游仓库后再安装', url:'https://qoder.com/zh/marketplace?q=wechat-mp'}
   ],
   skillsmp:[
     {name:'skill-index', owner:'skillsmp.com', sum:'聚合索引页，条目多但缺少搜索接口与稳定地址', url:'https://skillsmp.com/skills'},
@@ -345,8 +345,8 @@ const WEB_RESULTS = {
 
 /* ---- 收藏：github / gitee 开源 Skill ---- */
 const FAVS = [
-  {name:'pdf', host:'github.com', url:'https://github.com/anthropics/skills/tree/main/pdf', sub:'pdf',
-   desc:'抽取、合并、填写 PDF 表单；含扫描件 OCR 与批注读取。', added:'2026-11-18', state:'installed', ver:'1.4.2'},
+  {name:'wechat-mp', host:'github.com', url:'https://github.com/anthropics/skills/tree/main/wechat-mp', sub:'wechat-mp',
+   desc:'公众号排版、发文与配图生成；含首图、小图与长文两种产出。', added:'2026-11-18', state:'installed', ver:'1.4.2'},
   {name:'agent-skills', host:'gitee.com', url:'https://gitee.com/skillcraft/agent-skills', sub:null,
    desc:'中文社区整理的一揽子 Skill：tdd、research、docx 等，仓库内多个子目录。', added:'2026-11-19', state:'absent', ver:null},
   {name:'code-review', host:'github.com', url:'https://github.com/oraios/skills/tree/main/code-review', sub:'code-review',
@@ -544,8 +544,8 @@ const FAVS = [
 
               <div v-if="addOpen" class="addform h-in">
                 <div class="grid">
-                  <label class="fl">名称<input class="h-input" v-model.trim="nf.name" placeholder="pdf"></label>
-                  <label class="fl">仓库地址（github / gitee）<input class="h-input mono" v-model.trim="nf.url" placeholder="https://github.com/owner/repo/tree/main/pdf"></label>
+                  <label class="fl">名称<input class="h-input" v-model.trim="nf.name" placeholder="wechat-mp"></label>
+                  <label class="fl">仓库地址（github / gitee）<input class="h-input mono" v-model.trim="nf.url" placeholder="https://github.com/owner/repo/tree/main/wechat-mp"></label>
                 </div>
                 <label class="fl">描述<input class="h-input" v-model.trim="nf.desc" placeholder="一句话说明这个 Skill 干什么用"></label>
                 <div style="display:flex;align-items:center;gap:8px">
@@ -652,7 +652,7 @@ createApp({
     });
     const toasts = ref([]);
     let tid = 0;
-    /* 原型深链：#src=qoder&pane=favs&q=pdf —— 方便逐屏核对，不影响默认视图 */
+    /* 原型深链：#src=qoder&pane=favs&q=wechat-mp —— 方便逐屏核对，不影响默认视图 */
     const hs = new URLSearchParams((location.hash || '').replace(/^#/, ''));
     if(hs.get('src') && SOURCES.some(x => x.id === hs.get('src'))) s.curId = hs.get('src');
     if(hs.get('pane') === 'favs') s.pane = 'favs';

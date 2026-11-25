@@ -701,13 +701,26 @@ fn cmd_install(
             println!("{}", serde_json::to_string_pretty(&preview).unwrap());
         } else {
             println!("source   {}", heron_source::url::describe(&preview.source));
-            println!("skill    {}", preview.selected.as_deref().unwrap_or("-"));
+            match preview.selected.as_deref() {
+                Some(skill) => println!("skill    {skill}"),
+                None => println!(
+                    "skill    (not chosen - {} in this repository)",
+                    preview.available.len()
+                ),
+            }
             println!("slug     {}", preview.slug);
             println!(
                 "commit   {}",
                 &preview.commit[..8.min(preview.commit.len())]
             );
-            if preview.available.len() > 1 {
+            if preview.selected.is_none() {
+                // Several genuinely different skills share the repository. Listing them beats
+                // guessing, and beats telling the user to go find the directory name by hand.
+                println!("choose one with --subpath:");
+                for item in &preview.available {
+                    println!("  {}", if item.is_empty() { "." } else { item });
+                }
+            } else if preview.available.len() > 1 {
                 println!("also available:");
                 for item in preview
                     .available

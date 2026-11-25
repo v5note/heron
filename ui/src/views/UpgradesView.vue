@@ -53,6 +53,13 @@ function toggle(slug: string) {
     ? selected.value.filter((s) => s !== slug)
     : [...selected.value, slug];
 }
+
+// A full SHA is 40 unbreakable mono characters (~290px). Two of them, side by side, put the
+// table's minimum width past the 900px window floor, so the whole page gained a sideways
+// scrollbar. Git's own convention is the short form, and the full hash stays on hover.
+function shortSha(sha: string | null) {
+  return sha ? sha.slice(0, 8) : "—";
+}
 </script>
 
 <template>
@@ -69,23 +76,23 @@ function toggle(slug: string) {
     </PageHeader>
 
     <p v-if="!store.upgrades.length" class="empty">{{ t("common.empty") }}</p>
-    <div v-else class="card" style="padding: 0 4px">
+    <div v-else class="card upg-card">
       <table class="table">
         <thead>
           <tr>
-            <th style="width: 34px" />
-            <th>{{ t("upgrades.slug") }}</th>
-            <th>{{ t("upgrades.state") }}</th>
-            <th>{{ t("upgrades.installed") }}</th>
-            <th>{{ t("upgrades.baseline") }}</th>
-            <th>{{ t("upgrades.latest") }}</th>
-            <th>{{ t("upgrades.source") }}</th>
-            <th />
+            <th class="c-check" />
+            <th class="c-slug">{{ t("upgrades.slug") }}</th>
+            <th class="c-state">{{ t("upgrades.state") }}</th>
+            <th class="c-ver">{{ t("upgrades.installed") }}</th>
+            <th class="c-sha">{{ t("upgrades.baseline") }}</th>
+            <th class="c-sha">{{ t("upgrades.latest") }}</th>
+            <th class="c-source">{{ t("upgrades.source") }}</th>
+            <th class="c-act" />
           </tr>
         </thead>
         <tbody>
           <tr v-for="candidate in store.upgrades" :key="candidate.slug" :class="{ clickable: candidate.state === 'diverged' }">
-            <td>
+            <td class="c-check">
               <input
                 type="checkbox"
                 :checked="selected.includes(candidate.slug)"
@@ -93,13 +100,13 @@ function toggle(slug: string) {
                 @change="toggle(candidate.slug)"
               />
             </td>
-            <td><b>{{ candidate.slug }}</b></td>
-            <td><StateChip :state="candidate.state" labels="upgrades.states" /></td>
-            <td class="mono">{{ candidate.installed || "—" }}</td>
-            <td class="mono">{{ candidate.baseline || "—" }}</td>
-            <td class="mono">{{ candidate.latest || "—" }}</td>
-            <td class="path">{{ candidate.source || "—" }}</td>
-            <td style="width: 110px; text-align: right">
+            <td class="c-slug"><b :title="candidate.slug">{{ candidate.slug }}</b></td>
+            <td class="c-state"><StateChip :state="candidate.state" labels="upgrades.states" /></td>
+            <td class="c-ver mono">{{ candidate.installed || "—" }}</td>
+            <td class="c-sha mono" :title="candidate.baseline || ''">{{ shortSha(candidate.baseline) }}</td>
+            <td class="c-sha mono" :title="candidate.latest || ''">{{ shortSha(candidate.latest) }}</td>
+            <td class="path c-source">{{ candidate.source || "—" }}</td>
+            <td class="c-act">
               <button v-if="candidate.state === 'diverged'" class="btn sm" @click="editing = candidate.slug">
                 {{ t("upgrades.merge") }}
               </button>
@@ -130,3 +137,29 @@ function toggle(slug: string) {
     </AppOverlay>
   </section>
 </template>
+
+<style scoped>
+/* Two things were widening this table past the 900px window floor: a full SHA is 40 unbreakable mono
+   characters (~290px a column, see shortSha), and a source path never stops asking for room. Fixed
+   layout is what makes the fix structural rather than a guess about the font — the table is pinned to
+   the card's width, so a column that cannot fit clips instead of dragging the page header and the
+   sidebar sideways with it. */
+.upg-card { padding: 0 4px; }
+.upg-card .table { table-layout: fixed; }
+.upg-card .table th,
+.upg-card .table td { padding-left: 10px; padding-right: 10px; }
+/* Only the six columns whose content has a known size are sized. Skill and Source are left unsized,
+   so under fixed layout they split whatever the window has left — the name grows on a wide screen and
+   the path gives way first on a narrow one. */
+.c-check { width: 38px; }
+.c-state { width: 150px; overflow: hidden; white-space: nowrap; }
+.c-ver { width: 76px; }
+.c-sha { width: 82px; }
+.c-act { width: 110px; text-align: right; overflow: hidden; }
+.c-slug, .c-ver, .c-sha { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Below this the path would be ellipsised to a handful of characters, and it is spelled out in full
+   on the Sources page, so it stops taking a column and the Skill name takes it back. */
+@media (max-width: 1100px) {
+  .c-source { display: none; }
+}
+</style>

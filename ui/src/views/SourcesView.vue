@@ -13,6 +13,7 @@ import type { FavoriteRow, InstallPlan, InstallPreview, MarketInfo, MarketItem }
 import { useAppStore } from "../stores/app";
 import AppIcon from "../components/AppIcon.vue";
 import AppOverlay from "../components/AppOverlay.vue";
+import FloatBar from "../components/FloatBar.vue";
 
 const store = useAppStore();
 const { t } = useI18n();
@@ -280,15 +281,37 @@ async function installRow(row: ResultRow) {
   }
 }
 
-async function installFavorite(fav: FavoriteRow) {
+async function installFavorite(fav: FavoriteRow, subpath?: string) {
   busyKey.value = `fav:${fav.id}`;
   installingFav.value = fav.id;
   try {
-    const res = await doInstall(fav.url, undefined, fav.name);
+    const res = await doInstall(fav.url, subpath, fav.name);
     const cached = favPreviews[fav.id];
     const slug = (res as { slug?: string })?.slug;
-    if (cached) favPreviews[fav.id] = { ...cached, slug: slug ?? cached.slug, existing: true };
+    if (cached)
+      favPreviews[fav.id] = {
+        ...cached,
+        slug: slug ?? cached.slug,
+        // 选定后要立刻把落点画进计划，否则用户看不出自己刚点了哪一个。
+        selected: subpath ?? cached.selected,
+        existing: true,
+      };
   } catch (e) {
+    // 没先展开预览就直接装，后端会把歧义当错误抛回来。这种情况不是失败，是缺一次选择：
+    // 补上 dry-run 让候选面板出现，而不是给用户一条看不懂的报错。
+    if ((e as { code?: string })?.code === "E_SOURCE_AMBIGUOUS") {
+      try {
+        favPreviews[fav.id] = (await api.install(fav.url, {
+          dryRun: true,
+        })) as InstallPreview;
+        const next = new Set(openPlan.value);
+        next.add(`fav:${fav.id}`);
+        openPlan.value = next;
+        return;
+      } catch {
+        /* 预览也失败了，那就报原始错误 */
+      }
+    }
     store.fail(e);
   } finally {
     busyKey.value = null;
@@ -541,6 +564,15 @@ function favInstalled(fav: FavoriteRow): boolean {
   return slug ? installed.value.has(slug) : false;
 }
 
+/**
+ * 后端没能替我们定下唯一 skill：仓库里有好几个真正的候选，而作者没有声明哪个是源。
+ * 这不是错误，是一次选择——把目录列表摊开让用户点，而不是逼他去手写 tree 地址。
+ */
+function favNeedsChoice(fav: FavoriteRow): boolean {
+  const p = favPreviews[fav.id];
+  return !!p && p.selected === null && p.available.length > 1;
+}
+
 /** 收藏展开的安装计划：命令行 + 后端 dry-run 算出的真实落点。 */
 function favPlanHtml(fav: FavoriteRow): string {
   const p = favPreviews[fav.id];
@@ -553,7 +585,9 @@ function favPlanHtml(fav: FavoriteRow): string {
     : ` <span class="mut">${t("sources.planDefaultRef")}</span>`;
   const sub = p.selected
     ? ` · ${t("sources.planSubpath")} <b>${esc(p.selected)}</b>`
-    : "";
+    : p.available.length > 1
+      ? ` · <b>${t("sources.planUnchosen", { n: p.available.length })}</b>`
+      : "";
   // 整仓安装：这个 skill 的代码会回到仓库根去找同级目录（huashu-motion 的 bin/om 就引用
   // ../../../cli/om.js），只导出 skill 目录会装出一个跑不起来的东西。
   const whole = p.whole_repo ? R(t("sources.planScope"), t("sources.planWholeRepo")) : "";
@@ -947,6 +981,19 @@ function stagger(i: number): string {
             class="h-plan"
             v-html="favPlanHtml(f)"
           ></div>
+          <!-- 仓库里有多个候选而作者没声明源：让用户点一下，而不是手写子路径 -->
+          <div v-if="openPlan.has(`fav:${f.id}`) && favNeedsChoice(f)" class="h-pick">
+            <span class="h-pick-hint">{{ t("sources.pickSkill") }}</span>
+            <button
+              v-for="cand in favPreviews[f.id].available"
+              :key="cand"
+              class="btn sm"
+              :disabled="busyKey === `fav:${f.id}`"
+              @click="installFavorite(f, cand)"
+            >
+              {{ cand || "." }}
+            </button>
+          </div>
         </div>
         <div v-if="!favorites.length" class="h-empty">
           {{ t("sources.favEmpty") }}<br />
@@ -1041,6 +1088,8 @@ function stagger(i: number): string {
         </div>
       </div>
     </AppOverlay>
+
+    <FloatBar :hidden="drawer" />
   </div>
 </template>
 
@@ -1164,6 +1213,11 @@ function stagger(i: number): string {
 .h-plan :deep(.k) { color: var(--faint); display: inline-block; min-width: 9ch; }
 .h-plan :deep(.v) { color: var(--text); }
 .h-plan :deep(.bad) { color: var(--bad); }
+
+/* 候选选择器：仓库里有多个 skill 时用真按钮排开，v-html 里的计划文本挂不了事件 */
+.h-pick { grid-column: 1 / -1; margin-top: 8px; padding: 10px 12px; display: flex; flex-wrap: wrap; align-items: center; gap: 7px; background: var(--raised); border: 1px dashed color-mix(in srgb, var(--accent) 42%, var(--line)); border-radius: 8px; }
+.h-pick-hint { font-size: 12.5px; color: var(--dim); margin-right: 2px; }
+.h-pick .btn { font-family: var(--font-mono); font-size: 12px; }
 
 .badge.ok { display: inline-flex; align-items: center; gap: 4px; height: 19px; padding: 0 7px; border-radius: 999px; background: color-mix(in srgb, var(--good) 14%, transparent); color: var(--good); font-size: 11px; font-weight: 600; }
 .badge.ok svg { width: 11px; height: 11px; stroke: currentColor; fill: none; stroke-width: 2.4; }

@@ -870,6 +870,9 @@ Heron
   * `plugin.json` 的 `skills[]` 相对路径直接作为 Skill 目录，指向不存在 `SKILL.md` 的条目跳过。
 * **兜底扫描排除客户端投影副本**：顶层点目录（`.trae/`、`.claude/`、`.doubao/` …）下的 `SKILL.md`
   视为作者预先投影的副本，仅在仓库中没有其它候选时才采用——投影是 Heron 的职责，不该被当成来源。
+* **歧义是可预览的待选态**：多个候选且无人声明源时，`preview` 返回 `selected = null` + 完整 `available`
+  候选列表（CLI 打印、GUI 渲染成可点按钮），安装才报 `E_SOURCE_AMBIGUOUS`。把候选丢回去让用户
+  手写 `tree` 地址，等于让工具把已经算出来的东西再要一遍。
 * **Heron 原生格式**（简洁、面向 Skill）：
 
 ```toml

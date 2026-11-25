@@ -207,7 +207,12 @@ mod tests {
             Visibility::NotScanned
         );
         assert_eq!(
-            classify(&mk("/home/u/.claude/skills/wechat-mp", &["wechat-mp"], true)).unwrap(),
+            classify(&mk(
+                "/home/u/.claude/skills/wechat-mp",
+                &["wechat-mp"],
+                true
+            ))
+            .unwrap(),
             Visibility::Shadowed {
                 by: "wechat-mp".to_owned()
             }

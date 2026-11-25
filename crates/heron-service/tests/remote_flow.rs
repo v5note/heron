@@ -198,7 +198,7 @@ fn prefetch_reports_an_unreachable_remote_instead_of_hanging() {
 }
 
 #[test]
-fn ambiguous_repo_without_subpath_is_reported() {
+fn ambiguous_repo_previews_a_choice_instead_of_failing() {
     if !git_available() {
         return;
     }
@@ -209,13 +209,66 @@ fn ambiguous_repo_without_subpath_is_reported() {
         input: remote.url(),
         ..Default::default()
     };
-    let err = install::preview(&ctx, &req).unwrap_err();
-    assert_eq!(err.code(), "E_SOURCE_AMBIGUOUS");
-    let msg = err.as_msg();
+    // Tier C: two distinct skills is a question, not a dead end. Throwing the whole preview away
+    // here is what used to force the user to hand-write a tree URL.
+    let preview = install::preview(&ctx, &req).unwrap();
+    assert_eq!(preview.selected, None, "nothing is chosen for them");
     assert_eq!(
-        msg.params.get("count").map(String::as_str),
+        preview.available,
+        vec!["skills/tdd".to_string(), "skills/wechat-mp".to_string()],
+        "every candidate is offered"
+    );
+}
+
+#[test]
+fn ambiguous_repo_install_without_a_choice_is_refused() {
+    if !git_available() {
+        return;
+    }
+    let remote = Remote::new("x");
+    let env = Env::new();
+    let mut ctx = env.ctx();
+    let req = InstallRequest {
+        input: remote.url(),
+        ..Default::default()
+    };
+    let err = install::install(&mut ctx, &req).unwrap_err();
+    assert_eq!(err.code(), "E_SOURCE_AMBIGUOUS");
+    assert_eq!(
+        err.as_msg().params.get("count").map(String::as_str),
         Some("2"),
-        "both skills listed"
+        "the refusal names how many there are"
+    );
+}
+
+#[test]
+fn choosing_a_candidate_installs_only_that_skill() {
+    if !git_available() {
+        return;
+    }
+    let remote = Remote::new("x");
+    let env = Env::new();
+    let mut ctx = env.ctx();
+    let req = InstallRequest {
+        input: remote.url(),
+        subpath_override: Some("skills/tdd".into()),
+        ..Default::default()
+    };
+    let preview = install::preview(&ctx, &req).unwrap();
+    assert_eq!(preview.selected.as_deref(), Some("skills/tdd"));
+    let report = install::install(&mut ctx, &req).unwrap();
+    assert_eq!(report.slug, "tdd");
+    // The sibling stayed in the repository: exactly one skill directory was exported.
+    let root = ctx.skill_dir_of("tdd").parent().unwrap().to_path_buf();
+    let entries: Vec<String> = std::fs::read_dir(&root)
+        .unwrap()
+        .filter_map(|e| e.ok())
+        .map(|e| e.file_name().to_string_lossy().into_owned())
+        .collect();
+    assert_eq!(
+        entries,
+        vec!["tdd".to_string()],
+        "picking one candidate must not drag its sibling in, got {entries:?}"
     );
 }
 

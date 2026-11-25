@@ -97,8 +97,13 @@ mod tests {
         assert_eq!(list(db.conn()).unwrap().len(), 1);
 
         // Same url updates in place rather than duplicating.
-        db.write(|tx| save(tx, &fav("WeChat MP renamed", "https://github.com/o/wechat-mp")))
-            .unwrap();
+        db.write(|tx| {
+            save(
+                tx,
+                &fav("WeChat MP renamed", "https://github.com/o/wechat-mp"),
+            )
+        })
+        .unwrap();
         let rows = list(db.conn()).unwrap();
         assert_eq!(rows.len(), 1);
         assert_eq!(rows[0].name, "WeChat MP renamed");

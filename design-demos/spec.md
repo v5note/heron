@@ -67,7 +67,7 @@ Heron（苍鹭）是一个 macOS 桌面应用（Tauri 2 + Vue 3），管理本�
 - 流水线：已纳管 Skill 1 / 启用落点 6 / 可升级 0；生效中的投影 0/0；被压制/坏链 0/0；共 0 处投影 0%
 - 落点状态表行（客户端/路径/已启用/状态）：heron(默认) ~/heron/skills、agents ~/.agents/skills、claude ~/.claude/skills、codex ~/.codex/skills、cursor ~/.cursor/skills、opencode ~/.config/opencode/skills
 - 扫描 6 个 root（root_total=6）：~/.claude/skills、~/.agents/skills、~/.codex/skills、~/.cursor/skills、~/.config/opencode/skills、~/.trae/skills
-- 扫描发现样例（skill 名 + 来源，演示用合理名，标注为样例）：huashu-design(claude)、pdf(codex)、lark-docs(agents)、pptx(claude)、wechat-mp(cursor)、logo-design(trae)、research(claude)、tdd(agents)、code-review(codex)、dynamic-ui(trae)、grilling(claude)、wizard(agents)…共 52 个，按 root 分批出现
+- 扫描发现样例（skill 名 + 来源，演示用合理名，标注为样例）：huashu-design(claude)、lark-docs(agents)、pptx(claude)、wechat-mp(cursor)、logo-design(trae)、research(claude)、tdd(agents)、code-review(codex)、dynamic-ui(trae)、grilling(claude)、wizard(agents)…共 52 个，按 root 分批出现
 - 顶栏按钮：扫描本机 / 校验；概览页头按钮：扫描本机 / 运行体检
 - 完成 toast：「扫描完成 · 52 个新发现 · 2.8s」→ 跳发现页；truncated 变体：「结果不完整 · 已达 50 000 目录上限」→ 排除设置
 

@@ -33,7 +33,9 @@ pub struct InstallPreview {
     pub source: url::ParsedSource,
     /// Candidate skill directories found in the repository.
     pub available: Vec<String>,
-    /// The one that would be installed.
+    /// The one that would be installed. `None` means the repository holds several distinct skills
+    /// and none of them is declared as the intended one: `available` is the choice to present, and
+    /// an install without picking from it fails with `E_SOURCE_AMBIGUOUS`.
     pub selected: Option<String>,
     pub slug: String,
     pub commit: String,
@@ -214,7 +216,10 @@ fn resolve_remote(dirs: &Dirs, req: &InstallRequest) -> Result<Resolved> {
                 Err(err) => return Err(err),
             };
             let (skill_name, layout) = match &skill_dir {
-                Some(dir) => (read_skill_name(&repo, &commit, dir), detect_layout(&repo, &commit, dir, &files)),
+                Some(dir) => (
+                    read_skill_name(&repo, &commit, dir),
+                    detect_layout(&repo, &commit, dir, &files),
+                ),
                 None => (None, heron_source::SkillLayout::Skill),
             };
             return Ok(Resolved {

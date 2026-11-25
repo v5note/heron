@@ -479,7 +479,7 @@ a{color:var(--h-accent)}
         <div v-if="!totalHits" class="h-card"><div class="h-empty">
           {{ enabledSearch.length ? '已启用来源里没有匹配 «' + query + '» 的结果。' : '请先在上方勾选至少一个来源。' }}
           <div class="h-emp-acts">
-            <button class="h-btn sm" @click="query='pdf';run()">换成 «pdf» 试试</button>
+            <button class="h-btn sm" @click="query='wechat-mp';run()">换成 «wechat-mp» 试试</button>
             <button class="h-btn sm ghost" @click="allOn()">全部来源启用</button>
             <button class="h-btn sm ghost" @click="tab='fav'">去我的收藏</button>
           </div>
@@ -548,7 +548,7 @@ a{color:var(--h-accent)}
       <div class="h-paste">
         <span class="fi"><svg viewBox="0 0 24 24"><path d="M9.5 14.5 14.5 9.5"/><path d="M8 12.5 6.2 14.3a3.2 3.2 0 0 0 4.5 4.5L12.5 17"/><path d="M16 11.5l1.8-1.8a3.2 3.2 0 0 0-4.5-4.5L11.5 7"/></svg>
           <input v-model="paste" aria-label="粘贴 Git 仓库地址" @keyup.enter="installUrl"
-                 placeholder="https://github.com/anthropics/skills/tree/main/skills/pdf"></span>
+                 placeholder="https://github.com/anthropics/skills/tree/main/skills/wechat-mp"></span>
         <button class="h-btn" @click="previewPaste">预览</button>
         <button class="h-btn primary" @click="installUrl"><svg viewBox="0 0 24 24"><path d="M12 4v11"/><path d="M7.5 10.5 12 15l4.5-4.5"/><path d="M5 19h14"/></svg>安装</button>
         <button class="h-btn ghost" @click="favFromPaste">存为收藏</button>
@@ -584,13 +584,13 @@ a{color:var(--h-accent)}
   <div class="h-drawer-b">
     <div class="h-field" :class="{bad:err.name}">
       <label for="fv-name">名称</label>
-      <input id="fv-name" v-model.trim="fv.name" placeholder="pdf-form-fill">
+      <input id="fv-name" v-model.trim="fv.name" placeholder="wechat-mp">
       <span class="hint">收藏列表与安装计划里显示的名字；留空时按解析结果自动补。</span>
       <span class="h-err" v-if="err.name">请填写名称。</span>
     </div>
     <div class="h-field" :class="{bad:err.url}">
       <label for="fv-url">仓库地址</label>
-      <input id="fv-url" v-model.trim="fv.url" @input="onUrl" placeholder="https://github.com/owner/repo/tree/main/skills/pdf">
+      <input id="fv-url" v-model.trim="fv.url" @input="onUrl" placeholder="https://github.com/owner/repo/tree/main/skills/wechat-mp">
       <span class="hint">支持 github.com 与 gitee.com，可带 /tree/分支/子路径。</span>
       <span style="display:flex;gap:7px;flex-wrap:wrap;margin-top:2px">
         <button class="h-ex" @click="fillEx('github')">github 示例</button>
@@ -634,77 +634,77 @@ const HEALTH_TEXT = {visible:'正常', shadowed:'偏慢：上次探测超过 3s�
 /* 示例结果（字段对齐后端：name / owner / summary / version / downloads / stars / url / installable） */
 const RESULTS = {
   skills_sh: [
-    {key:'pdf',           owner:'anthropics', ver:'1.4.0', dl:'12.4k', stars:'3.1k', installable:true,
-     repo:'github.com/anthropics/skills', sub:'skills/pdf', size:'38 KB',
-     url:'https://www.skills.sh/anthropics/pdf', sum:'生成与审阅 PDF：分页约定、模板填充、表单字段与页眉页脚。'},
-    {key:'pdf-extract',   owner:'docsmith',   ver:'2.0.3', dl:'5.8k',  stars:'1.2k', installable:true,
-     repo:'github.com/docsmith/skills', sub:'pdf-extract', size:'22 KB',
-     url:'https://www.skills.sh/docsmith/pdf-extract', sum:'抽取正文与表格为结构化 JSON，保留阅读顺序与标题层级。'},
-    {key:'pdf-check',     owner:'toolness',   ver:'0.6.1', dl:'2.1k',  stars:'418',  installable:true,
-     repo:'github.com/toolness/pdf-skills', sub:'check', size:'14 KB',
-     url:'https://www.skills.sh/toolness/pdf-check', sum:'校验 PDF 结构：字体嵌入、可访问性标签、页码与书签完整性。'},
-    {key:'invoice-pdf',   owner:'skillforge', ver:'1.1.0', dl:'940',   stars:'122',  installable:true,
-     repo:'github.com/skillforge/invoice-skills', sub:'pdf', size:'31 KB',
-     url:'https://www.skills.sh/skillforge/invoice-pdf', sum:'从仓库里的 CSV 渲染发票 PDF，含币种、税号与合计校验。'}
+    {key:'wechat-mp',     owner:'anthropics', ver:'1.4.0', dl:'12.4k', stars:'3.1k', installable:true,
+     repo:'github.com/anthropics/skills', sub:'skills/wechat-mp', size:'38 KB',
+     url:'https://www.skills.sh/anthropics/wechat-mp', sum:'公众号排版、发文与配图生成：首图、小图与可直接粘贴的 HTML。'},
+    {key:'wechat-mp-word',owner:'docsmith',   ver:'2.0.3', dl:'5.8k',  stars:'1.2k', installable:true,
+     repo:'github.com/docsmith/skills', sub:'wechat-mp-word', size:'22 KB',
+     url:'https://www.skills.sh/docsmith/wechat-mp-word', sum:'把 Word 正文与表格导入成公众号草稿，保留标题层级与图片顺序。'},
+    {key:'wechat-mp-lint',owner:'toolness',   ver:'0.6.1', dl:'2.1k',  stars:'418',  installable:true,
+     repo:'github.com/toolness/wechat-mp-skills', sub:'lint', size:'14 KB',
+     url:'https://www.skills.sh/toolness/wechat-mp-lint', sum:'发文前校验：字号行距、图片宽高与外链，并给出敏感词提示。'},
+    {key:'wechat-mp-list',owner:'skillforge', ver:'1.1.0', dl:'940',   stars:'122',  installable:true,
+     repo:'github.com/skillforge/mp-skills', sub:'wechat-mp-list', size:'31 KB',
+     url:'https://www.skills.sh/skillforge/wechat-mp-list', sum:'从仓库里的 CSV 榜单渲染合集图文，含条目序号、配图占位与字数校验。'}
   ],
   clawhub: [
-    {key:'pdf-merge',       owner:'clawlabs',    ver:'3.2.0', dl:'8.6k', stars:'2.0k', installable:true,
-     repo:'github.com/clawlabs/pdf-merge', sub:'.', size:'46 KB',
-     url:'https://clawhub.ai/clawlabs/pdf-merge', sum:'合并、拆分与重排页面：书签继承、页面尺寸归一与元数据保留。'},
-    {key:'pdf-ocr',         owner:'visionworks', ver:'1.0.4', dl:'4.3k', stars:'902',  installable:true,
-     repo:'github.com/visionworks/ocr-skills', sub:'pdf-ocr', size:'58 KB',
-     url:'https://clawhub.ai/visionworks/pdf-ocr', sum:'扫描页转可搜索 PDF：本地 tesseract 后端，中英混排识别。'},
-    {key:'pdf-redact',      owner:'privax',      ver:'0.8.0', dl:'1.7k', stars:'265',  installable:true,
+    {key:'wechat-mp-merge', owner:'clawlabs',    ver:'3.2.0', dl:'8.6k', stars:'2.0k', installable:true,
+     repo:'github.com/clawlabs/wechat-mp-merge', sub:'.', size:'46 KB',
+     url:'https://clawhub.ai/clawlabs/wechat-mp-merge', sum:'多篇草稿合并成一篇：栏目顺序、图片重排与封面自动选取。'},
+    {key:'wechat-mp-ocr',   owner:'visionworks', ver:'1.0.4', dl:'4.3k', stars:'902',  installable:true,
+     repo:'github.com/visionworks/ocr-skills', sub:'wechat-mp-ocr', size:'58 KB',
+     url:'https://clawhub.ai/visionworks/wechat-mp-ocr', sum:'长图与截图识字回填草稿：本地 OCR 后端，中英混排识别。'},
+    {key:'wechat-mp-redact',owner:'privax',      ver:'0.8.0', dl:'1.7k', stars:'265',  installable:true,
      repo:'github.com/privax/redact', sub:'.', size:'19 KB',
-     url:'https://clawhub.ai/privax/pdf-redact', sum:'按规则批量涂抹证件号、邮箱等敏感串，并导出涂抹审计日志。'},
-    {key:'pdf-annotate-cloud', owner:'clawlabs', ver:'1.2.1', dl:'3.0k', stars:'611',  installable:false,
+     url:'https://clawhub.ai/privax/wechat-mp-redact', sum:'按规则批量涂抹手机号、微信号等敏感串，并导出脱敏审计日志。'},
+    {key:'wechat-mp-review',owner:'clawlabs',    ver:'1.2.1', dl:'3.0k', stars:'611',  installable:false,
      repo:'—（来源未公开仓库）', sub:'—', size:'—',
-     url:'https://clawhub.ai/clawlabs/pdf-annotate-cloud', sum:'云端批注与协同审阅，只提供网页端下载包。'}
+     url:'https://clawhub.ai/clawlabs/wechat-mp-review', sum:'云端协作审阅公众号稿，只提供网页端下载包。'}
   ],
   skillhub_cn: [
-    {key:'cn-contract-pdf', owner:'hanlab',     ver:'1.2.1', dl:'6.1k', stars:'1.4k', installable:true,
-     repo:'github.com/hanlab/cn-doc-skills', sub:'contract-pdf', size:'27 KB',
-     url:'https://skillhub.cn/hanlab/cn-contract-pdf', sum:'中文合同排版：宋黑混排、条款编号、骑缝章位置与页眉水印。'},
-    {key:'pdf-translate',   owner:'lingvault',  ver:'0.9.7', dl:'3.4k', stars:'613',  installable:true,
-     repo:'github.com/lingvault/pdf-translate', sub:'.', size:'35 KB',
-     url:'https://skillhub.cn/lingvault/pdf-translate', sum:'整篇 PDF 中英互译并回排版，保留图表与脚注位置。'},
-    {key:'pdf-slides-cn',   owner:'slidecraft', ver:'2.3.0', dl:'2.2k', stars:'402',  installable:true,
-     repo:'github.com/slidecraft/md-to-pdf', sub:'slides-cn', size:'21 KB',
-     url:'https://skillhub.cn/slidecraft/pdf-slides-cn', sum:'把 Markdown 大纲渲染成 16:9 PDF 讲义，含中文字体子集。'}
+    {key:'wechat-mp-cn',    owner:'hanlab',     ver:'1.2.1', dl:'6.1k', stars:'1.4k', installable:true,
+     repo:'github.com/hanlab/cn-doc-skills', sub:'wechat-mp-cn', size:'27 KB',
+     url:'https://skillhub.cn/hanlab/wechat-mp-cn', sum:'中文公众号版式：宋黑混排、小标题编号、页脚与引导关注水印。'},
+    {key:'wechat-mp-trans', owner:'lingvault',  ver:'0.9.7', dl:'3.4k', stars:'613',  installable:true,
+     repo:'github.com/lingvault/wechat-mp-trans', sub:'.', size:'35 KB',
+     url:'https://skillhub.cn/lingvault/wechat-mp-trans', sum:'整篇公众号稿中英互译并回排版，保留图表与脚注位置。'},
+    {key:'wechat-mp-slide', owner:'slidecraft', ver:'2.3.0', dl:'2.2k', stars:'402',  installable:true,
+     repo:'github.com/slidecraft/md-to-mp', sub:'slides-cn', size:'21 KB',
+     url:'https://skillhub.cn/slidecraft/wechat-mp-slide', sum:'把 Markdown 大纲渲染成公众号图文卡片与 16:9 首图，含中文字体子集。'}
   ],
   modelscope: [
-    {key:'pdf-parse-ms',    owner:'openxlab', ver:'1.6.2', dl:'15.3k', stars:'4.2k', installable:true,
-     repo:'github.com/modelscope/pdf-parse-skills', sub:'parse', size:'64 KB',
-     url:'https://www.modelscope.cn/skills/openxlab/pdf-parse-ms', sum:'多模态版面解析：布局还原、公式转 LaTeX、表格转 Markdown。'},
-    {key:'pdf-summarize-cn',owner:'xlm-team', ver:'0.5.0', dl:'2.9k',  stars:'377',  installable:true,
+    {key:'wechat-mp-parse', owner:'openxlab', ver:'1.6.2', dl:'15.3k', stars:'4.2k', installable:true,
+     repo:'github.com/modelscope/wechat-mp-skills', sub:'parse', size:'64 KB',
+     url:'https://www.modelscope.cn/skills/openxlab/wechat-mp-parse', sum:'版面还原：把已发布的公众号文章反解成可编辑草稿与 Markdown。'},
+    {key:'wechat-mp-digest',owner:'xlm-team', ver:'0.5.0', dl:'2.9k',  stars:'377',  installable:true,
      repo:'github.com/xlm-team/doc-skills', sub:'summarize-cn', size:'18 KB',
-     url:'https://www.modelscope.cn/skills/xlm-team/pdf-summarize-cn', sum:'长文档分段摘要与要点抽取，支持 128k 上下文。'},
-    {key:'doc2pdf',         owner:'stampylab', ver:'1.0.1', dl:'1.1k',  stars:'154',  installable:true,
-     repo:'github.com/stampylab/office2pdf', sub:'.', size:'42 KB',
-     url:'https://www.modelscope.cn/skills/stampylab/doc2pdf', sum:'Office 文档批量转 PDF，保留页边距、脚注与目录域。'}
+     url:'https://www.modelscope.cn/skills/xlm-team/wechat-mp-digest', sum:'长文分段摘要与要点抽取，支持 128k 上下文。'},
+    {key:'wechat-mp-conv',  owner:'stampylab', ver:'1.0.1', dl:'1.1k', stars:'154',  installable:true,
+     repo:'github.com/stampylab/office2mp', sub:'.', size:'42 KB',
+     url:'https://www.modelscope.cn/skills/stampylab/wechat-mp-conv', sum:'Office 文档批量转公众号草稿，保留脚注与目录结构。'}
   ]
 };
 
 createApp({
   data(){return{
-    query:'pdf', paste:'', tab:'all', plan:'', drawer:'', elapsed:0, perCap:5,
+    query:'wechat-mp', paste:'', tab:'all', plan:'', drawer:'', elapsed:0, perCap:5,
     busy:false, probing:false, fail:false, probeAge:'3 分钟前', sug:'',
     sources:SOURCES, results:RESULTS, installed:{},
     err:{name:false,url:false},
     fv:{name:'',url:'',desc:''},
     favorites:[
-      {name:'pdf · anthropics/skills', url:'https://github.com/anthropics/skills/tree/main/skills/pdf', kind:'repo',
-       owner:'anthropics', repo:'skills', branch:'main', sub:'skills/pdf', slug:'pdf',
-       desc:'官方 PDF Skill：分页、模板与表单字段约定，随上游仓库更新。', addedAt:'2026-11-18'},
+      {name:'wechat-mp · anthropics/skills', url:'https://github.com/anthropics/skills/tree/main/skills/wechat-mp', kind:'repo',
+       owner:'anthropics', repo:'skills', branch:'main', sub:'skills/wechat-mp', slug:'wechat-mp',
+       desc:'官方公众号内容工坊 Skill：排版、首图与配图约定，随上游仓库更新。', addedAt:'2026-11-18'},
       {name:'cn-doc-skills · hanlab', url:'https://github.com/hanlab/cn-doc-skills', kind:'repo',
        owner:'hanlab', repo:'cn-doc-skills', branch:'默认分支', sub:'.', slug:'cn-doc-skills',
        desc:'中文文档排版合集：合同、发票、公文页眉与骑缝章规范。', addedAt:'2026-11-15'},
       {name:'doc-skills · 观星阁', url:'https://gitee.com/guanxingge/doc-skills', kind:'repo',
        owner:'guanxingge', repo:'doc-skills', branch:'默认分支', sub:'.', slug:'doc-skills',
        desc:'gitee 上的中文文档 Skill：报告模板、目录与图表编号。', addedAt:'2026-11-09'},
-      {name:'pdf-extract · docsmith', url:'https://github.com/docsmith/skills/tree/main/pdf-extract', kind:'repo',
-       owner:'docsmith', repo:'skills', branch:'main', sub:'pdf-extract', slug:'pdf-extract',
-       desc:'正文与表格抽取为 JSON，含 CLI 与 Skill 两种形态。', addedAt:'2026-10-30'}
+      {name:'wechat-mp-word · docsmith', url:'https://github.com/docsmith/skills/tree/main/wechat-mp-word', kind:'repo',
+       owner:'docsmith', repo:'skills', branch:'main', sub:'wechat-mp-word', slug:'wechat-mp-word',
+       desc:'把 Word 正文与表格导入成公众号草稿，含 CLI 与 Skill 两种形态。', addedAt:'2026-10-30'}
     ],
     toasts:[], seq:0
   }},
@@ -883,10 +883,10 @@ createApp({
     closeDrawer(){this.drawer=''},
     fillEx(k){
       this.fv.url = k==='github'
-        ? 'https://github.com/anthropics/skills/tree/main/skills/pdf-form-fill'
+        ? 'https://github.com/anthropics/skills/tree/main/skills/wechat-mp-cover'
         : 'https://gitee.com/guanxingge/doc-skills/tree/master/report-cn';
       if(!this.fv.desc.trim())this.fv.desc = k==='github'
-        ? '官方 skills 仓库里的 PDF 表单填写子路径，随上游更新。'
+        ? '官方 skills 仓库里的公众号首图与配图子路径，随上游更新。'
         : 'gitee 上的中文报告模板 Skill，含目录与图表编号。';
       this.onUrl();
     },

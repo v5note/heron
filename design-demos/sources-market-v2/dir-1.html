@@ -315,7 +315,7 @@ textarea.h-input{height:auto;padding:8px 10px;line-height:1.5;resize:vertical;fo
             <h3><span class="i" v-html="ICON.install"></span>粘贴地址安装</h3>
             <p>不经过市场也能装：粘贴 github / gitee 仓库地址（可到子路径）。</p>
             <div class="h-paste">
-              <input class="h-input" v-model="paste" @keyup.enter="installPaste" placeholder="https://github.com/acme/skills/tree/main/pdf-forms">
+              <input class="h-input" v-model="paste" @keyup.enter="installPaste" placeholder="https://github.com/acme/skills/tree/main/wechat-mp">
               <button class="h-btn primary" :disabled="!paste.trim()" @click="installPaste">安装</button>
             </div>
           </div>
@@ -610,7 +610,7 @@ const SOURCES = [
 /* ================= 各来源的示例搜索结果 ================= */
 const RESULTS = {
   skills_sh:[
-    {name:'pdf-forms',owner:'anthropics/skills',summary:'填表、合并、拆分 PDF，保留表单域与批注',version:'1.4.2',downloads:128406,stars:3921,rev:'1f3a9c2'},
+    {name:'wechat-mp',owner:'anthropics/skills',summary:'公众号排版、发文与配图生成，导出可直接粘贴的 HTML',version:'1.4.2',downloads:128406,stars:3921,rev:'1f3a9c2'},
     {name:'repo-map',owner:'oss-agent/toolkit',summary:'扫描仓库结构，输出模块依赖与入口地图',version:'2.1.0',downloads:96215,stars:2860,rev:'84b1d07'},
     {name:'commit-lint',owner:'oss-agent/toolkit',summary:'按约定式提交校验 message，顺带起草 changelog',version:'0.9.1',downloads:42880,stars:1204,rev:'c2e0f55'},
     {name:'skill-creator',owner:'acme/skill-lab',summary:'把一段流程说明拆成 SKILL.md + 脚本 + 校验清单',version:'1.0.7',downloads:30512,stars:812,rev:'77aa1e3'},
@@ -641,7 +641,7 @@ const RESULTS = {
 };
 /* ================= 收藏（github / gitee 地址） ================= */
 const FAVS = [
-  {id:'f1',name:'pdf-forms',url:'https://github.com/anthropics/skills/tree/main/skills/pdf-forms',desc:'填表、合并、拆分 PDF，保留表单域与批注。',addedAt:'2026-11-18',installed:true},
+  {id:'f1',name:'wechat-mp',url:'https://github.com/anthropics/skills/tree/main/skills/wechat-mp',desc:'公众号排版、发文与配图生成，导出可直接粘贴的 HTML。',addedAt:'2026-11-18',installed:true},
   {id:'f2',name:'周报生成',url:'https://gitee.com/cn-skills/work/tree/main/weekly-report',desc:'从提交记录与日历聚合本周产出，生成周报草稿。',addedAt:'2026-11-15',installed:false},
   {id:'f3',name:'repo-map',url:'https://github.com/oss-agent/toolkit/tree/main/skills/repo-map',desc:'扫描仓库结构，输出模块依赖与入口地图。',addedAt:'2026-11-09',installed:true},
   {id:'f4',name:'合同风险审查',url:'https://gitee.com/cn-skills/legal/tree/main/contract-review',desc:'逐条标注条款风险并给出修改建议。',addedAt:'2026-10-28',installed:false}

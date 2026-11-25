@@ -37,6 +37,51 @@ export interface ScanProgress {
 }
 
 /**
+ * Where the visibility check is. `done` and `canceled` are terminal; both are also what the `*://done`
+ * event carries, so a terminal push never settles a run on its own.
+ */
+export type VerifyPhase = "prepare" | "checking" | "done" | "canceled";
+
+/** Where the check-up is: detected clients, then projections, then content. */
+export type DoctorPhase = "detected" | "projection" | "content" | "done" | "canceled";
+
+/**
+ * One `verify://progress` push. Optional fields mean "unchanged since the last push", and `percent`
+ * is null whenever the backend cannot estimate a total — the UI shows counts, never a made-up
+ * percentage (the same rule `ScanProgress` follows).
+ */
+export interface VerifyProgress {
+  phase: VerifyPhase;
+  done?: number;
+  total?: number;
+  percent?: number | null;
+  findings?: number;
+}
+
+/** The terminal `verify://done` push: the tally plus the rows themselves. */
+export interface VerifyDone extends VerifyProgress {
+  phase: "done" | "canceled";
+  durationMs?: number;
+  rows?: VisibilityReport[];
+}
+
+/** One `doctor://progress` push, same shape and same rules as `VerifyProgress`. */
+export interface DoctorProgress {
+  phase: DoctorPhase;
+  done?: number;
+  total?: number;
+  percent?: number | null;
+  findings?: number;
+}
+
+/** The terminal `doctor://done` push (also sent for a canceled run, with the partial report). */
+export interface DoctorDone extends DoctorProgress {
+  phase: "done" | "canceled";
+  durationMs?: number;
+  report?: DoctorReport;
+}
+
+/**
  * One `scan://hit` batch. The rows carry the same content as `DetectedRow`, in the camelCase the
  * event contract uses (`observedSlug`, `frontmatterOk`); the snake_case spellings are accepted too,
  * because that is what the query commands return.
@@ -170,6 +215,8 @@ export interface Issue {
 
 export interface DoctorReport {
   issues: Issue[];
+  /** True when the run was stopped mid-pass: what is here is real, but nothing after it was checked. */
+  canceled: boolean;
 }
 
 export interface MarketItem {

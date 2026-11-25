@@ -260,8 +260,13 @@ pub fn sync_catalog(db: &mut Db, home: &Path, force: bool) -> Result<()> {
 ///
 /// Heron's own `~/.heron/skills` is the store, not a projection target, so it never appears here.
 /// Later runs only fill in what a newer binary added ([`sync_catalog`]), which is also what the scan
-/// and the startup path call.
+/// and the startup path call. It also drops the landing points an older release wrote by mistake
+/// ([`prune_home_project_targets`]), so opening the index is enough to repair that history.
 pub fn bootstrap(db: &mut Db, home: &Path) -> Result<()> {
+    // Ahead of the first-run guard: every entry point opens the index through here, so a database
+    // written by a release that made home a project is healed the moment it is opened, without the
+    // user having to press 扫描 to see the duplicate cards go away.
+    prune_home_project_targets(db, home)?;
     if db.kv_get("bootstrap_done")?.as_deref() == Some("1") {
         return Ok(());
     }
@@ -332,6 +337,46 @@ pub fn prune_phantom_targets(db: &mut Db) -> Result<usize> {
 /// Anything at all sitting at this path: a directory, a file, or a link — even a dangling one.
 fn entry_exists(path: &Path) -> bool {
     std::fs::symlink_metadata(path).is_ok()
+}
+
+/// Forget the landing points that registered the home directory as a project.
+///
+/// [`crate::projects::discover`] used to report home itself as a project root, since the
+/// `.<client>/skills` it holds match the discovery pattern. For every client whose `project_skills`
+/// is the same relative path as its `global_skills`, that wrote a second, disabled landing point on
+/// the very path the catalogue already registers — the overview then showed two identical cards for
+/// one client. The walk no longer reports home, so this only clears what the old one left behind.
+///
+/// Conservative like [`prune_phantom_targets`]: a row that still owns projections is kept, because
+/// deleting a target cascades to the links recorded under it.
+pub fn prune_home_project_targets(db: &mut Db, home: &Path) -> Result<usize> {
+    let projections = projection::list_all(db.conn())?;
+    let mut stale: Vec<String> = Vec::new();
+    for t in target::list(db.conn())? {
+        if t.scope != "project" {
+            continue;
+        }
+        let Some(root) = t.project_path.as_deref() else {
+            continue;
+        };
+        if !heron_platform::paths::same_path_ci(Path::new(root), home) {
+            continue;
+        }
+        if projections.iter().any(|p| p.target_id == t.id) {
+            continue;
+        }
+        stale.push(t.id);
+    }
+    if stale.is_empty() {
+        return Ok(0);
+    }
+    db.write(|tx| {
+        for id in &stale {
+            target::remove(tx, id)?;
+        }
+        Ok(())
+    })?;
+    Ok(stale.len())
 }
 
 /// Is this landing point live: switched on by the user *and* not reported absent by the last scan?
@@ -703,5 +748,118 @@ mod tests {
             std::fs::symlink_metadata(&present).is_ok(),
             "no file was touched"
         );
+    }
+
+    /// The shape the old project walk wrote: home itself registered as a project root, so a second
+    /// landing point on the very path the catalogue already owns.
+    fn home_project(db: &mut Db, home: &Path, kind: &str, projection: Option<&Path>) {
+        let id = format!("{kind}:project:af63f34c");
+        let row = TargetRow {
+            kind: kind.to_owned(),
+            scope: "project".to_owned(),
+            project_path: Some(home.to_string_lossy().to_string()),
+            path: home.join(".claude/skills").to_string_lossy().to_string(),
+            enabled: false,
+            is_default: false,
+            discover: "auto".to_owned(),
+            id: id.clone(),
+        };
+        db.write(|tx| {
+            target::upsert(tx, &row)?;
+            if let Some(link) = projection {
+                skill::insert(
+                    tx,
+                    &SkillRow {
+                        slug: "huashu-design".to_owned(),
+                        display_name: "huashu-design".to_owned(),
+                        description: String::new(),
+                        tags: vec![],
+                        status: "active".to_owned(),
+                        origin: "adopted".to_owned(),
+                        storage_path: None,
+                        subpath: None,
+                        created_at: String::new(),
+                        updated_at: String::new(),
+                    },
+                )?;
+                projection::insert(
+                    tx,
+                    &ProjectionRow {
+                        slug: "huashu-design".to_owned(),
+                        target_id: id.clone(),
+                        link_name: "huashu-design".to_owned(),
+                        path: link.to_string_lossy().to_string(),
+                        mode: "symlink".to_owned(),
+                        ..Default::default()
+                    },
+                )?;
+            }
+            Ok(())
+        })
+        .unwrap();
+    }
+
+    #[test]
+    fn opening_the_index_forgets_a_home_that_was_registered_as_a_project() {
+        let tmp = tempfile::tempdir().unwrap();
+        let mut db = Db::open(&tmp.path().join("heron.db")).unwrap();
+        let home = tmp.path().join("home");
+        std::fs::create_dir_all(home.join(".claude/skills")).unwrap();
+        bootstrap(&mut db, &home).unwrap();
+        let catalogue = target::list(db.conn()).unwrap().len();
+
+        home_project(&mut db, &home, "claude", None);
+        assert_eq!(target::list(db.conn()).unwrap().len(), catalogue + 1);
+
+        // The repair runs on every entry point, not only after the user presses 扫描.
+        bootstrap(&mut db, &home).unwrap();
+        assert_eq!(target::list(db.conn()).unwrap().len(), catalogue);
+        assert!(
+            target::get(db.conn(), "claude:project:af63f34c")
+                .unwrap()
+                .is_none(),
+            "the duplicate card is gone"
+        );
+        assert!(
+            target::get(db.conn(), "claude:global").unwrap().is_some(),
+            "the catalogue's own landing point survives with the user's switch"
+        );
+    }
+
+    #[test]
+    fn a_real_project_and_a_project_that_owns_links_are_kept() {
+        let tmp = tempfile::tempdir().unwrap();
+        let mut db = Db::open(&tmp.path().join("heron.db")).unwrap();
+        let home = tmp.path().join("home");
+        let project = tmp.path().join("work/proj-a");
+        std::fs::create_dir_all(home.join(".claude/skills")).unwrap();
+        bootstrap(&mut db, &home).unwrap();
+
+        // A project under home is what discovery really means; it must not be swept up.
+        let real = TargetRow {
+            id: "claude:project:1d9b0a".to_owned(),
+            kind: "claude".to_owned(),
+            scope: "project".to_owned(),
+            project_path: Some(project.to_string_lossy().to_string()),
+            path: project.join(".claude/skills").to_string_lossy().to_string(),
+            enabled: false,
+            is_default: false,
+            discover: "auto".to_owned(),
+        };
+        db.write(|tx| target::upsert(tx, &real)).unwrap();
+
+        // Home again, but something is still recorded under it: deleting the target would take
+        // those links with it, so the row stays for the user to decide.
+        let link = home.join(".claude/skills/huashu-design");
+        home_project(&mut db, &home, "codex", Some(&link));
+
+        bootstrap(&mut db, &home).unwrap();
+        let ids: Vec<_> = target::list(db.conn())
+            .unwrap()
+            .into_iter()
+            .map(|t| t.id)
+            .collect();
+        assert!(ids.contains(&real.id));
+        assert!(ids.contains(&"codex:project:af63f34c".to_owned()));
     }
 }

@@ -175,7 +175,20 @@ heron install github:anthropics/skills#main:skills/wechat-mp
 heron install https://github.com/anthropics/skills --subpath skills/wechat-mp --dry-run
 ```
 
-如果仓库里有多个 Skill 而你没指定 `--subpath`，Heron 会**明确报错并列出候选**，不会替你猜：
+如果仓库里有多个 Skill 而你没指定 `--subpath`，Heron 不会替你猜。预览（`--dry-run`）会把候选摊开，
+并告诉你下一条命令该怎么写：
+
+```text
+source   github.com/anthropics/skills (main)
+skill    (not chosen - 2 in this repository)
+slug     skills
+commit   c7a91442
+choose one with --subpath:
+  skills/tdd
+  skills/wechat-mp
+```
+
+真正执行安装时则**明确报错并列出候选**：
 
 ```text
 error[E_SOURCE_AMBIGUOUS]: {"count":"2","examples":"skills/wechat-mp, skills/tdd","reason":"multiple_skills"}

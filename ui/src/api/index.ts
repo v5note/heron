@@ -6,9 +6,9 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import type {
-  AdoptPlan, ClientRow, ConflictPayload, DetectedMeta, DetectedRow, DiffReport, DoctorReport, Drift, FavoriteRow, InstallPlan,
+  AdoptPlan, ClientRow, ConflictPayload, DetectedMeta, DetectedRow, DiffReport, Drift, FavoriteRow, InstallPlan,
   InstallPreview, LockFile, MarketInfo, MarketItem, NativeScanStatus, ProxyConfig, RemoveOutcome, RemovePlan, ScanReport, SkillRow,
-  TargetRow, UpgradeCandidate, UpgradeOutcome, VisibilityReport,
+  TargetRow, UpgradeCandidate, UpgradeOutcome,
 } from "./types";
 
 export interface AppError {
@@ -22,6 +22,20 @@ export interface AdoptResult {
   adopted: string[];
   skipped: string[];
   errors: string[];
+}
+
+/**
+ * What `*_start` answers. The command only says whether it could hand the job over: the run itself is
+ * reported by its `*://progress` / `*://done` events, never by this return value.
+ */
+export interface StartAck {
+  started: boolean;
+  running: boolean;
+}
+
+/** What `*_cancel` answers; `canceling` only means the stop was noted, the run ends on its events. */
+export interface CancelAck {
+  canceling: boolean;
 }
 
 function toAppError(raw: unknown): AppError {
@@ -72,12 +86,26 @@ export const api = {
    */
   removeSkill: <T = RemovePlan | RemoveOutcome>(slug: string, dryRun: boolean) =>
     call<T>("skill_remove", { slug, dryRun }),
-  verify: () => call<VisibilityReport[]>("verify_visibility"),
+  /**
+   * Starts the visibility check. Answers as soon as the job is handed over; the rows arrive on
+   * `verify://done` and the run is described on the way by `verify://progress`, so this return value
+   * is only the `StartAck` — `started: false, running: true` means somebody else is already checking
+   * and its events are the result to wait for.
+   */
+  verifyStart: () => call<StartAck>("verify_start"),
+  /** Asks for that check to stop; as with `scanCancel`, the run ends on its terminal event. */
+  verifyCancel: () => call<CancelAck>("verify_cancel"),
   outdated: () => call<UpgradeCandidate[]>("outdated_list"),
   upgrade: (slugs: string[], dryRun: boolean, keepLocal: boolean) =>
     call<UpgradeOutcome[]>("upgrade_skills", { slugs, dryRun, keepLocal }),
   rollback: (slug: string, to: string) => call<void>("rollback_skill", { slug, to }),
-  doctor: () => call<DoctorReport>("doctor_run"),
+  /**
+   * Starts the check-up. Same shape as `verifyStart`: the invoke answers with a `StartAck` only and
+   * the report comes back on `doctor://done`, with `doctor://progress` counting the pass along.
+   */
+  doctorStart: () => call<StartAck>("doctor_start"),
+  /** Asks for that check-up to stop; the partial report still arrives on `doctor://done`. */
+  doctorCancel: () => call<CancelAck>("doctor_cancel"),
   markets: () => call<MarketInfo[]>("markets_list"),
   marketSetEnabled: (market: string, enabled: boolean) =>
     call<void>("market_set_enabled", { market, enabled }),

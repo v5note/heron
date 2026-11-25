@@ -53,7 +53,10 @@ fn clawhub_live_search() {
                     market.install_plan(&item.key)
                 );
             }
-            assert!(!items.is_empty(), "clawhub search should find wechat-mp skills");
+            assert!(
+                !items.is_empty(),
+                "clawhub search should find wechat-mp skills"
+            );
         }
         Err(e) => eprintln!(
             "clawhub unavailable ({}) - adapter degrades gracefully",

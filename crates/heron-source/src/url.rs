@@ -288,7 +288,8 @@ mod tests {
 
     #[test]
     fn tree_link_carries_ref_and_subpath() {
-        let p = parse_source("https://github.com/anthropics/skills/tree/main/skills/wechat-mp").unwrap();
+        let p = parse_source("https://github.com/anthropics/skills/tree/main/skills/wechat-mp")
+            .unwrap();
         assert_eq!(
             p.kind,
             SourceKind::Git {
@@ -369,6 +370,9 @@ mod tests {
     #[test]
     fn describe_is_readable() {
         let p = parse_source("https://github.com/o/r/tree/main/skills/wechat-mp").unwrap();
-        assert_eq!(describe(&p), "https://github.com/o/r.git @ main skills/wechat-mp");
+        assert_eq!(
+            describe(&p),
+            "https://github.com/o/r.git @ main skills/wechat-mp"
+        );
     }
 }

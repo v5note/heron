@@ -487,7 +487,7 @@ textarea.h-input{height:auto;padding:8px 10px;line-height:1.5;resize:vertical;fo
       <!-- ============ 粘贴 Git 地址安装：常驻底栏 ============ -->
       <div class="h-pastebar">
         <span class="lab"><span class="i" v-html="ICON.install"></span>粘贴 Git 地址安装</span>
-        <input class="h-input" v-model="paste" @keyup.enter="installPaste" placeholder="https://github.com/acme/skills/tree/main/pdf-forms">
+        <input class="h-input" v-model="paste" @keyup.enter="installPaste" placeholder="https://github.com/acme/skills/tree/main/wechat-mp">
         <button class="h-btn primary" :disabled="!paste.trim()" @click="installPaste">安装</button>
         <span class="hint">不经过市场，直接从仓库或子路径装入存储区</span>
       </div>
@@ -649,8 +649,8 @@ const FAVS=[
    desc:'给提示词跑固定用例，输出通过率与回归对比。',addedAt:'2026-10-21',installed:false},
   {id:4,name:'official-doc-format',host:'gitee.com',url:'https://gitee.com/hanhai/official-doc-format',
    desc:'党政机关公文格式与常见错项检查。',addedAt:'2026-11-03',installed:false},
-  {id:5,name:'pdf-forms-fill',host:'github.com',url:'https://github.com/acme/skills/tree/main/pdf-forms',
-   desc:'读取表单字段并批量回填，保留原 PDF 元数据。',addedAt:'2026-11-18',installed:false},
+  {id:5,name:'wechat-mp',host:'github.com',url:'https://github.com/acme/skills/tree/main/wechat-mp',
+   desc:'把草稿排成公众号版式并生成首图，导出可直接粘贴的 HTML。',addedAt:'2026-11-18',installed:false},
 ];
 const { createApp } = Vue;
 const HOSTS=['github.com','gitee.com'];

@@ -287,7 +287,10 @@ mod tests {
         let path = write(tmp.path(), &lock).unwrap();
         assert!(path.ends_with(LOCK_FILE_NAME));
         let back = read(&path).unwrap();
-        assert_eq!(back.skills["wechat-mp"].source, lock.skills["wechat-mp"].source);
+        assert_eq!(
+            back.skills["wechat-mp"].source,
+            lock.skills["wechat-mp"].source
+        );
         assert_eq!(back.targets[0].kind, "claude");
     }
 

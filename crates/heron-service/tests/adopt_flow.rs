@@ -147,7 +147,12 @@ fn adopt_retries_after_a_store_copy_was_left_behind() -> Result<()> {
     let dest = ctx.skill_path("wechat-mp");
     heron_service::adopt::copy_tree(&env.home.join(".agents/skills/wechat-mp"), &dest)?;
     let repo = heron_vcs::SkillRepo::open(&dest);
-    repo.init(&heron_vcs::SkillMeta::new("wechat-mp", "local", "", "0.0.0"))?;
+    repo.init(&heron_vcs::SkillMeta::new(
+        "wechat-mp",
+        "local",
+        "",
+        "0.0.0",
+    ))?;
 
     let plan = adopt::plan(&ctx, &row)?;
     let report = adopt::execute(&mut ctx, &plan, AdoptPlacement::KeepOriginal)?;
@@ -215,7 +220,10 @@ fn project_needs_an_explicit_target_and_verify_reports_visibility() -> Result<()
         projected.join("SKILL.md").is_file(),
         "projected into the named client target"
     );
-    assert_eq!(projection::list_for_skill(ctx.db.conn(), "wechat-mp")?.len(), 1);
+    assert_eq!(
+        projection::list_for_skill(ctx.db.conn(), "wechat-mp")?.len(),
+        1
+    );
     assert!(
         heron_store::repos::target::get_default(ctx.db.conn())
             .unwrap()

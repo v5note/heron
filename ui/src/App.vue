@@ -6,6 +6,7 @@ import AppIcon, { type IconName } from "./components/AppIcon.vue";
 import logoDark from "./assets/logo-dark.png";
 import logoLight from "./assets/logo-light.png";
 import ScanPill from "./components/ScanPill.vue";
+import ActionPill from "./components/ActionPill.vue";
 import ToastHost from "./components/ToastHost.vue";
 import { useAppStore } from "./stores/app";
 import pkg from "../package.json";
@@ -85,6 +86,22 @@ const railOn = computed(() => store.scan.running || store.scan.flash?.kind === "
 const railDone = computed(() => !store.scan.running && store.scan.flash?.kind === "done");
 /** 0..1, or 1 for the completion flash; a cancel drops it to 0 and the rail fades out unlit. */
 const railValue = computed(() => (railDone.value ? 1 : store.railProgress ?? 0));
+
+/** The 校验 pill's 1.8s result tail; empty means the pill shows its label or its running state. */
+const verifyResult = computed(() => {
+  const run = store.verifyRun;
+  if (run.failed) return t("verify.failed");
+  if (!run.flash) return "";
+  return run.flash.kind === "done" ? t("verify.result", { n: run.flash.findings }) : t("verify.canceledShort");
+});
+
+/* Leaving the page where 体检 lives must not look like leaving the job. The run belongs to the
+   backend, not to the view, so the count keeps arriving either way; what the topbar adds is proof.
+   It is a link rather than a pill on purpose: the click that lands here should never be the click
+   that cancels, which is the one thing a second ActionPill in this row would invite. */
+const doctorElsewhere = computed(
+  () => store.doctorRun.running && route.name !== "doctor" && route.name !== "overview",
+);
 
 function onKeydown(event: KeyboardEvent) {
   if (event.key !== "Escape" || !store.scanning) return;
@@ -198,9 +215,36 @@ function go(to: string) {
         <!-- The walk owns its own state: `busy` only locks request-shaped commands, so 校验 stays
              clickable while a scan runs. -->
         <ScanPill :label="t('shell.scan')" />
-        <button class="btn primary" :disabled="store.busy" @click="store.verify()">
-          <AppIcon name="check" :size="14" class="rail-icon" />
-          {{ t("common.verify") }}
+        <ActionPill
+          :label="t('common.verify')"
+          :running-label="t('verify.running')"
+          :cancel-label="t('verify.cancelHint')"
+          :canceling-label="t('verify.canceling')"
+          :result-text="verifyResult"
+          :result-kind="store.verifyRun.flash?.kind ?? 'done'"
+          :findings-label="t('verify.findings', { n: store.verifyRun.findings })"
+          :done="store.verifyRun.done"
+          :total="store.verifyRun.total"
+          :percent="store.verifyRun.percent"
+          :running="store.verifyRun.running"
+          :cancel-requested="store.verifyRun.cancelRequested"
+          :failed="store.verifyRun.failed"
+          icon="check"
+          primary
+          :min-width="210"
+          @run="store.verify()"
+          @cancel="store.cancelVerify()"
+        />
+        <button
+          v-if="doctorElsewhere"
+          type="button"
+          class="btn sm follow"
+          :title="t('doctor.follow')"
+          @click="go('/doctor')"
+        >
+          <AppIcon name="refresh" :size="13" class="spin" />
+          <span>{{ t("doctor.running") }}</span>
+          <span v-if="store.doctorRun.total" class="mono">{{ store.doctorRun.done }}/{{ store.doctorRun.total }}</span>
         </button>
         <div class="scan-rail" :class="{ on: railOn, flash: railDone }" aria-hidden="true">
           <i :style="{ '--p': railValue }" />
@@ -301,6 +345,12 @@ function go(to: string) {
 
 /* topbar + content */
 .topbar { position: relative; display: flex; align-items: center; gap: 10px; height: 48px; padding: 0 24px; border-bottom: 1px solid var(--line); flex: none; }
+/* The off-page 体检 indicator is furniture, not the star of the row: quieter than the pills beside it,
+   because it appears only while something else already has the user's attention. The spinner is the
+   shared `.spin` on a `refresh` glyph — the same idiom as the scan pill — so reduced-motion tames it
+   globally and the count keeps saying the job is alive. */
+.follow { border-color: var(--line); color: var(--dim); }
+.follow:hover { border-color: var(--line-strong); color: var(--text); }
 /* The only progress meter in the app: 2px on the topbar's lower edge, spanning the full width, so
    it reads as furniture of the toolbar rather than a widget bolted under it. It lives here, not on
    the overview page, because the walk keeps going after you leave that page.

@@ -19,21 +19,33 @@ use heron_service::{adopt, doctor, install, upgrade, verify, Ctx};
 use serde::Serialize;
 use tauri::{Emitter, Manager, State};
 
-/// The scan does not live in `AppState`'s mutex: the walking thread reads these atomics while the
-/// IPC threads keep answering everything else, which is the whole point of backgrounding it
-/// (implementation doc §7.5).
+/// A background check does not live in `AppState`'s mutex: the worker thread reads these atomics
+/// while the IPC threads keep answering everything else, which is the whole point of backgrounding
+/// it (implementation doc §7.5). One per long read-only task: scan, verify, doctor.
 #[derive(Default)]
-struct ScanFlags {
-    /// A scan owns the walk. A second `scan` call is refused rather than queued behind it.
+struct TaskFlags {
+    /// A run owns the task. A second start is refused rather than queued behind it.
     running: Arc<AtomicBool>,
-    /// Raised by `scan_cancel`; the walk checks it between directory entries.
+    /// Raised by the matching `*_cancel` command; the run checks it between units of work.
     cancel: Arc<AtomicBool>,
+}
+
+impl TaskFlags {
+    /// The atomics a worker thread needs, so it never has to touch the `AppState` mutex again.
+    fn share(&self) -> TaskFlags {
+        TaskFlags {
+            running: self.running.clone(),
+            cancel: self.cancel.clone(),
+        }
+    }
 }
 
 struct AppState {
     ctx: Mutex<Ctx>,
     home: PathBuf,
-    scan: ScanFlags,
+    scan: TaskFlags,
+    verify: TaskFlags,
+    doctor: TaskFlags,
 }
 
 fn err(e: HeronError) -> Msg {
@@ -244,14 +256,9 @@ impl Drop for RunningGuard {
     }
 }
 
-fn scan_task(
-    app: tauri::AppHandle,
-    extra_roots: Vec<String>,
-    cancel: Arc<AtomicBool>,
-    running: Arc<AtomicBool>,
-) {
-    let _guard = RunningGuard(running);
-    if let Err(e) = run_scan(&app, extra_roots, &cancel) {
+fn scan_task(app: tauri::AppHandle, extra_roots: Vec<String>, flags: TaskFlags) {
+    let _guard = RunningGuard(flags.running);
+    if let Err(e) = run_scan(&app, extra_roots, &flags.cancel) {
         // The invoke already answered, so the only way back to the UI is an event.
         let _ = app.emit("scan://error", err(e));
     }
@@ -334,10 +341,10 @@ fn run_scan(
     Ok(())
 }
 
-/// Claim the scan slot: `false` when a scan is already in flight — a second click is refused,
-/// it does not queue behind the first. Whoever claims it re-arms the cancel flag, so a cancel
-/// meant for the previous task cannot kill this one.
-fn claim_scan(flags: &ScanFlags) -> bool {
+/// Claim a task slot: `false` when one is already in flight — a second click is refused, it does
+/// not queue behind the first. Whoever claims it re-arms the cancel flag, so a cancel meant for
+/// the previous run cannot kill this one.
+fn claim_task(flags: &TaskFlags) -> bool {
     if flags.running.swap(true, Ordering::SeqCst) {
         return false;
     }
@@ -350,14 +357,8 @@ fn claim_scan(flags: &ScanFlags) -> bool {
 /// for the walk, which is what used to freeze the window.
 #[tauri::command]
 async fn scan(app: tauri::AppHandle, roots: Option<Vec<String>>) -> Result<ScanStartDto, Msg> {
-    let flags = {
-        let state = app.state::<AppState>();
-        ScanFlags {
-            running: state.scan.running.clone(),
-            cancel: state.scan.cancel.clone(),
-        }
-    };
-    if !claim_scan(&flags) {
+    let flags = app.state::<AppState>().scan.share();
+    if !claim_task(&flags) {
         return Ok(ScanStartDto {
             started: false,
             running: true,
@@ -366,9 +367,7 @@ async fn scan(app: tauri::AppHandle, roots: Option<Vec<String>>) -> Result<ScanS
     let extra_roots = roots.unwrap_or_default();
     // The handle is deliberately not awaited: dropping it does not stop the task, it only stops
     // anyone from asking about it — the events are the answer.
-    let _task = tauri::async_runtime::spawn_blocking(move || {
-        scan_task(app, extra_roots, flags.cancel, flags.running)
-    });
+    let _task = tauri::async_runtime::spawn_blocking(move || scan_task(app, extra_roots, flags));
     Ok(ScanStartDto {
         started: true,
         running: true,
@@ -379,14 +378,17 @@ async fn scan(app: tauri::AppHandle, roots: Option<Vec<String>>) -> Result<ScanS
 /// `phase: "canceled"` progress event.
 #[tauri::command]
 fn scan_cancel(state: State<'_, AppState>) -> ScanCancelDto {
-    cancel_scan(&state.scan)
+    ScanCancelDto {
+        canceling: request_cancel(&state.scan),
+    }
 }
 
-/// Raising cancel is all this does — the walk decides when it is out, and says so itself.
-fn cancel_scan(flags: &ScanFlags) -> ScanCancelDto {
+/// Raising cancel is all this does — the task decides when it is out, and says so itself. The
+/// answer is whether there was anything running to stop.
+fn request_cancel(flags: &TaskFlags) -> bool {
     let running = flags.running.load(Ordering::SeqCst);
     flags.cancel.store(true, Ordering::SeqCst);
-    ScanCancelDto { canceling: running }
+    running
 }
 
 #[derive(Serialize)]
@@ -599,10 +601,177 @@ fn skill_remove(
     serde_json::to_value(&outcome).map_err(|e| Msg::new("E_INTERNAL").with("detail", e.to_string()))
 }
 
+/// `verify://progress`. The field names are the contract with the UI: camelCase, verbatim.
+#[derive(Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+struct VerifyProgressDto {
+    phase: &'static str,
+    done: usize,
+    total: usize,
+    /// `None` wherever there is no honest denominator: the `prepare` tick, whose row count is not
+    /// known yet, and a store with no projections at all. The UI animates instead.
+    percent: Option<f64>,
+    /// Projections whose verdict is not `visible`, so far.
+    findings: usize,
+}
+
+/// The terminal `verify://done` event: the progress envelope plus the reports, so the UI has no
+/// second call to make. `rows` is exactly what `verify::verify` answers with, which keeps the
+/// overview's `visibility` list working. A cancelled pass arrives too, with `phase: "canceled"`
+/// and only the rows it managed to check.
+#[derive(Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+struct VerifyDoneDto {
+    #[serde(flatten)]
+    progress: VerifyProgressDto,
+    duration_ms: u64,
+    rows: Vec<verify::VerifyReport>,
+}
+
+/// What `verify_start` answers straight away: the check is running, or one already was.
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct VerifyStartDto {
+    started: bool,
+    running: bool,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct VerifyCancelDto {
+    /// `false` when there was no check in flight to stop.
+    canceling: bool,
+}
+
+/// Share of a check that is provably finished, one decimal — and only when a denominator exists to
+/// divide by, so a bar is never shown for a number nobody actually knows.
+fn tick_percent(done: usize, total: usize) -> Option<f64> {
+    (total > 0).then(|| ((done as f64 / total as f64 * 100.0) * 10.0).round() / 10.0)
+}
+
+/// Which phase has already gone out as a progress event, and when.
+#[derive(Default)]
+struct TickForward {
+    phase: Option<&'static str>,
+    since_emit: Option<Instant>,
+}
+
+impl TickForward {
+    /// A tick gets its own event when the phase changes — which includes the terminal one, so even
+    /// a sub-millisecond check leaves the UI with a start and an end — or once the batch window
+    /// has passed. Anything closer is a bar that would not have moved anyway.
+    fn due(&mut self, phase: &'static str) -> bool {
+        let changed = self.phase != Some(phase);
+        self.phase = Some(phase);
+        let elapsed = self
+            .since_emit
+            .map(|t| t.elapsed() >= HIT_BATCH_INTERVAL)
+            .unwrap_or(true);
+        if changed || elapsed {
+            self.since_emit = Some(Instant::now());
+            return true;
+        }
+        false
+    }
+}
+
+fn verify_progress(tick: verify::VerifyTick) -> VerifyProgressDto {
+    VerifyProgressDto {
+        phase: tick.phase,
+        done: tick.done,
+        total: tick.total,
+        percent: tick_percent(tick.done, tick.total),
+        findings: tick.findings,
+    }
+}
+
+/// Verify visibility in the background and answer immediately. This used to be a synchronous
+/// command, i.e. every projection path probed on the thread that owns the window.
 #[tauri::command]
-fn verify_visibility(state: State<'_, AppState>) -> Result<Vec<verify::VerifyReport>, Msg> {
-    let mut ctx = state.ctx.lock().unwrap();
-    verify::verify(&mut ctx, None).map_err(err)
+async fn verify_start(app: tauri::AppHandle) -> Result<VerifyStartDto, Msg> {
+    let flags = app.state::<AppState>().verify.share();
+    if !claim_task(&flags) {
+        return Ok(VerifyStartDto {
+            started: false,
+            running: true,
+        });
+    }
+    // Deliberately not awaited: the events are the answer.
+    let _task = tauri::async_runtime::spawn_blocking(move || verify_task(app, flags));
+    Ok(VerifyStartDto {
+        started: true,
+        running: true,
+    })
+}
+
+fn verify_task(app: tauri::AppHandle, flags: TaskFlags) {
+    let _guard = RunningGuard(flags.running);
+    if let Err(e) = run_verify(&app, &flags.cancel) {
+        // The invoke already answered, so the only way back to the UI is an event.
+        let _ = app.emit("verify://error", err(e));
+    }
+}
+
+fn run_verify(app: &tauri::AppHandle, cancel: &AtomicBool) -> Result<(), HeronError> {
+    let state = app.state::<AppState>();
+    let started = Instant::now();
+    let _ = app.emit(
+        "verify://progress",
+        VerifyProgressDto {
+            phase: "prepare",
+            done: 0,
+            total: 0,
+            percent: None,
+            findings: 0,
+        },
+    );
+
+    let mut forwarded = TickForward::default();
+    // The last tick the service handed over: once the call has returned it is the only place the
+    // number of checked rows lives, which a stopped pass needs in order to say how far it got.
+    let mut last = verify::VerifyTick {
+        phase: "checking",
+        done: 0,
+        total: 0,
+        findings: 0,
+    };
+    // The `Ctx` is locked on this thread rather than through `with_ctx`, which hands out a `&Ctx`
+    // where refreshing the cache needs `&mut`.
+    let outcome = {
+        let mut ctx = state.ctx.lock().unwrap();
+        verify::verify_with_hook(&mut ctx, None, &mut |tick| {
+            last = tick;
+            if forwarded.due(tick.phase) {
+                let _ = app.emit("verify://progress", verify_progress(tick));
+            }
+            // Cancel is answered here as well as in the service loop, so a stretch of ticks that
+            // were too close together to emit cannot swallow the user's click.
+            !cancel.load(Ordering::SeqCst)
+        })?
+    };
+
+    // A stopped pass still gets its `done` event, carrying what it checked: the UI's run has to
+    // settle on something, and the rows it never looked at keep their cached verdict.
+    let _ = app.emit(
+        "verify://done",
+        VerifyDoneDto {
+            progress: VerifyProgressDto {
+                phase: if outcome.canceled { "canceled" } else { "done" },
+                ..verify_progress(last)
+            },
+            duration_ms: started.elapsed().as_millis() as u64,
+            rows: outcome.rows,
+        },
+    );
+    Ok(())
+}
+
+/// Ask the verify in flight to stop. What it already checked stays in the cache.
+#[tauri::command]
+fn verify_cancel(state: State<'_, AppState>) -> VerifyCancelDto {
+    VerifyCancelDto {
+        canceling: request_cancel(&state.verify),
+    }
 }
 
 /// Answer on the main thread, do the work on a blocking one.
@@ -665,14 +834,124 @@ fn rollback_skill(state: State<'_, AppState>, slug: String, to: String) -> Resul
     Ok(())
 }
 
+/// `doctor://progress`, same envelope as `verify://progress` and the same camelCase contract.
+#[derive(Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+struct DoctorProgressDto {
+    phase: &'static str,
+    done: usize,
+    total: usize,
+    /// `None` wherever there is no honest denominator — an empty store has nothing to count down.
+    percent: Option<f64>,
+    /// Issues found so far.
+    findings: usize,
+}
+
+/// The terminal `doctor://done` event: the progress envelope plus the report, so the UI has no
+/// second call to make. A cancelled run arrives here too, with `phase: "canceled"` and whatever it
+/// had found by then.
+#[derive(Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+struct DoctorDoneDto {
+    #[serde(flatten)]
+    progress: DoctorProgressDto,
+    duration_ms: u64,
+    report: doctor::DoctorReport,
+}
+
+/// What `doctor_start` answers straight away: the check is running, or one already was.
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct DoctorStartDto {
+    started: bool,
+    running: bool,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct DoctorCancelDto {
+    /// `false` when there was no check in flight to stop.
+    canceling: bool,
+}
+
+fn doctor_progress(tick: doctor::DoctorTick) -> DoctorProgressDto {
+    DoctorProgressDto {
+        phase: tick.phase,
+        done: tick.done,
+        total: tick.total,
+        percent: tick_percent(tick.done, tick.total),
+        findings: tick.findings,
+    }
+}
+
+/// Run the doctor in the background and answer immediately. It used to hash every managed skill
+/// directory on the caller's thread, which is exactly the freeze `scan` already fixed.
 #[tauri::command]
-async fn doctor_run(app: tauri::AppHandle) -> Result<doctor::DoctorReport, Msg> {
-    with_ctx(app, |ctx| {
-        // Hashes every managed skill directory to find duplicate content, and probes every
-        // projection path. Filesystem-bound, so it cannot run in the IPC handler.
-        doctor::run(ctx)
+async fn doctor_start(app: tauri::AppHandle) -> Result<DoctorStartDto, Msg> {
+    let flags = app.state::<AppState>().doctor.share();
+    if !claim_task(&flags) {
+        return Ok(DoctorStartDto {
+            started: false,
+            running: true,
+        });
+    }
+    // Deliberately not awaited: the events are the answer.
+    let _task = tauri::async_runtime::spawn_blocking(move || doctor_task(app, flags));
+    Ok(DoctorStartDto {
+        started: true,
+        running: true,
     })
-    .await
+}
+
+fn doctor_task(app: tauri::AppHandle, flags: TaskFlags) {
+    let _guard = RunningGuard(flags.running);
+    if let Err(e) = run_doctor(&app, &flags.cancel) {
+        let _ = app.emit("doctor://error", err(e));
+    }
+}
+
+fn run_doctor(app: &tauri::AppHandle, cancel: &AtomicBool) -> Result<(), HeronError> {
+    let state = app.state::<AppState>();
+    let started = Instant::now();
+    let mut forwarded = TickForward::default();
+    // The service reads all three lists before its first tick, so the denominator is real from the
+    // first event; no `prepare` tick is invented for a number nobody has counted yet.
+    let mut last = doctor::DoctorTick {
+        phase: "detected",
+        done: 0,
+        total: 0,
+        findings: 0,
+    };
+    let report = {
+        let ctx = state.ctx.lock().unwrap();
+        doctor::run_with_hook(&ctx, &mut |tick| {
+            last = tick;
+            if forwarded.due(tick.phase) {
+                let _ = app.emit("doctor://progress", doctor_progress(tick));
+            }
+            !cancel.load(Ordering::SeqCst)
+        })?
+    };
+    // Like verify, a stopped run still settles on a `done` event: the partial report is an answer,
+    // and the `canceled` flag inside it is what tells the UI not to read it as a clean bill.
+    let _ = app.emit(
+        "doctor://done",
+        DoctorDoneDto {
+            // The terminal tick is the only place the counts live once the call has returned.
+            progress: doctor_progress(last),
+            duration_ms: started.elapsed().as_millis() as u64,
+            report,
+        },
+    );
+    Ok(())
+}
+
+/// Ask the doctor in flight to stop. It keeps the issues it had already found.
+#[tauri::command]
+fn doctor_cancel(state: State<'_, AppState>) -> DoctorCancelDto {
+    DoctorCancelDto {
+        canceling: request_cancel(&state.doctor),
+    }
 }
 
 /// A `source` row for a built-in market, used both to seed the table and to persist a toggle.
@@ -1019,7 +1298,9 @@ pub fn run() {
         .manage(AppState {
             ctx: Mutex::new(ctx),
             home,
-            scan: ScanFlags::default(),
+            scan: TaskFlags::default(),
+            verify: TaskFlags::default(),
+            doctor: TaskFlags::default(),
         })
         .invoke_handler(tauri::generate_handler![
             preflight,
@@ -1034,11 +1315,13 @@ pub fn run() {
             project_skill,
             unproject_skill,
             skill_remove,
-            verify_visibility,
+            verify_start,
+            verify_cancel,
             outdated_list,
             upgrade_skills,
             rollback_skill,
-            doctor_run,
+            doctor_start,
+            doctor_cancel,
             markets_list,
             market_set_enabled,
             market_search,
@@ -1212,34 +1495,147 @@ mod tests {
     }
 
     #[test]
-    fn a_second_scan_is_refused_and_the_next_one_re_arms_cancel() {
-        let flags = ScanFlags::default();
-        assert!(claim_scan(&flags), "the first click owns the scan slot");
+    fn a_second_task_is_refused_and_the_next_one_re_arms_cancel() {
+        let flags = TaskFlags::default();
+        assert!(claim_task(&flags), "the first click owns the task slot");
         assert!(
-            !claim_scan(&flags),
+            !claim_task(&flags),
             "the second is refused instead of queued behind it"
         );
 
-        // scan_cancel only raises the flag; the task itself clears running on its way out.
+        // The `*_cancel` commands only raise the flag; the task clears running on its way out.
         flags.cancel.store(true, Ordering::SeqCst);
         assert!(
-            cancel_scan(&flags).canceling,
-            "there is a scan in flight to cancel"
+            request_cancel(&flags),
+            "there is a task in flight to cancel"
         );
         {
             let _guard = RunningGuard(flags.running.clone());
         }
         assert!(!flags.running.load(Ordering::SeqCst));
-        assert!(claim_scan(&flags), "the next click is accepted");
+        assert!(claim_task(&flags), "the next click is accepted");
         assert!(
             !flags.cancel.load(Ordering::SeqCst),
-            "claiming a scan re-arms cancel, so the old request cannot kill the new one"
+            "claiming a task re-arms cancel, so the old request cannot kill the new one"
         );
 
-        let idle = ScanFlags::default();
+        let idle = TaskFlags::default();
         assert!(
-            !cancel_scan(&idle).canceling,
+            !request_cancel(&idle),
             "cancelling nothing says so, it is not an error"
         );
+    }
+
+    /// The two checks are a contract with the UI exactly as `scan://*` is: one wrong field name and
+    /// a progress bar silently never moves.
+    #[test]
+    fn the_verify_and_doctor_events_have_exactly_the_agreed_fields() {
+        fn keys(value: &serde_json::Value) -> Vec<&str> {
+            let mut names: Vec<&str> = value
+                .as_object()
+                .expect("an object")
+                .keys()
+                .map(String::as_str)
+                .collect();
+            names.sort_unstable();
+            names
+        }
+        let progress = ["done", "findings", "percent", "phase", "total"];
+
+        let tick = verify::VerifyTick {
+            phase: "checking",
+            done: 3,
+            total: 9,
+            findings: 1,
+        };
+        let value = serde_json::to_value(verify_progress(tick)).unwrap();
+        assert_eq!(keys(&value), progress);
+        assert_eq!(value["percent"], 33.3, "one decimal, and real");
+        assert_eq!(
+            keys(
+                &serde_json::to_value(VerifyDoneDto {
+                    progress: VerifyProgressDto {
+                        phase: "canceled",
+                        ..verify_progress(tick)
+                    },
+                    duration_ms: 1234,
+                    rows: vec![],
+                })
+                .unwrap()
+            ),
+            [
+                "done",
+                "durationMs",
+                "findings",
+                "percent",
+                "phase",
+                "rows",
+                "total"
+            ]
+        );
+
+        let dtick = doctor::DoctorTick {
+            phase: "content",
+            done: 4,
+            total: 7,
+            findings: 2,
+        };
+        assert_eq!(
+            keys(&serde_json::to_value(doctor_progress(dtick)).unwrap()),
+            progress
+        );
+        assert_eq!(
+            keys(
+                &serde_json::to_value(DoctorDoneDto {
+                    progress: doctor_progress(dtick),
+                    duration_ms: 42,
+                    report: doctor::DoctorReport::default(),
+                })
+                .unwrap()
+            ),
+            [
+                "done",
+                "durationMs",
+                "findings",
+                "percent",
+                "phase",
+                "report",
+                "total"
+            ]
+        );
+        // The report itself carries the stop flag, so a UI that only reads `report` and never
+        // looks at the envelope's phase still knows the answer is partial.
+        let report = serde_json::to_value(doctor::DoctorReport {
+            issues: vec![],
+            canceled: true,
+        })
+        .unwrap();
+        assert_eq!(keys(&report), ["canceled", "issues"]);
+        assert_eq!(report["canceled"], true);
+
+        assert_eq!(
+            keys(
+                &serde_json::to_value(VerifyStartDto {
+                    started: false,
+                    running: true
+                })
+                .unwrap()
+            ),
+            ["running", "started"]
+        );
+        assert_eq!(
+            keys(&serde_json::to_value(DoctorCancelDto { canceling: true }).unwrap()),
+            ["canceling"]
+        );
+
+        // No denominator, no percentage: the field is there and null, so the UI animates.
+        let prepare = serde_json::to_value(verify_progress(verify::VerifyTick {
+            phase: "prepare",
+            done: 0,
+            total: 0,
+            findings: 0,
+        }))
+        .unwrap();
+        assert!(prepare["percent"].is_null());
     }
 }

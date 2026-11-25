@@ -196,7 +196,8 @@ fn checkout_subdir_materializes_exactly_the_skill() {
     let head = repo.resolve(Some("main")).unwrap().commit;
 
     let dest = dest_root.path().join("wechat-mp");
-    repo.checkout_subdir(&head, "skills/wechat-mp", &dest).unwrap();
+    repo.checkout_subdir(&head, "skills/wechat-mp", &dest)
+        .unwrap();
 
     assert!(dest.join("SKILL.md").is_file());
     assert!(dest.join("references/a.md").is_file());
@@ -238,7 +239,8 @@ fn checkout_subdir_keeps_binary_bytes_intact() {
     let head = repo.resolve(Some("main")).unwrap().commit;
 
     let dest = dest_root.path().join("wechat-mp");
-    repo.checkout_subdir(&head, "skills/wechat-mp", &dest).unwrap();
+    repo.checkout_subdir(&head, "skills/wechat-mp", &dest)
+        .unwrap();
     assert_eq!(fs::read(dest.join("logo.png")).unwrap(), blob);
     assert!(
         !dest_root.path().join(".wechat-mp-heron.tar").exists(),

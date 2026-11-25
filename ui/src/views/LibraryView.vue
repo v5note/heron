@@ -7,6 +7,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref } from "vue";
 import { useI18n } from "vue-i18n";
 import AppIcon from "../components/AppIcon.vue";
 import AppOverlay from "../components/AppOverlay.vue";
+import FloatBar from "../components/FloatBar.vue";
 import PageHeader from "../components/PageHeader.vue";
 import StateChip from "../components/StateChip.vue";
 import { api } from "../api";
@@ -635,6 +636,8 @@ const drawerLive = computed(() => {
         </footer>
       </template>
     </AppOverlay>
+
+    <FloatBar :hidden="!!drawer || !!removePlan" />
   </section>
 </template>
 

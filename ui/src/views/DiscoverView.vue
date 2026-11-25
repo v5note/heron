@@ -5,6 +5,7 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import AppIcon from "../components/AppIcon.vue";
 import AppOverlay from "../components/AppOverlay.vue";
+import FloatBar from "../components/FloatBar.vue";
 import PageHeader from "../components/PageHeader.vue";
 import { clientColor, clientIcon } from "../utils/clients";
 import type { AdoptPlan, DetectedMeta, DetectedRow } from "../api/types";
@@ -437,6 +438,16 @@ async function adopt() {
     <p v-if="nested.length" class="note muted">
       {{ t("discover.nestedWarning") }} · {{ t("discover.nestedCount", { n: nested.length }) }}
     </p>
+
+    <!-- What the page head carries, kept reachable once it has scrolled away. -->
+    <FloatBar :hidden="dialog">
+      <button v-if="selected.length" class="btn primary" :disabled="busy" @click="openPreview">
+        <AppIcon name="plus" :size="14" />{{ busy ? t("discover.collecting") : t("discover.adoptSelected") }} ({{ selected.length }})
+      </button>
+      <button v-if="selected.length" type="button" class="btn ghost" @click="selected = []">
+        {{ t("discover.clearSelection") }}
+      </button>
+    </FloatBar>
 
     <AppOverlay :open="dialog" @close="dialog = false">
       <header class="overlay-head pv-head">

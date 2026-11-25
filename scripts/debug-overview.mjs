@@ -16,7 +16,10 @@ const url = process.argv.includes("--url")
   : "http://127.0.0.1:1420";
 const port = process.argv.includes("--port") ? Number(process.argv[process.argv.indexOf("--port") + 1]) : 9222;
 
-const CALLS = ["preflight", "skills_list", "detected_list", "targets_list", "verify_visibility", "doctor_run", "outdated_list"];
+// `verify_start` and `doctor_start` only prove the command answered: both jobs now run in the
+// background and stream their counts over `verify://*` / `doctor://*`, so this replay sees the ack,
+// not the rows. The other calls are still plain request/response.
+const CALLS = ["preflight", "skills_list", "detected_list", "targets_list", "verify_start", "doctor_start", "outdated_list"];
 
 let page = null;
 try {

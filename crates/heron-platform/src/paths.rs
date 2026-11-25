@@ -150,7 +150,10 @@ mod tests {
         let root = Path::new("/data/store");
         assert!(is_same_or_inside(root, Path::new("/data/store/wechat-mp")));
         assert!(is_same_or_inside(root, Path::new("/data/store")));
-        assert!(!is_same_or_inside(root, Path::new("/data/store-other/wechat-mp")));
+        assert!(!is_same_or_inside(
+            root,
+            Path::new("/data/store-other/wechat-mp")
+        ));
         assert!(!is_same_or_inside(root, Path::new("/data")));
     }
 

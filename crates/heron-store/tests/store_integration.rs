@@ -334,7 +334,11 @@ fn projection_foreign_key_rejects_unknown_skill() {
 fn scan_upsert_and_prune_keeps_ignored_rows() {
     let (_dir, mut db) = temp_db();
     db.write(|tx| {
-        for (path, slug) in [("/a/wechat-mp", "wechat-mp"), ("/a/tdd", "tdd"), ("/a/old", "old")] {
+        for (path, slug) in [
+            ("/a/wechat-mp", "wechat-mp"),
+            ("/a/tdd", "tdd"),
+            ("/a/old", "old"),
+        ] {
             detected::upsert(tx, &detected_row(path, slug))?;
         }
         Ok(())
@@ -345,7 +349,10 @@ fn scan_upsert_and_prune_keeps_ignored_rows() {
     db.write(|tx| detected::set_state(tx, "/a/tdd", "adopted"))
         .unwrap();
 
-    let seen: HashSet<String> = ["/a/wechat-mp", "/a/old"].iter().map(|s| s.to_string()).collect();
+    let seen: HashSet<String> = ["/a/wechat-mp", "/a/old"]
+        .iter()
+        .map(|s| s.to_string())
+        .collect();
     let removed = db.write(|tx| detected::prune_not_in(tx, &seen)).unwrap();
     assert_eq!(removed, 1, "only the adopted-but-now-absent row is pruned");
 
@@ -409,7 +416,14 @@ fn events_record_undo_steps_and_pending() {
     let (_dir, mut db) = temp_db();
     let id = db
         .write(|tx| {
-            let id = event::record(tx, "cli", "adopt", Some("wechat-mp"), Some("{\"n\":1}"), true)?;
+            let id = event::record(
+                tx,
+                "cli",
+                "adopt",
+                Some("wechat-mp"),
+                Some("{\"n\":1}"),
+                true,
+            )?;
             event::push_undo_step(tx, id, 0, "{\"kind\":\"created_link\"}")?;
             event::push_undo_step(tx, id, 1, "{\"kind\":\"moved_dir\"}")?;
             Ok(id)

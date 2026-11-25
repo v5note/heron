@@ -358,22 +358,22 @@ const VIEWS = {"overview":"概览","library":"我的 Skill","discover":"发现",
 </script>
 <script>
 /* ---- 扫描时间线：准备 0.8s → 6 root 各 ~1.7s（不等长）→ 入库 0.6 → 汇总 0.4 ≈ 12.0s ----
-   speed 参数实时缩放；批次 = root 内每 ~300ms 冒一小批（9/5/3/8/6/21 = 52） */
+   speed 参数实时缩放；批次 = root 内每 ~300ms 冒一小批（9/5/2/8/6/21 = 51） */
 const PHASE_PREP = 800, PHASE_INGEST = 600, PHASE_SUM = 400;
 const SCAN_ROOTS = [
   { path:'~/.claude/skills',            client:'claude',   dur:1900, count:9  },
   { path:'~/.agents/skills',            client:'agents',   dur:1600, count:5  },
-  { path:'~/.codex/skills',             client:'codex',    dur:1800, count:3  },
+  { path:'~/.codex/skills',             client:'codex',    dur:1800, count:2  },
   { path:'~/.cursor/skills',            client:'cursor',   dur:1500, count:8  },
   { path:'~/.config/opencode/skills',   client:'opencode', dur:1700, count:6  },
   { path:'~/.trae/skills',              client:'trae',     dur:1700, count:21 },
 ];
-/* 52 个样例发现（spec 点名的 huashu-design/pdf/pptx/tdd/lark-docs/grilling/docx/
+/* 51 个样例发现（spec 点名的 huashu-design/pptx/tdd/lark-docs/grilling/docx/
    code-review/research/wizard/slides/dynamic-ui 全部在池内） */
 const SAMPLE_NAMES = {
   claude:['huashu-design','pptx','research','grilling','slides','skill-creator','page-prd','meeting-minutes','email-draft'],
   agents:['lark-docs','tdd','wizard','lark-base','task-board'],
-  codex:['pdf','code-review','sql-lens'],
+  codex:['code-review','sql-lens'],
   cursor:['wechat-mp','migrate-to-shoehorn','setup-pre-commit','code-navigation','theme-tune','editor-maps','plugin-scan','lint-sweep'],
   opencode:['diagnose-loop','patch-notes','term-lookup','config-sync','dotfile-audit','repo-map'],
   trae:['docx','dynamic-ui','logo-design','motion-recipe','canvas-sketch','deck-outline','brand-tokens',
@@ -402,10 +402,10 @@ const TARGET_ROWS = [
   { kind:'opencode', def:false, path:'~/.config/opencode/skills', live:0, broken:0 },
 ];
 /* ---- dir-1 其余视图数据（原样搬） ---- */
-const SKILLS = [{"slug":"pdf","name":"PDF Toolkit","desc":"抽取、合并、填写 PDF 表单，处理扫描件与 OCR 的常用流程","origin":"skills.sh","ver":"1.4.2","vis":{"claude":"visible","codex":"visible","cursor":"shadowed","opencode":"not_scanned"}},{"slug":"docx","name":"Word 文档","desc":"读写 .docx，保留批注与修订记录，生成规范报告","origin":"anthropic/skills","ver":"0.9.0","vis":{"claude":"visible","codex":"visible","cursor":"visible","opencode":"visible"}},{"slug":"slides","name":"幻灯片工坊","desc":"从大纲生成 16:9 演示稿，含图表与讲者备注","origin":"本地编辑","ver":"0.4.1","vis":{"claude":"visible","codex":"shadowed","cursor":"broken","opencode":"not_scanned"}},{"slug":"xlsx","name":"表格计算","desc":"公式重算、透视表、图表导出 CSV 与 PDF","origin":"github.com/acme/skills","ver":"2.0.0","vis":{"claude":"visible","codex":"visible","cursor":"visible","opencode":"visible"}},{"slug":"web-clip","name":"网页剪藏","desc":"把页面正文与配图整理成可检索的 Markdown","origin":"ClawHub","ver":"1.1.0","vis":{"claude":"visible","codex":"not_scanned","cursor":"not_scanned","opencode":"not_scanned"}},{"slug":"code-review","name":"代码评审","desc":"按仓库规范逐文件审阅，输出分级的意见清单","origin":"anthropic/skills","ver":"0.7.3","vis":{"claude":"visible","codex":"visible","cursor":"visible","opencode":"visible"}}];
-const DETECTED = [{"path":"~/.claude/skills/pdf","client":"Claude Code","kind":"skill","fm":true,"scope":"全局"},{"path":"~/.codex/skills/notion-sync","client":"Codex","kind":"skill","fm":true,"scope":"全局"},{"path":"~/.agents/skills/legacy/translate","client":"Agents","kind":"legacy-command","fm":true,"scope":"全局"},{"path":"~/.cursor/skills/web-clip","client":"Cursor","kind":"skill","fm":false,"scope":"全局"},{"path":"~/work/notes-app/.claude/skills/local-note","client":"Claude Code","kind":"skill","fm":true,"scope":"项目"},{"path":"~/.codex/skills","client":"Codex","kind":"nested-suspect","fm":null,"scope":"全局"}];
+const SKILLS = [{"slug":"wechat-mp","name":"公众号内容工坊","desc":"公众号排版、发文与配图生成，含标题备选与素材导出流程","origin":"skills.sh","ver":"1.4.2","vis":{"claude":"visible","codex":"visible","cursor":"shadowed","opencode":"not_scanned"}},{"slug":"docx","name":"Word 文档","desc":"读写 .docx，保留批注与修订记录，生成规范报告","origin":"anthropic/skills","ver":"0.9.0","vis":{"claude":"visible","codex":"visible","cursor":"visible","opencode":"visible"}},{"slug":"slides","name":"幻灯片工坊","desc":"从大纲生成 16:9 演示稿，含图表与讲者备注","origin":"本地编辑","ver":"0.4.1","vis":{"claude":"visible","codex":"shadowed","cursor":"broken","opencode":"not_scanned"}},{"slug":"xlsx","name":"表格计算","desc":"公式重算、透视表、图表导出 CSV 与 PNG","origin":"github.com/acme/skills","ver":"2.0.0","vis":{"claude":"visible","codex":"visible","cursor":"visible","opencode":"visible"}},{"slug":"web-clip","name":"网页剪藏","desc":"把页面正文与配图整理成可检索的 Markdown","origin":"ClawHub","ver":"1.1.0","vis":{"claude":"visible","codex":"not_scanned","cursor":"not_scanned","opencode":"not_scanned"}},{"slug":"code-review","name":"代码评审","desc":"按仓库规范逐文件审阅，输出分级的意见清单","origin":"anthropic/skills","ver":"0.7.3","vis":{"claude":"visible","codex":"visible","cursor":"visible","opencode":"visible"}}];
+const DETECTED = [{"path":"~/.claude/skills/wechat-mp","client":"Claude Code","kind":"skill","fm":true,"scope":"全局"},{"path":"~/.codex/skills/notion-sync","client":"Codex","kind":"skill","fm":true,"scope":"全局"},{"path":"~/.agents/skills/legacy/translate","client":"Agents","kind":"legacy-command","fm":true,"scope":"全局"},{"path":"~/.cursor/skills/web-clip","client":"Cursor","kind":"skill","fm":false,"scope":"全局"},{"path":"~/work/notes-app/.claude/skills/local-note","client":"Claude Code","kind":"skill","fm":true,"scope":"项目"},{"path":"~/.codex/skills","client":"Codex","kind":"nested-suspect","fm":null,"scope":"全局"}];
 const TARGETS = [{"id":"claude","kind":"Claude Code","scope":"全局","path":"~/.claude/skills","enabled":true,"def":true},{"id":"codex","kind":"Codex","scope":"全局","path":"~/.codex/skills","enabled":true,"def":false},{"id":"agents","kind":"Agents","scope":"全局","path":"~/.agents/skills","enabled":true,"def":false},{"id":"cursor","kind":"Cursor","scope":"全局","path":"~/.cursor/skills","enabled":true,"def":false},{"id":"opencode","kind":"opencode","scope":"全局","path":"~/.config/opencode/skills","enabled":false,"def":false},{"id":"notes","kind":"Claude Code · 项目","scope":"notes-app","path":"~/work/notes-app/.claude/skills","enabled":true,"def":false}];
-const UPGRADES = [{"slug":"docx","state":"has_update","installed":"0.9.0","baseline":"0.9.0","latest":"1.0.0","source":"github.com/anthropics/skills"},{"slug":"slides","state":"has_update","installed":"0.4.1","baseline":"0.4.1","latest":"0.5.0","source":"github.com/acme/slides"},{"slug":"pdf","state":"diverged","installed":"1.4.2","baseline":"1.3.0","latest":"1.5.0","source":"skills.sh/pdf"},{"slug":"xlsx","state":"local_modified","installed":"2.0.0","baseline":"2.0.0","latest":"2.0.0","source":"github.com/acme/skills"},{"slug":"code-review","state":"up_to_date","installed":"0.7.3","baseline":"0.7.3","latest":"0.7.3","source":"github.com/anthropics/skills"},{"slug":"web-clip","state":"not_tracked","installed":"1.1.0","baseline":"—","latest":null,"source":null}];
+const UPGRADES = [{"slug":"docx","state":"has_update","installed":"0.9.0","baseline":"0.9.0","latest":"1.0.0","source":"github.com/anthropics/skills"},{"slug":"slides","state":"has_update","installed":"0.4.1","baseline":"0.4.1","latest":"0.5.0","source":"github.com/acme/slides"},{"slug":"wechat-mp","state":"diverged","installed":"1.4.2","baseline":"1.3.0","latest":"1.5.0","source":"skills.sh/wechat-mp"},{"slug":"xlsx","state":"local_modified","installed":"2.0.0","baseline":"2.0.0","latest":"2.0.0","source":"github.com/acme/skills"},{"slug":"code-review","state":"up_to_date","installed":"0.7.3","baseline":"0.7.3","latest":"0.7.3","source":"github.com/anthropics/skills"},{"slug":"web-clip","state":"not_tracked","installed":"1.1.0","baseline":"—","latest":null,"source":null}];
 const ISSUES = [{"id":"broken-link","sev":"error","subject":"~/.cursor/skills/slides","actions":["reproject","unproject"],"label":"坏链"},{"id":"nested-suspect","sev":"warn","subject":"~/.codex/skills","actions":["ignore"],"label":"病态嵌套"},{"id":"frontmatter-invalid","sev":"warn","subject":"~/.cursor/skills/web-clip","actions":["fix-frontmatter"],"label":"frontmatter 无效"}];
 const PROJECTS = [{"root":"~/work/notes-app","clients":["claude-code"],"skills":["local-note","docx"]},{"root":"~/work/heron","clients":["claude-code","cursor"],"skills":["code-review"]}];
 const MARKETS = [{"id":"skills_sh","name":"skills.sh","cap":"indexed","on":true},{"id":"clawhub","name":"ClawHub","cap":"indexed","on":true},{"id":"qoder","name":"Qoder","cap":"guided","on":true},{"id":"skillhub_cn","name":"SkillHub","cap":"guided","on":true},{"id":"skillsmp","name":"SkillsMP","cap":"guided","on":false}];
@@ -589,7 +589,7 @@ const MARKETS = [{"id":"skills_sh","name":"skills.sh","cap":"indexed","on":true}
           <span class="client" :style="{'--cc':CLIENT_COLORS[d.client]}">{{ d.client }}</span>
         </div>
       </TransitionGroup>
-      <p class="h-muted" style="font-size:12px;display:flex;gap:6px;align-items:center;margin-top:14px"><span class="i" v-html="ICON.alert"></span>样例数据：52 处发现按 root 分批流入；病态嵌套只报告，不会自动改动。</p>
+      <p class="h-muted" style="font-size:12px;display:flex;gap:6px;align-items:center;margin-top:14px"><span class="i" v-html="ICON.alert"></span>样例数据：51 处发现按 root 分批流入；病态嵌套只报告，不会自动改动。</p>
     </div>
 
     <!-- ============ LIBRARY ============ -->
@@ -652,13 +652,13 @@ const MARKETS = [{"id":"skills_sh","name":"skills.sh","cap":"indexed","on":true}
               <td><b class="h-mono" style="color:var(--h-text)">{{ i.key }}</b><div class="h-muted" style="font-size:12px;margin-top:2px">{{ i.summary }}</div></td>
               <td class="h-mono">{{ i.ver }}</td>
               <td><span class="h-chip good">可安装 · git</span></td>
-              <td style="text-align:right"><button class="h-btn" style="height:26px" @click="say('预览：将在 ~/.heron/store/pdf 安装 1.5.0')">预览</button> <button class="h-btn primary" style="height:26px" @click="say('pdf 1.5.0 已安装到存储区')">安装</button></td>
+              <td style="text-align:right"><button class="h-btn" style="height:26px" @click="say('预览：将在 ~/.heron/store/wechat-mp 安装 1.5.0')">预览</button> <button class="h-btn primary" style="height:26px" @click="say('wechat-mp 1.5.0 已安装到存储区')">安装</button></td>
             </tr>
           </tbody>
         </table>
       </div>
       <div class="h-sec"><h2>粘贴地址安装</h2><span class="line"></span></div>
-      <div style="display:flex;gap:8px"><input class="h-input" style="max-width:420px" placeholder="https://github.com/anthropics/skills/tree/main/pdf"><button class="h-btn">预览</button></div>
+      <div style="display:flex;gap:8px"><input class="h-input" style="max-width:420px" placeholder="https://github.com/anthropics/skills/tree/main/wechat-mp"><button class="h-btn">预览</button></div>
     </div>
 
     <!-- ============ PROJECTS ============ -->
@@ -837,8 +837,8 @@ const MARKETS = [{"id":"skills_sh","name":"skills.sh","cap":"indexed","on":true}
       <div class="h-dialog-b">
         <label style="display:flex;align-items:center;gap:8px;font-size:12.5px;margin-bottom:10px"><input type="checkbox" class="h-cb" v-model="adoptKeep">保留原位置（把原目录改为链接）</label>
         <pre class="h-code"><span class="h-muted">$ heron adopt --dry-run {{ selected.join(' ') || '...' }}</span>
-→ 存储    ~/.heron/store/pdf            (新建副本, 1.2 MB)
-→ 链接    ~/.claude/skills/pdf → store/pdf
+→ 存储    ~/.heron/store/wechat-mp      (新建副本, 1.2 MB)
+→ 链接    ~/.claude/skills/wechat-mp → store/wechat-mp
 → 跳过    重复内容 1 处（hash 相同，自动去重）
 → 备份    ~/.heron/backup/2026-11-20-1109
 完成 4 处，跳过 1 处，0 错误</pre>
@@ -852,21 +852,21 @@ const MARKETS = [{"id":"skills_sh","name":"skills.sh","cap":"indexed","on":true}
 <template v-if="dialog==='conflict'">
   <div class="h-overlay" @click.self="dialog=null">
     <div class="h-dialog" style="width:min(980px,100%)">
-      <div class="h-dialog-h"><h3>解决冲突 · pdf 1.4.2 → 1.5.0</h3><p>每个文件都要你决定；「保存并重试」会提交选择并重新跑一次升级。</p></div>
-      <div class="h-tabs"><button v-for="(f,i) in ['SKILL.md','scripts/extract.py','reference/form-fill.md']" :key="f" class="h-tab" :class="{'is-active':diffFile===i}" @click="diffFile=i">{{ f }}</button></div>
+      <div class="h-dialog-h"><h3>解决冲突 · wechat-mp 1.4.2 → 1.5.0</h3><p>每个文件都要你决定；「保存并重试」会提交选择并重新跑一次升级。</p></div>
+      <div class="h-tabs"><button v-for="(f,i) in ['SKILL.md','scripts/layout.py','reference/publish.md']" :key="f" class="h-tab" :class="{'is-active':diffFile===i}" @click="diffFile=i">{{ f }}</button></div>
       <div class="h-dialog-b"><div class="h-split">
-        <div><div style="display:flex;align-items:center;margin-bottom:6px"><span class="h-mono">本地（你的改动）</span><button class="h-btn" style="margin-left:auto;height:24px">采用本地</button></div><pre class="h-code"># PDF Toolkit
+        <div><div style="display:flex;align-items:center;margin-bottom:6px"><span class="h-mono">本地（你的改动）</span><button class="h-btn" style="margin-left:auto;height:24px">采用本地</button></div><pre class="h-code"># 公众号内容工坊
 
 ## 用法
-- 抽取：<b style="color:var(--h-bad)">- pdf extract in.pdf --pages 1-5</b>
-<span style="background:color-mix(in srgb,var(--h-bad) 18%,transparent)">+ pdf extract in.pdf --range 1-5 --ocr</span>
-- 合并、填表见 scripts/</pre></div>
-        <div><div style="display:flex;align-items:center;margin-bottom:6px"><span class="h-mono">上游（1.5.0）</span><button class="h-btn" style="margin-left:auto;height:24px">采用上游</button></div><pre class="h-code"># PDF Toolkit
+- 排版：<b style="color:var(--h-bad)">- wechat-mp layout draft.md --sections 1-5</b>
+<span style="background:color-mix(in srgb,var(--h-bad) 18%,transparent)">+ wechat-mp layout draft.md --sections 1-5 --cover</span>
+- 发文、配图见 scripts/</pre></div>
+        <div><div style="display:flex;align-items:center;margin-bottom:6px"><span class="h-mono">上游（1.5.0）</span><button class="h-btn" style="margin-left:auto;height:24px">采用上游</button></div><pre class="h-code"># 公众号内容工坊
 
 ## 用法
-- 抽取：<b style="color:var(--h-good)">pdf extract --pages 1-5 in.pdf</b>
-<span style="background:color-mix(in srgb,var(--h-good) 18%,transparent)">+ pdf fill form.pdf data.json</span>
-- 合并、填表见 scripts/</pre></div>
+- 排版：<b style="color:var(--h-good)">wechat-mp layout --sections 1-5 draft.md</b>
+<span style="background:color-mix(in srgb,var(--h-good) 18%,transparent)">+ wechat-mp publish article.html --cover auto</span>
+- 发文、配图见 scripts/</pre></div>
       </div></div>
       <div class="h-dialog-f"><span class="h-mono" style="margin-right:auto">1 / 3 个文件已决定</span><button class="h-btn" @click="dialog=null">稍后再说</button><button class="h-btn primary" @click="dialog=null; say('冲突已解决，已重新升级')">保存并重试</button></div>
     </div>
@@ -902,7 +902,7 @@ const app = createApp({
     const ALL_VIEWS = ['overview','library','discover','sources','projects','upgrades','doctor','settings'];
     const view = ref(ALL_VIEWS.includes(params.get('view')) ? params.get('view') : 'overview');
 
-    /* ---------- 发现池（按 root 顺序的 52 个样例） ---------- */
+    /* ---------- 发现池（按 root 顺序的 51 个样例） ---------- */
     const hashHue = s => { let h=0; for(const c of s) h=(h*31+c.charCodeAt(0))%360; return h; };
     const DISCOVERED = [];
     SCAN_ROOTS.forEach(r=>{ SAMPLE_NAMES[r.client].slice(0,r.count).forEach(n=>{
@@ -986,16 +986,16 @@ const app = createApp({
     function finishScan(){
       clearInterval(tTimer); tTimer=null;
       SCAN_ROOTS.forEach((r,i)=>{ rootCursor[i]=r.count; });
-      scan.found=52; scan.stage='sum'; prog.value=1; stream.value=DISCOVERED.slice();
+      scan.found=51; scan.stage='sum'; prog.value=1; stream.value=DISCOVERED.slice();
       scan.phase='done'; lastScanLabel.value='刚刚'; pulse(bump); pulse(numPulse);
       setTimeout(()=>{ if(scan.phase==='done'){ scan.phase='idle'; prog.value=0; } },1600);
       if(truncated.value)
         say('结果不完整 · 已达 50 000 目录上限','error',{icon:ICON.alert,actionLabel:'排除设置',link:true,action:()=>go('settings')});
       else
-        say('扫描完成 · 52 个新发现 · 2.8s','ok',{actionLabel:'查看',action:()=>go('discover')});
+        say('扫描完成 · 51 个新发现 · 2.8s','ok',{actionLabel:'查看',action:()=>go('discover')});
     }
     function scanClick(){ scan.phase==='run' ? scanCancel() : scanStart(); }
-    const unmanaged = computed(()=> running.value ? scan.found : (queueClean ? 0 : 52));
+    const unmanaged = computed(()=> running.value ? scan.found : (queueClean ? 0 : 51));
     const brokenLinks = ref(queueClean ? 0 : 1);
     const queueCount = computed(()=> (brokenLinks.value>0?1:0)+(unmanaged.value>0?1:0));
     /* 派生显示值 */
@@ -1104,8 +1104,8 @@ const app = createApp({
     const UP_TONE = { up_to_date:'good', has_update:'vit', diverged:'bad', local_modified:'warn', not_tracked:'neutral' };
     const UP_LABEL = { up_to_date:'已最新', has_update:'有更新', diverged:'分叉', local_modified:'本地已改', not_tracked:'未跟踪' };
     const MARKET_ITEMS = [
-      { key:'anthropics/skills · pdf', ver:'1.5.0', summary:'PDF 表单、抽取与合并；官方维护' },
-      { key:'skills.sh/pdf', ver:'1.4.2', summary:'社区镜像，含 OCR 扩展' },
+      { key:'anthropics/skills · wechat-mp', ver:'1.5.0', summary:'公众号排版、发文与配图生成；官方维护' },
+      { key:'skills.sh/wechat-mp', ver:'1.4.2', summary:'社区镜像，含配图扩展' },
       { key:'anthropics/skills · docx', ver:'1.0.0', summary:'Word 文档读写，保留批注' },
       { key:'acme/slides', ver:'0.5.0', summary:'大纲 → 演示稿，含图表' },
     ];

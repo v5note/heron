@@ -277,7 +277,10 @@ mod tests {
     fn a_reference_that_only_walks_within_the_skill_is_no_evidence() {
         let l = layout(
             "skills/wechat-mp",
-            &["skills/wechat-mp/SKILL.md", "skills/wechat-mp/references/a.md"],
+            &[
+                "skills/wechat-mp/SKILL.md",
+                "skills/wechat-mp/references/a.md",
+            ],
             &[(
                 "skills/wechat-mp/SKILL.md",
                 "See [a](../wechat-mp/references/a.md) and `./scripts/run.sh`.",
@@ -291,7 +294,10 @@ mod tests {
         // Prose about a sibling the author never committed must not force a whole-repo install.
         let l = layout(
             "skills/wechat-mp",
-            &["skills/wechat-mp/SKILL.md", "skills/wechat-mp/references/a.md"],
+            &[
+                "skills/wechat-mp/SKILL.md",
+                "skills/wechat-mp/references/a.md",
+            ],
             &[(
                 "skills/wechat-mp/SKILL.md",
                 "Compare with ../missing/tool.md first.",
