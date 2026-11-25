@@ -43,6 +43,7 @@ OPTICAL_RISE = 0.006            # body-height fraction the artwork is lifted
 DESPECKLE = 9                   # window (px) that tells a stray hair from detail
 DESPECKLE_STEP = 60             # tone jump (0-255) that marks a stray hair
 INK_GREY = 150                  # grey between black and white ink counts as ink
+TRAY_SIZE = 44                  # tray: 2x the ~22 pt menu bar, alpha-only silhouette
 
 ICNS_TYPES = {
     16: b"icp4", 32: b"icp5", 64: b"icp6",
@@ -181,6 +182,24 @@ def compose(size: int, body: int, corner: float, ink: Image.Image,
 
 
 # --- writers ----------------------------------------------------------------
+def compose_tray(size: int, ink: Image.Image, centroid_x: float, fill: float = 0.92) -> Image.Image:
+    """The tray icon is the silhouette alone: no plate, and the art fills the canvas.
+
+    A menu-bar status item is about 18 pt tall, so the app-icon recipe — artwork at 64 % of a
+    plate — would leave the heron a handful of pixels wide. macOS renders a template image from
+    its alpha channel only, which is why the white plate is not drawn here: as a template it
+    would turn into a solid rounded square.
+    """
+    ss = 4
+    S = size * ss
+    canvas = Image.new("RGBA", (S, S), (0, 0, 0, 0))
+    box = S * fill
+    scale = min(box / ink.width, box / ink.height)
+    art = ink.resize((max(1, round(ink.width * scale)), max(1, round(ink.height * scale))), Image.LANCZOS)
+    canvas.alpha_composite(art, (round(S / 2 - centroid_x * scale), round(S / 2 - art.height / 2)))
+    return canvas.resize((size, size), Image.BOX)
+
+
 def png_bytes(im: Image.Image) -> bytes:
     buf = io.BytesIO()
     im.save(buf, "PNG", optimize=True)
@@ -224,10 +243,14 @@ MSIX = {
 }
 
 
-def emit_family(out: Path, master: Image.Image, windows: Image.Image) -> None:
+def emit_family(out: Path, master: Image.Image, windows: Image.Image,
+                tray: Image.Image) -> None:
     out.mkdir(parents=True, exist_ok=True)
     master.save(out / "icon-master.png", optimize=True)
     windows.save(out / "windows-master.png", optimize=True)
+    # Not part of the bundled icon list: the shell embeds this one with include_bytes! and hands
+    # it to the tray, where macOS is asked to treat it as a template.
+    tray.save(out / "tray-template.png", optimize=True)
     write_icns(master, out / "icon.icns")
     write_ico(master, out / "icon.ico")
     for name, px in PNG_SIZES.items():
@@ -249,8 +272,10 @@ def main() -> None:
     mac = compose(SIZE, MAC_BODY, MAC_SQUIRCLE, ink, cx, (255, 255, 255))
     win = compose(SIZE, WIN_BODY, WIN_SQUIRCLE, ink, cx, (255, 255, 255))
 
-    emit_family(ROOT / "src-tauri/icons", mac, win)
-    print("wrote src-tauri/icons (macOS squircle + Windows full bleed)")
+    tray = compose_tray(TRAY_SIZE, ink, cx)
+
+    emit_family(ROOT / "src-tauri/icons", mac, win, tray)
+    print("wrote src-tauri/icons (macOS squircle + Windows full bleed + tray silhouette)")
 
 
 if __name__ == "__main__":

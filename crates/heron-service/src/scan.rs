@@ -113,12 +113,16 @@ pub fn prepare_with(
         }
     }
     // This app's own projections sit inside the scanned client directories. Telling the classifier
-    // where they are keeps a taken-over skill out of the discovery list.
+    // where they are keeps a taken-over skill out of the discovery list. The store is named too: a
+    // link the user made can point through a projection into the store copy itself, and that is the
+    // same taken-over content reached by another path.
     let projected: Vec<PathBuf> = projection::list_all(ctx.db.conn())?
         .into_iter()
         .map(|row| PathBuf::from(row.path))
         .collect();
-    let classifier = Classifier::new(specs, projects).with_projections(projected);
+    let classifier = Classifier::new(specs, projects)
+        .with_projections(projected)
+        .with_store_root(ctx.store_root());
 
     let mut options = ScanOptions {
         extra_excludes: req.extra_excludes.clone(),
@@ -141,16 +145,17 @@ pub fn walk(plan: &ScanPlan, monitor: &mut ScanMonitor<'_>) -> Result<ScanResult
     scan_monitored(&plan.classifier, &plan.options, monitor)
 }
 
-/// Drop the rows a scan indexed for a directory Heron projected itself.
+/// Drop the rows a scan indexed for content Heron owns itself.
 ///
 /// A scan no longer reports those, but the index can still hold rows written before the projection
 /// was recorded — an older build, or a projection made on this machine after the last walk. They are
-/// managed content, so the discovery list must not offer them again.
+/// managed content, so the discovery list must not offer them again. The same holds for a row that
+/// names a directory inside the store: it is the library's own copy, reached through a user-made
+/// link that resolved into it.
 pub fn without_projection_outputs(ctx: &Ctx, rows: Vec<DetectedRow>) -> Result<Vec<DetectedRow>> {
+    let store = std::fs::canonicalize(ctx.store_root()).unwrap_or(ctx.store_root());
+    let store = heron_platform::paths::normalize(&store);
     let projected = projection::list_all(ctx.db.conn())?;
-    if projected.is_empty() {
-        return Ok(rows);
-    }
     Ok(rows
         .into_iter()
         .filter(|row| {
@@ -158,9 +163,12 @@ pub fn without_projection_outputs(ctx: &Ctx, rows: Vec<DetectedRow>) -> Result<V
                 return true;
             };
             let dir = heron_platform::paths::normalize(dir);
-            !projected
-                .iter()
-                .any(|p| heron_platform::paths::same_path_ci(std::path::Path::new(&p.path), &dir))
+            if heron_platform::paths::is_same_or_inside(&store, &dir) {
+                return false;
+            }
+            !projected.iter().any(|p| {
+                heron_platform::paths::same_path_ci(std::path::Path::new(&p.path), &dir)
+            })
         })
         .collect())
 }

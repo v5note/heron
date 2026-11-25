@@ -16,6 +16,10 @@
     "website": "Project Homepage",
     "checkUpdate": "Check for Updates…"
   },
+  "tray": {
+    "show": "Show Main Window",
+    "quit": "Quit Heron"
+  },
   "nav": {
     "overview": "Overview",
     "library": "My skills",
@@ -507,6 +511,8 @@
     "autoDoctorHint": "Run the read-only check-up after every scan",
     "keepLocal": "Keep local edits on update",
     "keepLocalHint": "Three-way merge on upgrade, preserving your changes",
+    "autostart": "Launch at login",
+    "autostartHint": "Start Heron automatically when you sign in",
     "dataPaths": "Data & paths",
     "dataRoot": "Data root",
     "marketCache": "Market cache",
@@ -537,7 +543,8 @@
     "E_SAFETY_REFUSED": "Refused for safety",
     "E_PERMISSION": "No permission for that path",
     "E_INTERNAL": "Internal error",
-    "E_INTERNAL_DETAIL": "Internal error: {detail}"
+    "E_INTERNAL_DETAIL": "Internal error: {detail}",
+    "E_NO_HOST": "Browser preview: no local backend, so the data is empty. Open the app window."
   },
   "visibility": {
     "visible": "live",

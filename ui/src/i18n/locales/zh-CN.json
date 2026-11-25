@@ -16,6 +16,10 @@
     "website": "项目主页",
     "checkUpdate": "检查更新…"
   },
+  "tray": {
+    "show": "显示主窗口",
+    "quit": "退出 Heron"
+  },
   "nav": {
     "overview": "概览",
     "library": "我的 Skill",
@@ -507,6 +511,8 @@
     "autoDoctorHint": "每次扫描结束后自动运行只读体检",
     "keepLocal": "更新时保留本地改动",
     "keepLocalHint": "升级时三方合并，保留你的本地修改",
+    "autostart": "开机启动",
+    "autostartHint": "登录系统后自动运行 Heron",
     "dataPaths": "数据与路径",
     "dataRoot": "数据根目录",
     "marketCache": "市场缓存",
@@ -537,7 +543,8 @@
     "E_SAFETY_REFUSED": "为安全起见拒绝了该操作",
     "E_PERMISSION": "没有权限访问该路径",
     "E_INTERNAL": "内部错误",
-    "E_INTERNAL_DETAIL": "内部错误：{detail}"
+    "E_INTERNAL_DETAIL": "内部错误：{detail}",
+    "E_NO_HOST": "浏览器预览：未连接本地后端，数据为空。请在应用窗口中查看。"
   },
   "visibility": {
     "visible": "生效中",

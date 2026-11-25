@@ -22,9 +22,12 @@ heron-vcs = { path = "../crates/heron-vcs" }
 heron-source = { path = "../crates/heron-source" }
 heron-projection = { path = "../crates/heron-projection" }
 heron-service = { path = "../crates/heron-service" }
-tauri = { version = "2", features = [] }
+# `tray-icon` is what makes `tauri::tray` exist at all — it is not in tauri's default set — and
+# `image-png` decodes the tray assets embedded with `include_bytes!`.
+tauri = { version = "2", features = ["tray-icon", "image-png"] }
 tauri-plugin-opener = "2"
 tauri-plugin-updater = "2"
 tauri-plugin-process = "2"
+tauri-plugin-autostart = "2"
 serde = { workspace = true }
 serde_json = { workspace = true }

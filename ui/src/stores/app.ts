@@ -2,6 +2,7 @@
 
 import { defineStore } from "pinia";
 import { api, onEvent, type AdoptResult, type AppError, type CancelAck, type StartAck } from "../api";
+import { readAutostart, writeAutostart } from "../api/autostart";
 import type {
   ClientRow, DetectedRow, DoctorDone, DoctorProgress, DoctorReport, Msg, ScanPhase, ScanProgress,
   SkillRow, TargetRow, UpgradeCandidate, UpgradeOutcome, VerifyDone, VerifyProgress, VisibilityReport,
@@ -236,6 +237,12 @@ export const useAppStore = defineStore("app", {
   state: () => ({
     ...initialPrefs(),
     ...initialGeneral(),
+    /**
+     * 开机启动 is not a localStorage mirror: the OS holds the registration (LaunchAgent / 注册表 /
+     * autostart desktop 文件), so this only ever reflects what `syncAutostart()` read back —
+     * `false` until then, including in a browser dev session with no Rust host.
+     */
+    autostart: false,
     /** What the OS says right now; only consulted while `colorMode` is `system`. */
     systemIsDark: systemPrefersDark(),
     busy: false,
@@ -361,6 +368,26 @@ export const useAppStore = defineStore("app", {
       this.keepLocal = on;
       localStorage.setItem(KEEP_LOCAL_KEY, on ? "1" : "0");
     },
+    /**
+     * 开机启动: take the value from the OS rather than trusting the switch's last position — a user
+     * can remove the registration outside the app, and macOS can drop a LaunchAgent on an upgrade.
+     * Silent on failure: without a Rust host (vite dev in a browser) there is nothing to report.
+     */
+    async syncAutostart() {
+      try {
+        this.autostart = await readAutostart();
+      } catch {
+        this.autostart = false;
+      }
+    },
+    /** Writes the registration and settles on what the OS answers back, not on what was asked. */
+    async setAutostart(on: boolean) {
+      try {
+        this.autostart = await writeAutostart(on);
+      } catch (e) {
+        this.fail(e);
+      }
+    },
     /** Re-apply when the OS flips, but only while the user asked to follow it. */
     watchSystemTheme() {
       const mq = typeof window !== "undefined" ? window.matchMedia?.("(prefers-color-scheme: dark)") : undefined;
@@ -394,7 +421,9 @@ export const useAppStore = defineStore("app", {
       // Identical failures inside one render pass (e.g. every list command when the Rust host is
       // absent) collapse into one toast instead of stacking.
       if (this.toasts.some((toast) => toast.text === text)) return;
-      this.toast("error", text);
+      // No Rust host is a preview limitation, not a broken app: it gets the amber register the UI
+      // already uses for "this could not be done here", never a red internal error over a TypeError.
+      this.toast(err.code === "E_NO_HOST" ? "warn" : "error", text);
     },
     async init() {
       this.watchSystemTheme();
@@ -407,6 +436,7 @@ export const useAppStore = defineStore("app", {
       } catch (e) {
         this.fail(e);
       }
+      await this.syncAutostart();
       this.ready = true;
       await this.refreshAll();
       // 打开时自动扫描: kick off a machine-wide pass once per session so the inventory reflects

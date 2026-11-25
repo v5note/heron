@@ -67,6 +67,9 @@ pub struct Classifier {
     /// Skill directories this app projected into a client's skills folder. They live in a scanned
     /// location, but they are content the library already took over — not discoveries.
     projections: Vec<PathBuf>,
+    /// Heron's store (`~/.heron/skills`): the single place managed content lives. A scanned link
+    /// that resolves into it reaches content the library already owns.
+    store_root: Option<PathBuf>,
     /// The directory names a client owns, e.g. `.claude`. Derived from the declared locations
     /// instead of being listed here, so a client added to the matrix is covered by nested-suspect
     /// detection on the same day it is added to the scan.
@@ -133,6 +136,7 @@ impl Classifier {
             clients,
             projects,
             projections: Vec::new(),
+            store_root: None,
             client_dirs,
         }
     }
@@ -145,6 +149,27 @@ impl Classifier {
             .map(|p| heron_platform::paths::normalize(&p))
             .collect();
         self
+    }
+
+    /// Tell the classifier where the store of managed skills lives.
+    ///
+    /// A client directory can hold a link the user made that points — directly or through another
+    /// link — at the store copy of a skill Heron already took over. Resolving such a link yields
+    /// the library's own content, which is never a discovery.
+    pub fn with_store_root(mut self, store_root: PathBuf) -> Self {
+        // Compare on the footing the walker compares on: a resolved path, because `/tmp` and
+        // `/private/tmp` name one place on macOS and a lexical join would miss them.
+        let resolved = std::fs::canonicalize(&store_root).unwrap_or(store_root);
+        self.store_root = Some(heron_platform::paths::normalize(&resolved));
+        self
+    }
+
+    /// True when a resolved skill directory is content the library owns: the store itself, or
+    /// anything underneath it.
+    pub fn is_store_content(&self, dir: &Path) -> bool {
+        self.store_root
+            .as_ref()
+            .is_some_and(|store| heron_platform::paths::is_same_or_inside(store, dir))
     }
 
     pub fn clients(&self) -> &[ClientSpec] {

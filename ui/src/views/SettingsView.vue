@@ -343,6 +343,21 @@ function changeProjection(event: Event) {
             />
           </span>
         </div>
+        <div class="row">
+          <span class="label">{{ t("settings.autostart") }}</span>
+          <span class="switch-cell">
+            <small class="row-hint">{{ t("settings.autostartHint") }}</small>
+            <button
+              type="button"
+              class="switch"
+              :class="{ on: store.autostart }"
+              role="switch"
+              :aria-checked="store.autostart"
+              :aria-label="t('settings.autostart')"
+              @click="store.setAutostart(!store.autostart)"
+            />
+          </span>
+        </div>
       </div>
     </div>
 
@@ -451,20 +466,25 @@ function changeProjection(event: Event) {
 
 .card { margin-bottom: 16px; }
 
-/* One grid for every label/value pair in every card: the label keeps a fixed 100px gutter, the
+/* One grid for every label/value pair in every card: the label keeps a fixed 140px gutter, the
    value takes the rest and is anchored to the card's right edge — controls sit where the eye
    already looks for them after reading the label, not floating in the middle of a 1fr column.
    The gutter is the same in every row and every card, so "Git", "平台" and "应用更新" start on one
    rule. Each .row is its own grid rather than display:contents rows placed by the card's grid: the
    row markup stays intact, and no engine can drop a value into the label column.
 
+   140px is sized to the widest label on the page: the 9-character "更新时保留本地改动" and
+   "扫描完成后自动体检" measure 114.8px of text at 12.5px, plus the label's own 15px inset = 129.8px.
+   The ~10px left over is the slack that keeps them off a second line when the font family or weight
+   changes; a narrower gutter (the old 100px) broke every label of 7 characters or more.
+
    The divider belongs to the row, not to the two cells: drawn per cell it stopped at the label's
    edge and read as a scratch on the card. Now it spans the whole card exactly like .card-head's
-   line. The label's 15px inset lives in the gutter (100 + 15) and the value's 15px sits at the
+   line. The label's 15px inset lives in the gutter (140 + 15) and the value's 15px sits at the
    card's edge, so both columns line up with the section titles above them. */
 .grid-card .card-body { padding: 2px 0; }
 .grid-card .row {
-  display: grid; grid-template-columns: 100px minmax(0, 1fr);
+  display: grid; grid-template-columns: 140px minmax(0, 1fr);
   column-gap: 24px; align-items: center;
   border-top: 1px solid var(--line);
 }

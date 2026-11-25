@@ -9,6 +9,7 @@
     "core:default",
     "opener:default",
     "updater:default",
+    "autostart:default",
     "core:menu:allow-new",
     "core:menu:allow-set-as-app-menu",
     "core:menu:allow-set-as-window-menu"

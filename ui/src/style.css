@@ -254,6 +254,12 @@ input[type="checkbox"]:checked::after {
   content: ""; width: 8px; height: 4px; transform: rotate(-45deg) translateY(-1px);
   border-left: 1.8px solid var(--bg); border-bottom: 1.8px solid var(--bg);
 }
+/* appearance:none also drops the UA's own dimming, so a disabled box is pixel-identical to a live
+   one and reads as a broken control rather than an unavailable one. */
+input[type="checkbox"]:disabled { opacity: 0.38; cursor: not-allowed; }
+/* "Some but not all" on a select-all box, for the same reason: the native dash is gone. */
+input[type="checkbox"]:indeterminate { background: var(--text); border-color: var(--text); }
+input[type="checkbox"]:indeterminate::after { content: ""; width: 8px; border-bottom: 1.8px solid var(--bg); }
 code, .mono { font-family: var(--font-mono); font-size: 12px; }
 a { color: var(--accent); }
 

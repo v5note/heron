@@ -38,6 +38,17 @@ export interface CancelAck {
   canceling: boolean;
 }
 
+/**
+ * One row of the tray menu, as the shell wants it: `id` is what the click carries back (either a
+ * shell-handled `show`/`quit` or a `tray://action` for the UI), `text` is the label. A row with
+ * `separator` draws a divider and needs neither.
+ */
+export interface TrayItem {
+  id?: string;
+  text?: string;
+  separator?: boolean;
+}
+
 function toAppError(raw: unknown): AppError {
   if (raw && typeof raw === "object" && "code" in raw) {
     const value = raw as { code: string; params?: Record<string, string>; retryable?: boolean };
@@ -46,7 +57,18 @@ function toAppError(raw: unknown): AppError {
   return { code: "E_INTERNAL", params: { detail: String(raw) }, retryable: false };
 }
 
+/**
+ * Whether this page runs inside a Tauri window. `invoke` reaches for `window.__TAURI_INTERNALS__`,
+ * which only the shell injects — in a plain browser tab on the vite dev URL it is undefined, and
+ * every command would otherwise fail as an opaque `TypeError: … (reading 'invoke')`. Checked per
+ * call, not at import time, so the answer is the environment's, not the module's load order.
+ */
+function hasHost(): boolean {
+  return typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
+}
+
 async function call<T>(command: string, args?: Record<string, unknown>): Promise<T> {
+  if (!hasHost()) throw { code: "E_NO_HOST", params: {}, retryable: false } satisfies AppError;
   try {
     return await invoke<T>(command, args);
   } catch (raw) {
@@ -137,6 +159,8 @@ export const api = {
     call<UpgradeOutcome>("resolve_conflict", { slug, resolutions }),
   nativeScanStatus: () => call<NativeScanStatus[]>("native_scan_status"),
   nativeScanPlan: (client: string) => call<{ client: string; config_path: string; diff: string }>("native_scan_plan", { client }),
+  /** (Re)build the tray icon's menu. Calling it again with new labels replaces the menu in place. */
+  trayInstall: (items: TrayItem[]) => call<null>("tray_install", { items }),
 };
 
 /**

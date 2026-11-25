@@ -10,6 +10,7 @@ import ActionPill from "./components/ActionPill.vue";
 import ToastHost from "./components/ToastHost.vue";
 import { useAppStore } from "./stores/app";
 import { setupMenu } from "./menu";
+import { setupTray } from "./tray";
 import pkg from "../package.json";
 
 const store = useAppStore();
@@ -136,6 +137,9 @@ watch(() => store.platform, (os) => {
 onMounted(() => {
   void store.init();
   void store.watchScan();
+  // The tray needs no OS detail and its labels only need the locale, which `i18n` settled at
+  // import time — so unlike the menu bar, it can be put up right away.
+  setupTray();
   window.addEventListener("keydown", onKeydown);
 });
 

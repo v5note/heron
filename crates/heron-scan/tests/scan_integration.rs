@@ -163,6 +163,114 @@ fn broken_frontmatter_is_kept_but_flagged() {
     assert!(broken.issues.iter().any(|i| i.detail == "no_frontmatter"));
 }
 
+/// The store holds content Heron already took over. A link the user made in one client's directory
+/// can point through a projection link into the store copy, and resolving it must not hand the
+/// library's own copy back as a skill still waiting to be taken over.
+#[cfg(unix)]
+#[test]
+fn a_link_resolving_into_the_store_is_not_a_discovery() {
+    use std::os::unix::fs::symlink;
+    let tmp = tempfile::tempdir().unwrap();
+    let home = tmp.path();
+    let store = home.join(".heron/skills");
+
+    write(
+        home,
+        ".heron/skills/find-skills/SKILL.md",
+        &skill("find-skills", "Discover skills"),
+    );
+    write(
+        home,
+        ".claude/skills/novel/SKILL.md",
+        &skill("novel", "Still a discovery"),
+    );
+    fs::create_dir_all(home.join(".agents/skills")).unwrap();
+    fs::create_dir_all(home.join(".claude/skills")).unwrap();
+    // Heron's projection of the store copy, and the user's own link to that projection.
+    symlink(store.join("find-skills"), home.join(".agents/skills/find-skills")).unwrap();
+    symlink(
+        "../../.agents/skills/find-skills",
+        home.join(".claude/skills/find-skills"),
+    )
+    .unwrap();
+
+    let classifier = Classifier::new(
+        vec![
+            ClientSpec {
+                id: "claude".into(),
+                display_name: "Claude Code".into(),
+                global_paths: vec![home.join(".claude/skills")],
+                project_paths: vec![PathBuf::from(".claude/skills")],
+                command_paths: vec![],
+                project_command_paths: vec![],
+                priority: 20,
+            },
+            ClientSpec {
+                id: "agents".into(),
+                display_name: "Agents".into(),
+                global_paths: vec![home.join(".agents/skills")],
+                project_paths: vec![PathBuf::from(".agents/skills")],
+                command_paths: vec![],
+                project_command_paths: vec![],
+                priority: 10,
+            },
+        ],
+        vec![],
+    )
+    .with_projections(vec![home.join(".agents/skills/find-skills")])
+    .with_store_root(store);
+
+    let result = scan(&classifier, &ScanOptions::default()).unwrap();
+    let slugs: Vec<_> = result.hits.iter().filter_map(|h| h.slug.clone()).collect();
+    assert!(
+        !slugs.contains(&"find-skills".to_string()),
+        "the store copy is managed content, not a discovery: {slugs:?}"
+    );
+    assert!(
+        !result
+            .hits
+            .iter()
+            .any(|h| h.path.to_string_lossy().contains(".heron/skills")),
+        "no hit is reported inside the store"
+    );
+    assert!(
+        slugs.contains(&"novel".to_string()),
+        "an ordinary skill in the same directory is still found"
+    );
+}
+
+/// The store can also be named directly as a scan root (设置 → 扫描目录 → 自定义目录). Pointing the
+/// walk at the library's own content must not turn every managed skill into a discovery.
+#[test]
+fn the_store_is_not_a_discovery_even_when_scanned_directly() {
+    let tmp = tempfile::tempdir().unwrap();
+    let home = tmp.path();
+    let store = home.join(".heron/skills");
+    write(home, ".heron/skills/tdd/SKILL.md", &skill("tdd", "Test first"));
+    write(home, ".heron/skills/research/SKILL.md", &skill("research", "Investigate"));
+
+    let classifier = Classifier::new(
+        vec![ClientSpec {
+            id: "heron".into(),
+            display_name: "Heron".into(),
+            global_paths: vec![store.clone()],
+            project_paths: vec![PathBuf::from(".heron/skills")],
+            command_paths: vec![],
+            project_command_paths: vec![],
+            priority: 100,
+        }],
+        vec![],
+    )
+    .with_store_root(store);
+
+    let result = scan(&classifier, &ScanOptions::default()).unwrap();
+    assert!(
+        result.hits.is_empty(),
+        "managed content is never re-discovered: {:?}",
+        result.hits.iter().map(|h| &h.path).collect::<Vec<_>>()
+    );
+}
+
 #[test]
 fn missing_roots_are_reported_not_fatal() {
     let tmp = tempfile::tempdir().unwrap();

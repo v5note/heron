@@ -332,6 +332,13 @@ fn classify_skill(dir: &Path, classifier: &Classifier) -> Option<Hit> {
         .map(|s| s.as_str().to_owned())
         .or_else(|| classifier.slug_for(&skill_md, &classification));
     let real_dir = std::fs::canonicalize(dir).unwrap_or_else(|_| dir.to_path_buf());
+    // The link we followed can land inside the store: a user-made link in one client's directory
+    // pointing at a link Heron wrote, which itself points at `~/.heron/skills/<slug>`. The content
+    // there is already taken over, so resolving it must not hand the library's own copy back as a
+    // discovery.
+    if classifier.is_store_content(&real_dir) {
+        return None;
+    }
     // A skill reached through a user-made symlink (its real directory lives outside the scanned
     // roots) is reported at that real directory, not at the link: Discover shows the skill's own
     // home, and adopting it then treats it as an ordinary directory. A symlink that survives the

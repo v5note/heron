@@ -17,6 +17,9 @@ use heron_service::project::ProjectRequest;
 use heron_service::scan::ScanRequest;
 use heron_service::{adopt, doctor, install, upgrade, verify, Ctx};
 use serde::Serialize;
+use tauri::image::Image;
+use tauri::menu::{Menu, MenuItemBuilder, PredefinedMenuItem};
+use tauri::tray::{MouseButton, MouseButtonState, TrayIcon, TrayIconBuilder, TrayIconEvent};
 use tauri::{Emitter, Manager, State};
 
 /// A background check does not live in `AppState`'s mutex: the worker thread reads these atomics
@@ -46,6 +49,13 @@ struct AppState {
     scan: TaskFlags,
     verify: TaskFlags,
     doctor: TaskFlags,
+    /// The status-item icon, once the UI has handed down its menu. Kept alive here: a tray that
+    /// is dropped disappears from the menu bar.
+    tray: Mutex<Option<TrayIcon>>,
+    /// Whether a tray exists, read by the window's close handler. Deliberately an atomic rather
+    /// than the mutex above: `on_window_event` runs on the main thread, while building a tray
+    /// blocks that same thread waiting for a main-thread task — locking here could deadlock.
+    tray_up: Arc<AtomicBool>,
 }
 
 fn err(e: HeronError) -> Msg {
@@ -1267,6 +1277,104 @@ fn projects_discover(
     Ok(found)
 }
 
+/// One row of the tray menu. The UI sends the whole list because the labels are UI copy: only the
+/// webview knows which language is active, which is the same reason the menu bar is built there.
+/// The ids, though, belong to this file — `show` and `quit` are answered by the shell, everything
+/// else goes back to the UI as a `tray://action` event and runs the action the menu bar runs.
+#[derive(serde::Deserialize)]
+struct TrayItem {
+    #[serde(default)]
+    id: String,
+    #[serde(default)]
+    text: String,
+    #[serde(default)]
+    separator: bool,
+}
+
+/// Bring the window back from behind the tray.
+fn show_main(app: &tauri::AppHandle) {
+    if let Some(w) = app.get_webview_window("main") {
+        let _ = w.unminimize();
+        let _ = w.show();
+        let _ = w.set_focus();
+    }
+}
+
+fn tray_menu(app: &tauri::AppHandle, items: &[TrayItem]) -> tauri::Result<Menu<tauri::Wry>> {
+    let menu = Menu::new(app)?;
+    for item in items {
+        if item.separator {
+            menu.append(&PredefinedMenuItem::separator(app)?)?;
+        } else {
+            menu.append(
+                &MenuItemBuilder::with_id(item.id.as_str(), item.text.as_str()).build(app)?,
+            )?;
+        }
+    }
+    Ok(menu)
+}
+
+/// Install — or, on a language change, rebuild — the status-item icon. Called by the UI once the
+/// locale is known, so the first paint does not have a half-English tray menu.
+#[tauri::command]
+fn tray_install(
+    app: tauri::AppHandle,
+    state: State<'_, AppState>,
+    items: Vec<TrayItem>,
+) -> Result<(), Msg> {
+    let tray_error = |e: tauri::Error| {
+        eprintln!("heron: tray: {e}");
+        Msg::new("E_INTERNAL")
+    };
+    let menu = tray_menu(&app, &items).map_err(tray_error)?;
+    // The mutex stays held across the calls below: they round-trip to the main thread, which never
+    // takes this lock, so they cannot deadlock — and holding it is what keeps two concurrent
+    // installs (a locale switch landing mid-install) from producing two icons in the menu bar.
+    let mut guard = state.tray.lock().unwrap();
+    if let Some(tray) = guard.as_ref() {
+        return tray.set_menu(Some(menu)).map_err(tray_error);
+    }
+    // macOS tints a template image from its alpha channel and drops the colours, so it gets the
+    // bare silhouette; everywhere else the tray keeps the colour app icon.
+    #[cfg(target_os = "macos")]
+    let icon = include_bytes!("../icons/tray-template.png");
+    #[cfg(not(target_os = "macos"))]
+    let icon = include_bytes!("../icons/32x32.png");
+    let icon = Image::from_bytes(icon).map_err(tray_error)?;
+
+    let builder = TrayIconBuilder::new()
+        .menu(&menu)
+        // Left click raises the window, right click opens the menu.
+        .show_menu_on_left_click(false)
+        .tooltip("Heron")
+        .icon(icon)
+        .on_menu_event(|app, event| match event.id().as_ref() {
+            "show" => show_main(app),
+            "quit" => app.exit(0),
+            id => {
+                let _ = app.emit("tray://action", id.to_string());
+            }
+        })
+        .on_tray_icon_event(|tray, event| {
+            if let TrayIconEvent::Click {
+                button: MouseButton::Left,
+                button_state: MouseButtonState::Up,
+                ..
+            } = event
+            {
+                show_main(tray.app_handle());
+            }
+        });
+
+    #[cfg(target_os = "macos")]
+    let builder = builder.icon_as_template(true);
+
+    let tray = builder.build(&app).map_err(tray_error)?;
+    *guard = Some(tray);
+    state.tray_up.store(true, Ordering::SeqCst);
+    Ok(())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let home = std::env::var_os("HOME")
@@ -1291,16 +1399,25 @@ pub fn run() {
     let _ = heron_service::clients::sync_catalog(&mut ctx.db, &home, false);
     bootstrap_markets(&mut ctx);
 
-    tauri::Builder::default()
+    let app = tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
+        // 开机启动（设置页的开关）：macOS 用 LaunchAgent 注册，比 AppleScript 的登录项更稳，
+        // 不需要「自动化」授权弹窗；Windows 写注册表、Linux 写 autostart desktop 文件。
+        // 不需要额外启动参数，故 args 传 None。
+        .plugin(tauri_plugin_autostart::init(
+            tauri_plugin_autostart::MacosLauncher::LaunchAgent,
+            None,
+        ))
         .manage(AppState {
             ctx: Mutex::new(ctx),
             home,
             scan: TaskFlags::default(),
             verify: TaskFlags::default(),
             doctor: TaskFlags::default(),
+            tray: Mutex::new(None),
+            tray_up: Arc::new(AtomicBool::new(false)),
         })
         .invoke_handler(tauri::generate_handler![
             preflight,
@@ -1340,9 +1457,35 @@ pub fn run() {
             resolve_conflict,
             native_scan_status,
             native_scan_plan,
+            tray_install,
         ])
-        .run(tauri::generate_context!())
+        .on_window_event(|window, event| {
+            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                // Closing the window hides it: the app keeps living in the tray, and quitting is
+                // only ever the tray menu's job. Without a tray there would be nothing to come
+                // back from, so then the red button has to do what it always did.
+                if !window.state::<AppState>().tray_up.load(Ordering::SeqCst) {
+                    return;
+                }
+                api.prevent_close();
+                let _ = window.hide();
+            }
+        })
+        .build(tauri::generate_context!())
         .expect("error while running Heron");
+
+    app.run(|_handle, _event| {
+        // A hidden-to-tray app has no window left in the Dock; macOS still sends Reopen when the
+        // icon is clicked, which is the one way back that does not go through the tray menu.
+        #[cfg(target_os = "macos")]
+        if let tauri::RunEvent::Reopen {
+            has_visible_windows: false,
+            ..
+        } = _event
+        {
+            show_main(_handle);
+        }
+    });
 }
 
 #[allow(dead_code)]

@@ -43,8 +43,8 @@ const messages = i18n.global as unknown as Global;
 
 const label = (key: string, named: Record<string, string | number> = {}) => messages.t(key, named);
 
-/** Menu item id → what it does. */
-const actions: Record<string, () => void> = {
+/** Menu item id → what it does. Shared with the tray: the same id must do the same thing. */
+export const actions: Record<string, () => void> = {
   // The scan belongs to the store, not to the page on screen, so the menu can start it from
   // anywhere — which is the whole reason it is a menu item rather than a second button.
   rescan: () => void useAppStore().startScan(),
