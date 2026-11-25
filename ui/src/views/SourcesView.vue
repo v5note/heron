@@ -31,6 +31,22 @@ const META: Record<string, { mark: string; note: string; brief: string }> = {
 const markets = ref<MarketInfo[]>([]);
 const installed = ref<Set<string>>(new Set());
 
+/**
+ * 已装 skill 的上游仓库地址 → 真实落点 slug，来自 `outdated`（读 heron.skill.json，不打网络）。
+ * 收藏行不能只按仓库名猜 slug：`mouse-lin/finesse-skill` 装的是仓库里的 `skills/finesse-ui`，
+ * 落点叫 finesse-ui。只有地址对得上，才知道「已经装过了」。
+ */
+const upstream = ref<Map<string, string>>(new Map());
+
+/** 比对用地址归一：去协议/www、`.git`、末尾斜杠与 `/tree/...`，整体小写。 */
+function normUrl(raw: string): string {
+  let s = raw.trim().toLowerCase();
+  s = s.replace(/^[a-z][a-z0-9+.-]*:\/\//, "").replace(/^www\./, "");
+  s = s.replace(/\.git$/, "").replace(/\/+$/, "");
+  const hi = s.indexOf("/tree/");
+  return hi >= 0 ? s.slice(0, hi) : s;
+}
+
 const query = ref("");
 const phase = ref<"idle" | "loading" | "done">("idle");
 const searchedQ = ref("");
@@ -143,6 +159,17 @@ async function loadInstalled() {
     installed.value = new Set(rows.map((r) => r.slug.toLowerCase()));
   } catch (e) {
     store.fail(e);
+  }
+  // 上游地址表读不到不该影响本地库列表，单独兜住。
+  try {
+    const cands = await api.outdated();
+    const map = new Map<string, string>();
+    for (const c of cands) {
+      if (c.source) map.set(normUrl(c.source), c.slug.toLowerCase());
+    }
+    upstream.value = map;
+  } catch {
+    /* 没有上游表时退回按 slug 匹配 */
   }
 }
 
@@ -550,10 +577,12 @@ function planHtml(plan: InstallPlan): string {
   return `<span class="mut">${t("sources.planCmd")}</span> heron install <b>${esc(plan.url)}</b>${ref}${sub} <span class="mut">${t("sources.planNote")}</span>`;
 }
 
-/** 收藏安装后的落点：预览拿到的真实 slug 优先，否则退回地址解析的猜测。 */
+/** 收藏安装后的落点：预览拿到的真实 slug 优先，其次是已装记录里的同一仓库，最后才退回地址解析的猜测。 */
 function favSlug(fav: FavoriteRow): string {
   const p = favPreviews[fav.id];
   if (p?.slug) return p.slug.toLowerCase();
+  const byUrl = upstream.value.get(normUrl(fav.url));
+  if (byUrl) return byUrl;
   const q = parseUrl(fav.url);
   return q.kind === "repo" ? (q.slug || "").toLowerCase() : "";
 }

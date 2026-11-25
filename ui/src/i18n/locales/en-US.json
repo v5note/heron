@@ -4,6 +4,18 @@
     "subtitle": "Local skill manager",
     "short": "Heron"
   },
+  "menu": {
+    "file": "File",
+    "edit": "Edit",
+    "view": "View",
+    "window": "Window",
+    "help": "Help",
+    "rescan": "Rescan",
+    "settings": "Settings…",
+    "theme": "Toggle Light/Dark",
+    "website": "Project Homepage",
+    "checkUpdate": "Check for Updates…"
+  },
   "nav": {
     "overview": "Overview",
     "library": "My skills",
@@ -184,6 +196,7 @@
     "noSlug": "Not recognised as a skill; will be skipped",
     "backupNote": "A backup is taken before anything moves; a failure leaves the originals untouched.",
     "confirmAdopt": "Adopt now",
+    "adopting": "Adopting",
     "index": "#",
     "rows": "{n} items",
     "rowsFiltered": "{n} of {total}",
@@ -538,7 +551,8 @@
     "running": "Verifying",
     "cancelHint": "Click to cancel",
     "canceling": "Canceling…",
-    "result": "{n} verified",
+    "result": "{n} need attention",
+    "clean": "All visible",
     "canceledShort": "Canceled",
     "failed": "Verify failed",
     "findings": "{n} found"

@@ -268,21 +268,35 @@ async function openPreview() {
   }
 }
 
+/** The preview dialog stays up while this runs: closing it early hides what actually happened. */
+const adopting = ref(false);
+
+/** Esc, the scrim, the X and 取消 all go through here; a running adopt must not be dismissed. */
+function closeDialog() {
+  if (!adopting.value) dialog.value = false;
+}
+
 async function adopt() {
-  dialog.value = false;
+  if (adopting.value) return;
   const paths = [...selected.value];
-  const result = await store.adopt(paths, placement.value);
-  // "It did nothing" is usually one of these: every path failed (e.g. no permission on the
-  // original) or the rows were gone before the command ran. Say which, don't fail silently.
-  if (result.errors.length) {
-    store.toast("error", t("discover.adoptFailed", { n: result.errors.length, detail: result.errors.join(" · ") }));
-  } else if (!result.adopted.length) {
-    store.toast("warn", t("discover.adoptedNothing", { n: paths.length }));
+  adopting.value = true;
+  try {
+    const result = await store.adopt(paths, placement.value);
+    // "It did nothing" is usually one of these: every path failed (e.g. no permission on the
+    // original) or the rows were gone before the command ran. Say which, don't fail silently.
+    if (result.errors.length) {
+      store.toast("error", t("discover.adoptFailed", { n: result.errors.length, detail: result.errors.join(" · ") }));
+    } else if (!result.adopted.length) {
+      store.toast("warn", t("discover.adoptedNothing", { n: paths.length }));
+    }
+    // Adopted rows disappear from the list on refresh. Keep only the ones that failed, so they
+    // stay ticked and can be retried without hunting for them again.
+    selected.value = paths.filter((path) => result.errors.some((e) => e.startsWith(path)));
+    preview.value = null;
+    dialog.value = false;
+  } finally {
+    adopting.value = false;
   }
-  // Adopted rows disappear from the list on refresh. Keep only the ones that failed, so they
-  // stay ticked and can be retried without hunting for them again.
-  selected.value = paths.filter((path) => result.errors.some((e) => e.startsWith(path)));
-  preview.value = null;
 }
 </script>
 
@@ -449,14 +463,14 @@ async function adopt() {
       </button>
     </FloatBar>
 
-    <AppOverlay :open="dialog" @close="dialog = false">
+    <AppOverlay :open="dialog" @close="closeDialog">
       <header class="overlay-head pv-head">
         <span class="pv-badge"><AppIcon name="check" :size="13" /></span>
         <div>
           <h3>{{ t("discover.previewTitle") }}</h3>
           <p>{{ t("discover.previewHint") }}</p>
         </div>
-        <button class="icon-btn" :title="t('common.close')" @click="dialog = false"><AppIcon name="close" :size="15" /></button>
+        <button class="icon-btn" :disabled="adopting" :title="t('common.close')" @click="closeDialog"><AppIcon name="close" :size="15" /></button>
       </header>
 
       <div class="overlay-body">
@@ -524,9 +538,9 @@ async function adopt() {
       <footer class="overlay-foot">
         <span class="pv-caveat muted">{{ t("discover.backupNote") }}</span>
         <span class="right">
-          <button class="btn" @click="dialog = false">{{ t("common.cancel") }}</button>
-          <button class="btn primary" :disabled="!planned.length" @click="adopt">
-            {{ t("discover.confirmAdopt") }}<span class="pv-count">{{ planned.length }}</span>
+          <button class="btn" :disabled="adopting" @click="closeDialog">{{ t("common.cancel") }}</button>
+          <button class="btn primary" :disabled="!planned.length || adopting" @click="adopt">
+            {{ adopting ? t("discover.adopting") : t("discover.confirmAdopt") }}<span class="pv-count">{{ planned.length }}</span>
           </button>
         </span>
       </footer>
@@ -607,6 +621,8 @@ async function adopt() {
   display: grid; place-items: center; flex: none; color: var(--bg);
 }
 .box.on { background: var(--text); border-color: var(--text); }
+/* AppIcon ships paths only: without this the check renders as a solid blob, not a tick. */
+.box svg { fill: none; stroke: currentColor; stroke-width: 2.4; }
 
 /* ---------- cards ---------- */
 .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(268px, 1fr)); gap: 10px; }

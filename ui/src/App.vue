@@ -9,6 +9,7 @@ import ScanPill from "./components/ScanPill.vue";
 import ActionPill from "./components/ActionPill.vue";
 import ToastHost from "./components/ToastHost.vue";
 import { useAppStore } from "./stores/app";
+import { setupMenu } from "./menu";
 import pkg from "../package.json";
 
 const store = useAppStore();
@@ -92,7 +93,10 @@ const verifyResult = computed(() => {
   const run = store.verifyRun;
   if (run.failed) return t("verify.failed");
   if (!run.flash) return "";
-  return run.flash.kind === "done" ? t("verify.result", { n: run.flash.findings }) : t("verify.canceledShort");
+  if (run.flash.kind === "canceled") return t("verify.canceledShort");
+  // The tail counts what still needs doing, not how many rows were looked at — and a clean pass gets
+  // its own words, because "0 项待处理" reads like a broken counter rather than as good news.
+  return run.flash.findings > 0 ? t("verify.result", { n: run.flash.findings }) : t("verify.clean");
 });
 
 /* Leaving the page where 体检 lives must not look like leaving the job. The run belongs to the
@@ -121,6 +125,12 @@ watch(() => store.unmanaged.length, (to, from) => {
   discoverBump.value = true;
   clearTimeout(bumpTimer);
   bumpTimer = window.setTimeout(() => (discoverBump.value = false), 520);
+});
+
+/* The menu bar needs the OS before it can be laid out — macOS takes the app menu, Linux the window
+   menu, Windows none — and `preflight`, which `init` already runs, is what names it. */
+watch(() => store.platform, (os) => {
+  if (os) setupMenu(os);
 });
 
 onMounted(() => {

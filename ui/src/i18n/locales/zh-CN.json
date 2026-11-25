@@ -4,6 +4,18 @@
     "subtitle": "本地 Skill 管理器",
     "short": "苍鹭"
   },
+  "menu": {
+    "file": "文件",
+    "edit": "编辑",
+    "view": "显示",
+    "window": "窗口",
+    "help": "帮助",
+    "rescan": "重新扫描",
+    "settings": "设置…",
+    "theme": "切换深浅色",
+    "website": "项目主页",
+    "checkUpdate": "检查更新…"
+  },
   "nav": {
     "overview": "概览",
     "library": "我的 Skill",
@@ -184,6 +196,7 @@
     "noSlug": "无法识别为 Skill，将跳过",
     "backupNote": "执行前先备份到 backups/，失败不会改动原文件。",
     "confirmAdopt": "确认收拢",
+    "adopting": "正在收拢",
     "index": "序号",
     "rows": "共 {n} 条",
     "rowsFiltered": "{n} / {total} 条",
@@ -538,7 +551,8 @@
     "running": "校验中",
     "cancelHint": "点击取消",
     "canceling": "正在取消",
-    "result": "{n} 条已校验",
+    "result": "{n} 项待处理",
+    "clean": "全部可见",
     "canceledShort": "已取消",
     "failed": "校验失败",
     "findings": "已发现 {n}"
