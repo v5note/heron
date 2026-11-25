@@ -7,6 +7,7 @@ use std::process::Command;
 use heron_core::PinPolicy;
 use heron_platform::dirs::Dirs;
 use heron_service::install::{self, InstallRequest};
+use heron_service::project::{self, ProjectRequest};
 use heron_service::upgrade::{self, UpgradeOutcome, UpgradeState};
 use heron_service::Ctx;
 use heron_store::db::Db;
