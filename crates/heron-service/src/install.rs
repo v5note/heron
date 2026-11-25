@@ -604,4 +604,50 @@ mod tests {
         assert_eq!(first_slug([String::new(), "、。".to_owned()]), None);
         assert_eq!(repo_name(&git("")), "");
     }
+
+    fn resolved(raw: &str, skill_dir: &str, skill_name: &str, whole_repo: bool) -> Resolved {
+        Resolved {
+            parsed: git(raw),
+            catalog: empty_catalog(),
+            skill_dir: Some(skill_dir.to_owned()),
+            layout: if whole_repo {
+                heron_source::SkillLayout::Repo
+            } else {
+                heron_source::SkillLayout::Skill
+            },
+            skill_name: Some(skill_name.to_owned()),
+            commit: "c".to_owned(),
+            ref_name: None,
+        }
+    }
+
+    #[test]
+    fn a_whole_repository_is_named_after_itself() {
+        // `finesse-skill` books `skills/finesse-ui` as its entry point. Naming the store entry
+        // `finesse-ui` describes a directory inside the install, not the install.
+        let r = resolved(
+            "https://github.com/mouse-lin/finesse-skill",
+            "skills/finesse-ui",
+            "finesse-ui",
+            true,
+        );
+        assert_eq!(derived_slug(&r), "finesse-skill");
+    }
+
+    #[test]
+    fn a_subtree_export_is_still_named_after_its_directory() {
+        let r = resolved(
+            "https://github.com/mouse-lin/finesse-skill",
+            "skills/finesse-ui",
+            "finesse-ui",
+            false,
+        );
+        assert_eq!(derived_slug(&r), "finesse-ui");
+    }
+
+    #[test]
+    fn a_whole_repository_without_a_usable_name_falls_back_in_order() {
+        let r = resolved("", "skills/finesse-ui", "finesse-ui", true);
+        assert_eq!(derived_slug(&r), "finesse-ui");
+    }
 }
