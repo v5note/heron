@@ -456,3 +456,154 @@ fn an_overwrite_upgrade_discards_local_edits() {
 
     let _ = remote.tmp;
 }
+
+/// A repository shaped like `huashu-motion`: a single skill whose own scripts reach back into the
+/// tree around it, so exporting `skills/hm` on its own installs something that cannot run.
+struct CompoundRemote {
+    tmp: tempfile::TempDir,
+    work: PathBuf,
+    bare: PathBuf,
+}
+
+impl CompoundRemote {
+    fn new() -> Self {
+        let tmp = tempfile::tempdir().unwrap();
+        let work = tmp.path().join("work");
+        fs::create_dir_all(&work).unwrap();
+        git(&work, &["init", "-q", "-b", "main"]);
+        git(&work, &["config", "user.email", "t@example.com"]);
+        git(&work, &["config", "user.name", "Test"]);
+        write(
+            &work.join("skills/hm/SKILL.md"),
+            "---\nname: Motion\ndescription: render motion\nmetadata:\n  version: \"1.0.0\"\n---\n# v1\n",
+        );
+        write(
+            &work.join("skills/hm/bin/om"),
+            "#!/usr/bin/env bash\nDIR=\"$(cd \"$(dirname \"$0\")/../../..\" && pwd -P)\"\nexec node \"$DIR/cli/om.js\" \"$@\"\n",
+        );
+        write(&work.join("cli/om.js"), "// entry v1\n");
+        write(&work.join("runtime/render.sh"), "#!/bin/sh\necho v1\n");
+        write(&work.join("templates/basic.json"), "{}\n");
+        write(&work.join("package.json"), "{\"name\":\"hm\"}\n");
+        write(&work.join("README.md"), "how to install\n");
+        git(&work, &["add", "-A"]);
+        git(&work, &["commit", "-qm", "v1"]);
+        let bare = tmp.path().join("remote.git");
+        git(
+            tmp.path(),
+            &[
+                "clone",
+                "-q",
+                "--bare",
+                work.to_str().unwrap(),
+                bare.to_str().unwrap(),
+            ],
+        );
+        Self { tmp, work, bare }
+    }
+
+    fn publish(&self, version: &str) {
+        write(
+            &self.work.join("skills/hm/SKILL.md"),
+            &format!("---\nname: Motion\ndescription: render motion\nmetadata:\n  version: \"{version}\"\n---\n# {version}\n"),
+        );
+        write(
+            &self.work.join("cli/om.js"),
+            &format!("// entry {version}\n"),
+        );
+        git(&self.work, &["add", "-A"]);
+        git(&self.work, &["commit", "-qm", version]);
+        git(
+            &self.work,
+            &["push", "-q", self.bare.to_str().unwrap(), "main"],
+        );
+    }
+
+    fn url(&self) -> String {
+        self.bare.to_str().unwrap().to_owned()
+    }
+}
+
+#[test]
+fn a_skill_that_needs_its_repository_installs_the_whole_tree() {
+    if !git_available() {
+        return;
+    }
+    let remote = CompoundRemote::new();
+    let env = Env::new();
+    let mut ctx = env.ctx();
+    // No subpath: the repository names its one skill and Heron works out the rest.
+    let req = InstallRequest {
+        input: remote.url(),
+        ..Default::default()
+    };
+
+    let preview = install::preview(&ctx, &req).unwrap();
+    assert_eq!(preview.slug, "hm");
+    assert_eq!(preview.selected.as_deref(), Some("skills/hm"));
+    assert!(preview.whole_repo, "the shim escapes its own directory");
+
+    let report = install::install(&mut ctx, &req).unwrap();
+    assert_eq!(report.version, "1.0.0");
+
+    // The store entry is the repository: everything `bin/om` reaches for is on disk.
+    let root = ctx.skill_path("hm");
+    for path in [
+        "cli/om.js",
+        "runtime/render.sh",
+        "templates/basic.json",
+        "package.json",
+    ] {
+        assert!(root.join(path).is_file(), "{path} must come with the skill");
+    }
+    assert!(
+        root.join(".git").is_dir(),
+        "the repository is the versioned unit"
+    );
+    assert!(
+        !root.join("SKILL.md").exists(),
+        "the repository root is not the skill"
+    );
+
+    // And the entrypoint the clients are given is one directory inside it.
+    let skill = ctx.skill_dir_of("hm");
+    assert_eq!(skill, root.join("skills/hm"));
+    assert!(skill.join("SKILL.md").is_file());
+    assert!(ctx.projectable_path_of("hm").ends_with("skills/hm"));
+
+    let row = heron_store::repos::skill::get(ctx.db.conn(), "hm")
+        .unwrap()
+        .unwrap();
+    assert_eq!(row.subpath.as_deref(), Some("skills/hm"));
+    // Paths relative to the versioned root already are upstream paths: nothing to prefix.
+    let meta = heron_vcs::SkillRepo::open(&root)
+        .read_metadata()
+        .unwrap()
+        .unwrap();
+    assert_eq!(meta.source.as_ref().unwrap().subpath, None);
+
+    // Upgrading realigns the whole tree, not just the skill directory.
+    remote.publish("2.0.0");
+    upgrade::refresh_sources(&ctx).unwrap();
+    let cands = upgrade::outdated(&ctx, PinPolicy::Semver).unwrap();
+    assert_eq!(cands[0].slug, "hm");
+    assert_eq!(cands[0].state, UpgradeState::HasUpdate);
+    match upgrade::upgrade(&mut ctx, "hm", false).unwrap() {
+        UpgradeOutcome::Upgraded { from, to, .. } => {
+            assert_ne!(from, to, "the checkout moved to the new commit");
+        }
+        other => panic!("expected a clean upgrade, got {other:?}"),
+    }
+    assert_eq!(
+        fs::read_to_string(root.join("cli/om.js")).unwrap(),
+        "// entry 2.0.0\n",
+        "the runtime around the skill follows it"
+    );
+    let after = heron_vcs::SkillRepo::open(&root)
+        .read_metadata()
+        .unwrap()
+        .unwrap();
+    assert_eq!(after.baseline.version, "2.0.0");
+
+    let _ = remote.tmp;
+}

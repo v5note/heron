@@ -277,6 +277,8 @@
     "pasteEnterInstall": "回车即装",
     "planDefaultRef": "（默认分支）",
     "planSubpath": "子路径",
+    "planScope": "安装范围",
+    "planWholeRepo": "整个仓库（skill 依赖仓库内的其它目录）",
     "planCmd": "执行",
     "planNote": "→ 只把仓库内容放进本地库，再投影到你启用的客户端。",
     "planSlug": "落地 slug",

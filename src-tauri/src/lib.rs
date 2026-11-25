@@ -443,10 +443,15 @@ async fn adopt_paths(
     let work = tauri::async_runtime::spawn_blocking(move || {
         let state = app.state::<AppState>();
         let mut ctx = state.ctx.lock().unwrap();
-        adopt_paths_inner(&mut ctx, &paths, dry_run, keep_original, placement.as_deref())
+        adopt_paths_inner(
+            &mut ctx,
+            &paths,
+            dry_run,
+            keep_original,
+            placement.as_deref(),
+        )
     });
-    work
-        .await
+    work.await
         .map_err(|e| Msg::new("E_INTERNAL").with("detail", e.to_string()))?
 }
 

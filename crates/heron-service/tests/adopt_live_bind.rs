@@ -86,7 +86,11 @@ fn a_user_symlinked_skill_is_discovered_at_its_real_directory() {
 
     let plan = adopt::plan(&ctx, &row).unwrap();
     // Reached as a real directory, so it is suggested as an ordinary move into the store.
-    assert!(matches!(plan.entry, EntryState::RealDir), "{:?}", plan.entry);
+    assert!(
+        matches!(plan.entry, EntryState::RealDir),
+        "{:?}",
+        plan.entry
+    );
     assert_eq!(plan.suggested, AdoptPlacement::Replace);
 
     let report = adopt::execute(&mut ctx, &plan, plan.suggested).unwrap();

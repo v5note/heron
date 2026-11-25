@@ -238,8 +238,14 @@ pub fn upgrade(ctx: &mut Ctx, slug: &str, keep_local: bool) -> Result<UpgradeOut
             repo.set_upstream_point(&latest)?;
             let mut new_meta = meta.clone();
             new_meta.baseline.commit = latest.clone();
-            new_meta.baseline.version =
-                resolve_version(&dir, &cache_ref, &latest, repo_tag_hint(&cached, &latest));
+            // `dir` is the versioned root, which for a whole-repository skill is the repository
+            // itself — `SKILL.md` sits at `subpath` inside it.
+            new_meta.baseline.version = resolve_version(
+                &ctx.skill_dir_of(slug),
+                &cache_ref,
+                &latest,
+                repo_tag_hint(&cached, &latest),
+            );
             new_meta.local_revision += 1;
             repo.write_metadata(&new_meta)?;
             let local_head = repo.commit_all(&format!("heron: upgrade to {}", &latest[..8]))?;

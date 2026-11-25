@@ -209,9 +209,11 @@ pub fn plan_with_index(ctx: &Ctx, row: &DetectedRow, index: &DedupIndex) -> Resu
             EntryState::ForeignLink { target } => target.clone(),
             _ => content_dir.to_string_lossy().to_string(),
         };
+        // Widen to the project root when the skill needs the whole repository.
+        let widened = widen_to_repo_root(&PathBuf::from(&target));
         steps.push(AdoptStep::LiveBind {
             slug: final_slug.clone(),
-            at: target,
+            at: widened.to_string_lossy().to_string(),
         });
     } else {
         if duplicate_of.is_none() {
@@ -606,6 +608,10 @@ fn record_upstream(
 /// The user's own link keeps pointing at their own directory; the library records that this slug's
 /// authoritative content *is* that directory (`skill.storage_path`) and that the entry the client
 /// reads is an existing projection of it.
+///
+/// When the skill is part of a whole-repository project (the `huashu-motion` shape — bin shims
+/// that reach into sibling directories like `cli/`, `runtime/`, `templates/`), the storage path
+/// is widened to the project root so that the entire checkout is covered.
 fn live_bind(ctx: &mut Ctx, plan: &AdoptPlan, slug: &str) -> Result<AdoptReport> {
     let entry = entry_path(&plan.detail);
     let EntryState::ForeignLink { target } = &plan.entry else {
@@ -624,6 +630,10 @@ fn live_bind(ctx: &mut Ctx, plan: &AdoptPlan, slug: &str) -> Result<AdoptReport>
                 .with("target", real.display().to_string()),
         ));
     }
+
+    // Detect whole-repo skills: when the symlink target is a subdirectory of a project whose
+    // layout is `Repo` (e.g. huashu-motion), widen the storage path to the project root.
+    let storage_dir = widen_to_repo_root(&real);
 
     let event_id = ctx.db.write(|tx| {
         event::record(
@@ -655,13 +665,13 @@ fn live_bind(ctx: &mut Ctx, plan: &AdoptPlan, slug: &str) -> Result<AdoptReport>
                     tags: vec![],
                     status: "active".to_owned(),
                     origin: "adopted".to_owned(),
-                    storage_path: Some(real.to_string_lossy().to_string()),
+                    storage_path: Some(storage_dir.to_string_lossy().to_string()),
                     created_at: String::new(),
                     updated_at: String::new(),
                 },
             )?;
         } else {
-            skill::set_storage_path(tx, slug, Some(&real.to_string_lossy()))?;
+            skill::set_storage_path(tx, slug, Some(&storage_dir.to_string_lossy()))?;
         }
         Ok(())
     })?;
@@ -746,6 +756,23 @@ fn ensure_target_for_dir(ctx: &mut Ctx, dest_link: &Path, client_kind: &str) -> 
     };
     ctx.db.write(|tx| target::upsert(tx, &row))?;
     Ok(row)
+}
+
+/// When a symlink target lives inside a project whose layout is `SkillLayout::Repo`, widen to
+/// the project root so the entire checkout is managed. Otherwise, return the directory as-is.
+///
+/// The `huashu-motion` scenario: `skills/huashu-motion/bin/om` runs
+/// `cd "$(dirname "$0")/../../.." && exec node cli/om.js` — the `cli/` directory is a sibling
+/// of `skills/` and belongs to the same checkout. Binding to the skill subdirectory alone leaves
+/// the shim pointing at nothing; binding to the checkout root keeps everything the skill needs.
+fn widen_to_repo_root(skill_dir: &Path) -> PathBuf {
+    if let Some((root, rel)) = heron_source::find_project_root(skill_dir) {
+        let layout = heron_source::detect_layout_local(&root, &rel);
+        if layout.whole_repo() {
+            return root;
+        }
+    }
+    skill_dir.to_path_buf()
 }
 
 pub fn copy_tree(from: &Path, to: &Path) -> Result<()> {

@@ -7,6 +7,7 @@
 // 外壳（左栏/顶栏/toast）由 App.vue 与 store 提供，这里只移植视图内容区 + 抽屉。
 import { computed, onMounted, reactive, ref } from "vue";
 import { useI18n } from "vue-i18n";
+import { openUrl } from "@tauri-apps/plugin-opener";
 import { api } from "../api";
 import type { FavoriteRow, InstallPlan, InstallPreview, MarketInfo, MarketItem } from "../api/types";
 import { useAppStore } from "../stores/app";
@@ -221,8 +222,16 @@ function togglePlan(key: string) {
   openPlan.value = next;
 }
 
-function openExternal(url: string) {
-  window.open(url, "_blank", "noreferrer");
+/** 在系统浏览器打开：Tauri 的 webview 不会把 window.open 转给外部浏览器，必须走 opener 插件。 */
+async function openExternal(url: string) {
+  if (!url) return;
+  try {
+    await openUrl(url);
+  } catch (e) {
+    // 浏览器里跑 vite dev 时没有 opener 插件，退回新标签页。
+    console.error(e);
+    window.open(url, "_blank", "noreferrer");
+  }
 }
 
 /** 结果行的深链：git 计划用仓库地址，否则用条目自带页面。 */
@@ -545,10 +554,14 @@ function favPlanHtml(fav: FavoriteRow): string {
   const sub = p.selected
     ? ` · ${t("sources.planSubpath")} <b>${esc(p.selected)}</b>`
     : "";
+  // 整仓安装：这个 skill 的代码会回到仓库根去找同级目录（huashu-motion 的 bin/om 就引用
+  // ../../../cli/om.js），只导出 skill 目录会装出一个跑不起来的东西。
+  const whole = p.whole_repo ? R(t("sources.planScope"), t("sources.planWholeRepo")) : "";
   return (
     `<span class="mut">${t("sources.planCmd")}</span> heron install <b>${esc(fav.url)}</b>${ref}${sub} <span class="mut">${t("sources.planNote")}</span>\n` +
     R(t("sources.planSlug"), p.slug) +
     R(t("sources.vStoreDir"), "~/.heron/skills/" + p.slug, "to") +
+    whole +
     R(t("sources.planCommit"), p.commit.slice(0, 8)) +
     (p.existing
       ? R(t("sources.vStatus"), t("sources.planExisting"), "bad")

@@ -277,6 +277,8 @@
     "pasteEnterInstall": "press Enter to install",
     "planDefaultRef": "(default branch)",
     "planSubpath": "subpath",
+    "planScope": "Scope",
+    "planWholeRepo": "whole repository (the skill needs its sibling directories)",
     "planCmd": "Runs",
     "planNote": "→ clones into the local library, then projects into your enabled clients.",
     "planSlug": "Target slug",

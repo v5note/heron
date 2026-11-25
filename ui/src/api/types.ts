@@ -215,6 +215,8 @@ export interface InstallPreview {
   commit: string;
   ref_name: string | null;
   existing: boolean;
+  /** True when the store entry is the whole repository: the skill needs the tree around it. */
+  whole_repo: boolean;
 }
 
 export interface LockFile {
