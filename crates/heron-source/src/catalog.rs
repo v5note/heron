@@ -760,4 +760,31 @@ path = "skills/wechat-mp"
             "E_REF_NOT_FOUND"
         );
     }
+
+    #[test]
+    fn published_dirs_count_the_skill_not_its_client_mirrors() {
+        // `mouse-lin/finesse-skill`, whose five `SKILL.md` files are one skill and four mirrors.
+        let files: Vec<String> = [
+            "skills/finesse-ui/SKILL.md",
+            ".trae/skills/finesse-ui/SKILL.md",
+            ".cursor/skills/finesse-ui/SKILL.md",
+            ".claude/skills/finesse-ui/SKILL.md",
+            ".doubao/skills/finesse-ui/SKILL.md",
+            ".github/workflows/SKILL.md",
+            "tests/fixtures/demo/SKILL.md",
+        ]
+        .iter()
+        .map(|s| s.to_string())
+        .collect();
+        assert_eq!(published_skill_dirs(&files), vec!["skills/finesse-ui"]);
+    }
+
+    #[test]
+    fn a_collection_publishes_every_entry() {
+        let files: Vec<String> = ["skills/a/SKILL.md", "skills/b/SKILL.md", "SKILL.md"]
+            .iter()
+            .map(|s| s.to_string())
+            .collect();
+        assert_eq!(published_skill_dirs(&files), ["", "skills/a", "skills/b"]);
+    }
 }

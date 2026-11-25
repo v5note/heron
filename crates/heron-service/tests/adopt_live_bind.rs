@@ -112,6 +112,10 @@ fn a_user_symlinked_skill_is_discovered_at_its_real_directory() {
     let links = projection::list_for_skill(ctx.db.conn(), "motion-design").unwrap();
     assert_eq!(links.len(), 1, "{links:?}");
     assert_eq!(links[0].path, real_canon.to_string_lossy());
+    // The row is filed under no client: the content does not live in `~/.agents/skills`, only a link
+    // to it does, and the GUI groups such a row under「其他」while the projection stays booked against
+    // the client whose directory holds that link.
+    assert_eq!(row.client_id.as_deref(), Some("custom"));
 
     // But no landing point is invented for the directory the content really sits in: such a card
     // points somewhere no client reads, and it turns into a broken link the moment that third-party

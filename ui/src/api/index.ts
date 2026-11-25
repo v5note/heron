@@ -105,6 +105,12 @@ export const api = {
   /** Retract every Heron-owned link on one target; returns the paths that were taken back. */
   unprojectTarget: (targetId: string) => call<string[]>("target_unproject_all", { targetId }),
   /**
+   * Flip a landing point's switch. Only says whether Heron treats it as available — links already
+   * projected stay on disk either way, so the UI must re-verify to see the real state.
+   */
+  setTargetEnabled: (targetId: string, enabled: boolean) =>
+    call<void>("target_set_enabled", { targetId, enabled }),
+  /**
    * Delete a skill from the library. `dryRun` answers with the plan — which client links are
    * retracted and where the store copy is parked — so the dialog can state it before anything moves.
    */

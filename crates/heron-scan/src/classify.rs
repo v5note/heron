@@ -6,6 +6,11 @@ use std::path::{Path, PathBuf};
 use heron_core::{Slug, SlugPolicy};
 use serde::Serialize;
 
+/// The bucket for content that lives in no client's declared skills directory. The GUI groups an
+/// id it does not know under「其他」, which is exactly what this means: a skill on disk that belongs
+/// to no agent tool's home.
+pub const CUSTOM_CLIENT_ID: &str = "custom";
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Scope {
@@ -249,6 +254,15 @@ impl Classifier {
         None
     }
 
+    /// Does any client have a claim on this directory — is it inside a declared skills location?
+    ///
+    /// Unlike [`Classifier::classify`], this asks only about the location and ignores the
+    /// projection filter: a caller uses it to check a *resolved* directory, whose own path is
+    /// nowhere near the link the library wrote.
+    pub fn claims(&self, dir: &Path) -> bool {
+        self.skills_dir_of(dir, false).is_some()
+    }
+
     /// Walk up from an item path until we find a directory that equals one of the
     /// client's declared locations (global or project). Returns that location.
     fn skills_dir_of(&self, item_dir: &Path, is_command_file: bool) -> Option<PathBuf> {
@@ -476,6 +490,15 @@ mod tests {
         assert!(c
             .classify(Path::new("/home/u/.agents/skills/x/SKILL.md"), false)
             .is_none());
+    }
+
+    #[test]
+    fn claims_only_declared_locations() {
+        let c = classifier();
+        assert!(c.claims(Path::new("/home/u/.claude/skills/wechat-mp")));
+        assert!(c.claims(Path::new("/work/proj/.claude/skills/tdd")));
+        // A plain project directory is content no client reads.
+        assert!(!c.claims(Path::new("/work/other/wechat-mp")));
     }
 
     #[test]

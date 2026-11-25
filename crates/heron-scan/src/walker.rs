@@ -11,7 +11,7 @@ use heron_core::Result;
 use serde::Serialize;
 use walkdir::WalkDir;
 
-use crate::classify::{Classifier, HitKind, Scope};
+use crate::classify::{Classifier, HitKind, Scope, CUSTOM_CLIENT_ID};
 use crate::parse::{parse_skill_md, Confidence, Frontmatter, ParseIssue};
 use crate::rules::IgnoreRules;
 
@@ -343,18 +343,34 @@ fn classify_skill(dir: &Path, classifier: &Classifier) -> Option<Hit> {
     // roots) is reported at that real directory, not at the link: Discover shows the skill's own
     // home, and adopting it then treats it as an ordinary directory. A symlink that survives the
     // projection filter above is always the user's, never one Heron created.
-    let path = if is_symlink(dir) {
+    let link = is_symlink(dir);
+    let path = if link {
         real_dir.join("SKILL.md")
     } else {
         skill_md.clone()
+    };
+    // The source we report must match the address we show. A link sitting in `~/.agents/skills`
+    // only tells us where the user pointed an agent at; the content it names lives elsewhere, and
+    // that directory is not where the skill lives. So a followed link is credited to the client
+    // that owns the real directory, and to no client when nothing does — the GUI then groups it
+    // under「其他」instead of the client whose directory merely held the link.
+    let (client, project) = if !link {
+        (classification.client.clone(), classification.project.clone())
+    } else if classifier.claims(&real_dir) {
+        match classifier.classify(&path, false) {
+            Some(owner) => (owner.client, owner.project),
+            None => (Some(CUSTOM_CLIENT_ID.to_owned()), None),
+        }
+    } else {
+        (Some(CUSTOM_CLIENT_ID.to_owned()), None)
     };
     Some(Hit {
         path,
         real_path: real_dir,
         kind: classification.kind,
-        client: classification.client,
+        client,
         scope: Some(classification.scope),
-        project: classification.project,
+        project,
         slug,
         frontmatter: Some(frontmatter),
         issues,

@@ -392,6 +392,13 @@ pub fn target_live(t: &TargetRow, clients: &[ClientRow]) -> bool {
     t.enabled && verdict != Some(0)
 }
 
+/// Switch a landing point on or off — the consent flag behind [`target_live`]. Nothing on disk
+/// moves: links already projected stay projected, and `verify` keeps reporting them, so the count a
+/// target shows survives its switch. Turning it back on needs no re-projection.
+pub fn set_target_enabled(db: &mut Db, target_id: &str, enabled: bool) -> Result<()> {
+    db.write(|tx| target::set_enabled(tx, target_id, enabled))
+}
+
 /// Client specs as stored in the index (so user edits survive).
 pub fn loaded_specs(db: &Db) -> Result<Vec<heron_scan::classify::ClientSpec>> {
     Ok(client::list(db.conn())?

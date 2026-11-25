@@ -628,7 +628,9 @@ fn a_skill_that_needs_its_repository_installs_the_whole_tree() {
     let skill = ctx.skill_dir_of("motion-project");
     assert_eq!(skill, root.join("skills/hm"));
     assert!(skill.join("SKILL.md").is_file());
-    assert!(ctx.projectable_path_of("motion-project").ends_with("skills/hm"));
+    assert!(ctx
+        .projectable_path_of("motion-project")
+        .ends_with("skills/hm"));
 
     // The client sees the entry directory, so the link carries *its* name (`hm`), not the
     // repository's: a skill directory named after its checkout root would not match the name its
@@ -644,10 +646,10 @@ fn a_skill_that_needs_its_repository_installs_the_whole_tree() {
         },
     )
     .unwrap();
-    assert!(plan.blocked.is_none(), "{:?}", plan.reason);
+    assert!(!plan.is_blocked(), "{:?}", plan.steps);
     assert_eq!(
-        request.dest.file_name().map(|n| n.to_owned()),
-        Some(std::ffi::OsString::from("hm"))
+        request.dest.file_name().and_then(|n| n.to_str()),
+        Some("hm")
     );
 
     let row = heron_store::repos::skill::get(ctx.db.conn(), "motion-project")

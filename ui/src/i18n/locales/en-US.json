@@ -224,7 +224,8 @@
       "qoder": "Qoder",
       "grok": "Grok",
       "cline": "Cline",
-      "copilot": "Copilot"
+      "copilot": "Copilot",
+      "custom": "Other"
     },
     "otherClient": "Other",
     "scopes": {
@@ -397,6 +398,8 @@
     "enableAllTip": "Project all {total} library skills into this target; {done} resolve right now.",
     "revokeAllTip": "Take back the {n} Heron projections in this target so the client stops reading them. You can re-enable them at any time.",
     "revoked": "Revoked {n} projections",
+    "liveTip": "Enabled: Heron treats this directory as a usable target. Switching it off only changes that status — projections already on disk stay there.",
+    "offTip": "Not enabled: registering only recorded the directory, and the overview counts it as off. Switch it on for Heron to treat it as a usable target; existing links are unaffected.",
     "projects": "Projects"
   },
   "upgrades": {
@@ -444,7 +447,19 @@
     "partial": "This check-up was canceled — the report only covers part of it",
     "follow": "The check-up is still running while you are elsewhere — open it to follow along",
     "actions": "Suggested actions",
-    "lead": "Read-only checks: duplicates, broken links, nested suspects, lost sources. Nothing on disk is changed.",
+    "purge": "Remove missing skills ({n})",
+    "purgeHint": "These skills' content directories are gone from disk, so the library only holds links pointing at nothing. Clear them all at once.",
+    "purgeTitle": "Remove missing skills",
+    "purgeLead": "Removes {n} skills whose content directory no longer exists, retracting the links they left in each client.",
+    "purgeWarn": "If those directories are only offline for now (unmounted drive, moved folder), cancel first: once the links and index rows are gone you have to re-import.",
+    "purgeGone": "Content directory gone",
+    "purgeAck": "I confirm I deleted these content directories myself — they are not merely offline.",
+    "purgeCaveat": "Nothing is moved to the trash — the directories are already gone.",
+    "purgeConfirm": "Remove {n} skills",
+    "purgeRunning": "Removing…",
+    "purged": "Removed {n} skills, retracted {m} links",
+    "purgePartial": "Removed {ok}, failed for {failed}",
+    "lead": "Read-only checks: duplicates, broken links, nested suspects, lost sources. The check itself changes nothing; every repair here is confirmed by you.",
     "severityLabel": "Level",
     "issue": "Check",
     "severity": {

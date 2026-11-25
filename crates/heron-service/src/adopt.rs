@@ -395,14 +395,10 @@ pub fn execute(ctx: &mut Ctx, plan: &AdoptPlan, placement: AdoptPlacement) -> Re
             // The link takes the place of the entry *where it was found*, so the projection belongs
             // to that client's target, not to some generic one. A mis-booked row makes `verify` name
             // the wrong client and `unproject --on` miss the link.
-            let client_kind = plan
-                .detail
-                .client_id
-                .clone()
-                .unwrap_or_else(|| "custom".to_owned());
+            let booking = booking_client(ctx, &plan.detail, &dest_link)?;
             let managed_target = match target::find_for_path(ctx.db.conn(), &dest_link)? {
                 Some(row) => row,
-                None => ensure_target_for_dir(ctx, &dest_link, &client_kind)?,
+                None => ensure_target_for_dir(ctx, &dest_link, &booking)?,
             };
             if heron_platform::link::probe(&dest_link)?.kind.is_real_dir() {
                 std::fs::remove_dir_all(&dest_link).map_err(|e| {
@@ -669,14 +665,10 @@ fn live_bind(ctx: &mut Ctx, plan: &AdoptPlan, slug: &str) -> Result<AdoptReport>
 
     // 3) The link the client already reads becomes a known projection, booked against the client
     //    directory it sits in so `verify` judges it against the right scan paths.
-    let client_kind = plan
-        .detail
-        .client_id
-        .clone()
-        .unwrap_or_else(|| "custom".to_owned());
+    let booking = booking_client(ctx, &plan.detail, &entry)?;
     let managed_target = match target::find_for_path(ctx.db.conn(), &entry)? {
         Some(row) => row,
-        None => ensure_target_for_dir(ctx, &entry, &client_kind)?,
+        None => ensure_target_for_dir(ctx, &entry, &booking)?,
     };
     // Same rule as the copy placement: the prefix names the client that owns the directory the
     // link sits in, which is the target the row is booked against.
@@ -759,6 +751,43 @@ fn ensure_target_for_dir(ctx: &mut Ctx, dest_link: &Path, client_kind: &str) -> 
     };
     ctx.db.write(|tx| target::upsert(tx, &row))?;
     Ok(row)
+}
+
+/// Which client's directory a projection of this landing point should be booked against.
+///
+/// A row discovered in a client's skills directory names that client. A row that lives behind a
+/// user-made link out of one names none — the content is elsewhere, so the GUI files it under
+///「其他」— but the link itself is still the only evidence of which client the user wired up, and
+/// that is the target worth booking against, because it is where the client will read the skill
+/// from afterwards.
+fn booking_client(ctx: &Ctx, row: &DetectedRow, landing: &Path) -> Result<String> {
+    if let Some(kind) = row.client_id.as_deref() {
+        if kind != heron_scan::classify::CUSTOM_CLIENT_ID {
+            return Ok(kind.to_owned());
+        }
+    }
+    Ok(declared_link_owner(ctx, landing)?.unwrap_or_else(|| "custom".to_owned()))
+}
+
+/// The client that has a skills directory containing a link named after `landing` and resolving to
+/// it. Read-only: it probes what is already on disk and changes nothing.
+fn declared_link_owner(ctx: &Ctx, landing: &Path) -> Result<Option<String>> {
+    let Some(name) = landing.file_name().map(|n| n.to_string_lossy().into_owned()) else {
+        return Ok(None);
+    };
+    let landing = landing.canonicalize().unwrap_or_else(|_| landing.to_path_buf());
+    for spec in crate::clients::loaded_specs(&ctx.db)? {
+        for root in &spec.global_paths {
+            let candidate = root.join(&name);
+            if !heron_platform::link::probe(&candidate)?.kind.is_link() {
+                continue;
+            }
+            if candidate.canonicalize().ok().as_deref() == Some(landing.as_path()) {
+                return Ok(Some(spec.id));
+            }
+        }
+    }
+    Ok(None)
 }
 
 /// Is `dir` somewhere `client_kind` genuinely reads skills: its global root, or a project's?

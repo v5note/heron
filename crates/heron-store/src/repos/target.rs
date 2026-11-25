@@ -110,6 +110,24 @@ pub fn set_default(tx: &WriteTx<'_>, id: &str) -> Result<()> {
     Ok(())
 }
 
+/// Flip one landing point's consent switch. Links already on disk are untouched either way: this
+/// row only says whether Heron treats the target as available.
+pub fn set_enabled(tx: &WriteTx<'_>, id: &str, enabled: bool) -> Result<()> {
+    if get(tx.conn(), id)?.is_none() {
+        return Err(ErrorCode::TargetNotFound
+            .msg()
+            .with("target", id.to_owned())
+            .into());
+    }
+    tx.conn()
+        .execute(
+            "UPDATE target SET enabled = ?2 WHERE id = ?1",
+            params![id, enabled as i64],
+        )
+        .map_err(sql_err)?;
+    Ok(())
+}
+
 pub fn remove(tx: &WriteTx<'_>, id: &str) -> Result<()> {
     let changed = tx
         .conn()

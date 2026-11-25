@@ -163,6 +163,74 @@ fn broken_frontmatter_is_kept_but_flagged() {
     assert!(broken.issues.iter().any(|i| i.detail == "no_frontmatter"));
 }
 
+/// A link in `~/.agents/skills` says which agent the user wired up, not where the skill lives.
+/// When the real directory is outside every declared skills location, the card must not claim the
+/// client whose folder merely held the link — it belongs to no client (the GUI's「其他」).
+#[cfg(unix)]
+#[test]
+fn a_link_to_a_directory_outside_any_client_is_attributed_to_no_client() {
+    use std::os::unix::fs::symlink;
+    let tmp = tempfile::tempdir().unwrap();
+    let home = tmp.path();
+    fs::create_dir_all(home.join("work/repos/wechat-mp")).unwrap();
+    let external = fs::canonicalize(home.join("work/repos/wechat-mp")).unwrap();
+
+    write(
+        &external,
+        "SKILL.md",
+        &skill("wechat-mp", "Publish articles to WeChat"),
+    );
+    write(
+        home,
+        ".agents/skills/tdd/SKILL.md",
+        &skill("tdd", "Write tests first"),
+    );
+    fs::create_dir_all(home.join(".agents/skills")).unwrap();
+    symlink(&external, home.join(".agents/skills/wechat-mp")).unwrap();
+
+    let classifier = Classifier::new(
+        vec![ClientSpec {
+            id: "agents".into(),
+            display_name: "Agents".into(),
+            global_paths: vec![home.join(".agents/skills")],
+            project_paths: vec![PathBuf::from(".agents/skills")],
+            command_paths: vec![],
+            project_command_paths: vec![],
+            priority: 10,
+        }],
+        vec![],
+    );
+
+    let result = scan(&classifier, &ScanOptions::default()).unwrap();
+    let link = result
+        .hits
+        .iter()
+        .find(|h| h.slug.as_deref() == Some("wechat-mp"))
+        .expect("the linked skill is still a discovery");
+    assert_eq!(
+        link.path.parent().unwrap(),
+        external.as_path(),
+        "the card shows the skill's own home: {:?}",
+        link.path
+    );
+    assert_eq!(
+        link.client.as_deref(),
+        Some("custom"),
+        "a directory no client owns is not a 通用 skill"
+    );
+
+    let real = result
+        .hits
+        .iter()
+        .find(|h| h.slug.as_deref() == Some("tdd"))
+        .expect("an ordinary skill in the same directory");
+    assert_eq!(
+        real.client.as_deref(),
+        Some("agents"),
+        "content that really sits in .agents/skills keeps the client"
+    );
+}
+
 /// The store holds content Heron already took over. A link the user made in one client's directory
 /// can point through a projection link into the store copy, and resolving it must not hand the
 /// library's own copy back as a skill still waiting to be taken over.

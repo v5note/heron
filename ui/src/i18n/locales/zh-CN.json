@@ -224,7 +224,8 @@
       "qoder": "Qoder",
       "grok": "Grok",
       "cline": "Cline",
-      "copilot": "Copilot"
+      "copilot": "Copilot",
+      "custom": "其他"
     },
     "otherClient": "其他",
     "scopes": {
@@ -397,6 +398,8 @@
     "enableAllTip": "把库中 {total} 个 Skill 全部投影到这个落点；当前生效 {done} 个。",
     "revokeAllTip": "收回这个落点上由 Heron 建立的 {n} 处投影，客户端目录里不再读取它们；随时可以重新启用。",
     "revoked": "已撤销 {n} 处投影",
+    "liveTip": "已启用：Heron 把这个目录当作可用落点。关掉它只是改可用状态，盘上已投影的链接保持不变。",
+    "offTip": "未启用：登记只是记账，概览会把它算作未启用。打开后 Heron 才把这个目录视为可用落点；已投影的链接不受影响。",
     "projects": "项目"
   },
   "upgrades": {
@@ -444,7 +447,19 @@
     "partial": "本次体检已取消，结果为部分",
     "follow": "体检正在其他页继续，点击查看进度",
     "actions": "建议操作",
-    "lead": "只读检查：重复、坏链、病态嵌套、来源丢失。体检不会改动任何文件。",
+    "purge": "移除不存在的 Skill（{n}）",
+    "purgeHint": "这些 Skill 的内容目录已经不在磁盘上了，库里只剩指向空位置的链接；一次性把它们清掉。",
+    "purgeTitle": "移除不存在的 Skill",
+    "purgeLead": "将从库中移除 {n} 个内容目录已不存在的 Skill，并收回它们留在各个客户端的链接。",
+    "purgeWarn": "如果这些目录只是暂时离线（外接盘没挂载、目录被挪走），请先取消：链接和索引行删掉后，要重新导入才能回来。",
+    "purgeGone": "内容目录已不存在",
+    "purgeAck": "我确认这些内容目录是我自己删除的，不是暂时离线。",
+    "purgeCaveat": "不会有文件被移入回收站——目录本来已经不在了。",
+    "purgeConfirm": "移除 {n} 个 Skill",
+    "purgeRunning": "移除中…",
+    "purged": "已移除 {n} 个 Skill，收回 {m} 个链接",
+    "purgePartial": "已移除 {ok} 个，{failed} 移除失败",
+    "lead": "只读检查：重复、坏链、病态嵌套、来源丢失。体检本身不会改动文件；页面上的修复都要你确认。",
     "severityLabel": "级别",
     "issue": "检查项",
     "severity": {

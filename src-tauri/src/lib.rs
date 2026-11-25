@@ -604,6 +604,18 @@ fn target_unproject_all(
     heron_service::project::unproject_target(&mut ctx, &target_id).map_err(err)
 }
 
+/// Switch one landing point on or off. Pure consent flag: projections already on disk stay there,
+/// which is why the UI re-reads the targets and re-verifies rather than assuming anything moved.
+#[tauri::command]
+fn target_set_enabled(
+    state: State<'_, AppState>,
+    target_id: String,
+    enabled: bool,
+) -> Result<(), Msg> {
+    let mut ctx = state.ctx.lock().unwrap();
+    heron_service::clients::set_target_enabled(&mut ctx.db, &target_id, enabled).map_err(err)
+}
+
 /// Delete a skill from the library. `dry_run` answers with the plan (links + trash path) so the
 /// dialog can tell the user exactly what will move before anything happens.
 #[tauri::command]
@@ -1443,6 +1455,7 @@ pub fn run() {
             project_skill,
             unproject_skill,
             target_unproject_all,
+            target_set_enabled,
             skill_remove,
             verify_start,
             verify_cancel,
