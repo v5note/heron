@@ -36,6 +36,7 @@ const groups = computed<{ key: string; items: NavItem[] }[]>(() => [
     items: [
       { to: "/library", key: "library", icon: "library", count: store.skills.length },
       { to: "/discover", key: "discover", icon: "discover", count: store.unmanaged.length, tone: "warn" },
+      { to: "/favorites", key: "favorites", icon: "star", count: store.favorites.length },
       { to: "/sources", key: "sources", icon: "sources" },
     ],
   },

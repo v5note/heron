@@ -3,19 +3,21 @@
 //
 // 一个搜索框并发打到所有「已启用」来源，结果按来源分组、逐行直接安装（接通后端一直算得出、
 // 却被旧 UI 丢掉的 InstallPlan::Git）。仅浏览的来源给出带关键词的深链 + 「收进收藏」。
-// 收藏是页内分段，新增走右侧抽屉（地址实时解析 owner/repo/子路径）；底部常驻粘贴 Git 地址安装条。
-// 外壳（左栏/顶栏/toast）由 App.vue 与 store 提供，这里只移植视图内容区 + 抽屉。
+// 收藏已经拆成一级页面（/favorites），本页只留「收进收藏」入口：预填值交给 store 后跳过去。
+// 底部常驻粘贴 Git 地址安装条；外壳（左栏/顶栏/toast）由 App.vue 与 store 提供。
 import { computed, onMounted, reactive, ref } from "vue";
+import { useRouter } from "vue-router";
 import { useI18n } from "vue-i18n";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { api } from "../api";
-import type { FavoriteRow, InstallPlan, InstallPreview, MarketInfo, MarketItem } from "../api/types";
-import { useAppStore } from "../stores/app";
+import type { InstallPlan, InstallPreview, MarketInfo, MarketItem } from "../api/types";
+import { useAppStore, type FavoriteDraft } from "../stores/app";
+import { parseUrl } from "../utils/url";
 import AppIcon from "../components/AppIcon.vue";
-import AppOverlay from "../components/AppOverlay.vue";
 import FloatBar from "../components/FloatBar.vue";
 
 const store = useAppStore();
+const router = useRouter();
 const { t } = useI18n();
 
 /** 来源 id → 视图元数据（mark 字母 / host / 说明句），后端只给 id/name/capability/base_url。 */
@@ -30,22 +32,6 @@ const META: Record<string, { mark: string; note: string; brief: string }> = {
 
 const markets = ref<MarketInfo[]>([]);
 const installed = ref<Set<string>>(new Set());
-
-/**
- * 已装 skill 的上游仓库地址 → 真实落点 slug，来自 `outdated`（读 heron.skill.json，不打网络）。
- * 收藏行不能只按仓库名猜 slug：`mouse-lin/finesse-skill` 装的是仓库里的 `skills/finesse-ui`，
- * 落点叫 finesse-ui。只有地址对得上，才知道「已经装过了」。
- */
-const upstream = ref<Map<string, string>>(new Map());
-
-/** 比对用地址归一：去协议/www、`.git`、末尾斜杠与 `/tree/...`，整体小写。 */
-function normUrl(raw: string): string {
-  let s = raw.trim().toLowerCase();
-  s = s.replace(/^[a-z][a-z0-9+.-]*:\/\//, "").replace(/^www\./, "");
-  s = s.replace(/\.git$/, "").replace(/\/+$/, "");
-  const hi = s.indexOf("/tree/");
-  return hi >= 0 ? s.slice(0, hi) : s;
-}
 
 const query = ref("");
 const phase = ref<"idle" | "loading" | "done">("idle");
@@ -72,20 +58,8 @@ interface ResultGroup {
 }
 const results = ref<Record<string, ResultGroup>>({});
 
-const favorites = ref<FavoriteRow[]>([]);
-const seg = ref<"all" | "fav">("all");
 const openPlan = ref<Set<string>>(new Set());
 const busyKey = ref<string | null>(null);
-/** 收藏行 dry-run 预览缓存：id → 后端算出的真实落点（slug / commit / 子路径）。 */
-const favPreviews = reactive<Record<number, InstallPreview>>({});
-/** 哪一行正在真装（区分「解析中」与「安装中」两种按钮态）。 */
-const installingFav = ref<number | null>(null);
-
-// 收藏抽屉表单。
-const drawer = ref(false);
-const fv = reactive({ name: "", url: "", desc: "" });
-const formMarket = ref<string | null>(null);
-
 // 底部粘贴安装条。
 const paste = ref("");
 
@@ -130,9 +104,6 @@ const probeAge = computed(() => {
   return `${Math.max(...times)} ms`;
 });
 
-const reposFavs = computed(() => favorites.value.filter((f) => parseUrl(f.url).kind === "repo"));
-const linkFavs = computed(() => favorites.value.filter((f) => parseUrl(f.url).kind !== "repo"));
-
 function hostOf(url: string): string {
   try {
     return new URL(url).host;
@@ -142,7 +113,7 @@ function hostOf(url: string): string {
 }
 
 onMounted(async () => {
-  await Promise.all([loadMarkets(), loadFavorites(), loadInstalled()]);
+  await Promise.all([loadMarkets(), loadInstalled()]);
 });
 
 async function loadMarkets() {
@@ -157,25 +128,6 @@ async function loadInstalled() {
   try {
     const rows = await api.skills();
     installed.value = new Set(rows.map((r) => r.slug.toLowerCase()));
-  } catch (e) {
-    store.fail(e);
-  }
-  // 上游地址表读不到不该影响本地库列表，单独兜住。
-  try {
-    const cands = await api.outdated();
-    const map = new Map<string, string>();
-    for (const c of cands) {
-      if (c.source) map.set(normUrl(c.source), c.slug.toLowerCase());
-    }
-    upstream.value = map;
-  } catch {
-    /* 没有上游表时退回按 slug 匹配 */
-  }
-}
-
-async function loadFavorites() {
-  try {
-    favorites.value = await api.favorites();
   } catch (e) {
     store.fail(e);
   }
@@ -201,7 +153,6 @@ async function run(retryId?: string) {
     return;
   }
   searchedQ.value = q;
-  seg.value = "all";
   phase.value = "loading";
   openPlan.value = new Set();
   const wall0 = performance.now();
@@ -308,174 +259,29 @@ async function installRow(row: ResultRow) {
   }
 }
 
-async function installFavorite(fav: FavoriteRow, subpath?: string) {
-  busyKey.value = `fav:${fav.id}`;
-  installingFav.value = fav.id;
-  try {
-    const res = await doInstall(fav.url, subpath, fav.name);
-    const cached = favPreviews[fav.id];
-    const slug = (res as { slug?: string })?.slug;
-    if (cached)
-      favPreviews[fav.id] = {
-        ...cached,
-        slug: slug ?? cached.slug,
-        // 选定后要立刻把落点画进计划，否则用户看不出自己刚点了哪一个。
-        selected: subpath ?? cached.selected,
-        existing: true,
-      };
-  } catch (e) {
-    // 没先展开预览就直接装，后端会把歧义当错误抛回来。这种情况不是失败，是缺一次选择：
-    // 补上 dry-run 让候选面板出现，而不是给用户一条看不懂的报错。
-    if ((e as { code?: string })?.code === "E_SOURCE_AMBIGUOUS") {
-      try {
-        favPreviews[fav.id] = (await api.install(fav.url, {
-          dryRun: true,
-        })) as InstallPreview;
-        const next = new Set(openPlan.value);
-        next.add(`fav:${fav.id}`);
-        openPlan.value = next;
-        return;
-      } catch {
-        /* 预览也失败了，那就报原始错误 */
-      }
-    }
-    store.fail(e);
-  } finally {
-    busyKey.value = null;
-    installingFav.value = null;
-  }
-}
-
-/**
- * 收藏行的「预览 / 收起」：与市场行同款两步式。第一次展开才打后端 dry-run，
- * 之后再点开复用缓存，不重复克隆。
- */
-async function toggleFavPlan(fav: FavoriteRow) {
-  const key = `fav:${fav.id}`;
-  if (openPlan.value.has(key) || favPreviews[fav.id]) {
-    togglePlan(key);
-    return;
-  }
-  busyKey.value = key;
-  try {
-    favPreviews[fav.id] = (await api.install(fav.url, { dryRun: true })) as InstallPreview;
-    togglePlan(key);
-  } catch (e) {
-    store.fail(e);
-  } finally {
-    busyKey.value = null;
-  }
-}
-
-async function removeFavorite(fav: FavoriteRow) {
-  try {
-    await api.favoriteRemove(fav.id);
-    favorites.value = favorites.value.filter((f) => f.id !== fav.id);
-  } catch (e) {
-    store.fail(e);
-  }
-}
-
-// —— 抽屉：URL 解析 ——
-interface Parsed {
-  kind: "repo" | "link" | "bad";
-  host?: string;
-  owner?: string;
-  repo?: string;
-  branch?: string;
-  sub?: string;
-  slug?: string;
-}
-function parseUrl(raw: string): Parsed {
-  const url = raw.trim();
-  if (!/^https?:\/\//.test(url)) return { kind: "bad" };
-  try {
-    const u = new URL(url);
-    const host = u.host.toLowerCase().replace(/^www\./, "");
-    const repoHost =
-      /(^|\.)github\.com$/.test(host) ||
-      /(^|\.)gitee\.com$/.test(host) ||
-      /(^|\.)modelscope\.cn$/.test(host);
-    if (!repoHost) return { kind: "link", host };
-    const path = u.pathname.split("/").filter(Boolean);
-    const hi = path.findIndex((p) => p === "tree" || p === "blob");
-    const base = hi >= 0 ? path.slice(0, hi) : path;
-    if (base.length < 2) return { kind: "link", host };
-    const branch = hi >= 0 ? path[hi + 1] : "";
-    const sub = hi >= 0 ? path.slice(hi + 2).join("/") : "";
-    const repo = base[1];
-    const slug = (sub.split("/").filter(Boolean).pop() || repo || "").toLowerCase();
-    return { kind: "repo", host, owner: base[0], repo, branch, sub, slug };
-  } catch {
-    return { kind: "bad" };
-  }
-}
-const fvParsed = computed(() => parseUrl(fv.url));
-const fvState = computed<"idle" | "repo" | "link" | "bad">(() =>
-  fv.url.trim() ? fvParsed.value.kind : "idle"
-);
-
-function fillExample(kind: "github" | "gitee") {
-  fv.url =
-    kind === "github"
-      ? "https://github.com/v5note/wechat-mp"
-      : "https://gitee.com/zyw/wechat-mp";
-}
-
-/** 「收进收藏」：从结果行预填抽屉；可安装行预填 git 仓库地址，一键安装才可用。 */
+/** 「收进收藏」：把这一行的地址交给收藏页的抽屉预填；表单与安装都在「我的收藏」那一页。 */
 function favoriteRow(row: ResultRow) {
-  const installableUrl = row.plan?.kind === "git" ? row.plan.url : row.item.url;
-  fv.name = row.item.name || row.item.key;
-  fv.url = installableUrl;
-  fv.desc = row.item.summary || "";
-  formMarket.value = row.item.market;
-  drawer.value = true;
+  collect({
+    name: row.item.name || row.item.key,
+    url: row.plan?.kind === "git" ? row.plan.url : row.item.url,
+    description: row.item.summary || "",
+    market: row.item.market,
+  });
 }
 
 function favoriteBrowserSource(market: MarketInfo) {
-  fv.name = "";
-  fv.url = market.base_url;
-  fv.desc = "";
-  formMarket.value = market.id;
-  drawer.value = true;
+  collect({ name: "", url: market.base_url, description: "", market: market.id });
 }
 
-function openDrawer(name = "", url = "", description = "", market: string | null = null) {
-  fv.name = name;
-  fv.url = url;
-  fv.desc = description;
-  formMarket.value = market;
-  drawer.value = true;
+/** 视图头的「+ 添加收藏」：抽屉已经不在本页，一律送到收藏页去开。 */
+function goFavorites() {
+  collect({ name: "", url: "", description: "", market: null });
 }
 
-async function saveFav(andInstall: boolean) {
-  if (!fv.name.trim()) {
-    store.toast("warn", t("sources.fieldNameRequired"));
-    return;
-  }
-  const st = fvState.value;
-  if (st === "idle" || st === "bad") {
-    store.toast("warn", t("sources.urlInvalid"));
-    return;
-  }
-  try {
-    const saved = await api.favoriteAdd({
-      name: fv.name.trim(),
-      url: fv.url.trim(),
-      description: fv.desc.trim(),
-      market: formMarket.value,
-    });
-    favorites.value = [saved, ...favorites.value.filter((f) => f.id !== saved.id)];
-    drawer.value = false;
-    seg.value = "fav";
-    fv.name = "";
-    fv.url = "";
-    fv.desc = "";
-    if (andInstall) await installFavorite(saved);
-    else store.toast("ok", t("sources.favoriteSaved"));
-  } catch (e) {
-    store.fail(e);
-  }
+/** 预填值放进 store（一次性交接），再把用户送到收藏页。 */
+function collect(draft: FavoriteDraft) {
+  store.favDraft = draft;
+  void router.push("/favorites");
 }
 
 // —— 底部粘贴条：实时解析 + 回车即装 ——
@@ -518,44 +324,7 @@ async function previewUrl() {
 function pasteToFav() {
   const input = paste.value.trim();
   if (!input) return;
-  openDrawer("", input, "", null);
-}
-
-/** 抽屉「校验」框：随地址实时给出 idle / bad / link / repo 四态明细。 */
-function favParseBlock(): string {
-  const st = fvState.value;
-  const p = fvParsed.value;
-  const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-  const R = (k: string, v: string, cls = "v") =>
-    `<span class="k">${esc(k)}</span><span class="${cls}">${esc(v)}</span>\n`;
-  if (st === "idle") return t("sources.vIdle");
-  if (st === "bad")
-    return (
-      `${t("sources.vBadTitle")}\n` +
-      R(t("sources.vBadNeed"), t("sources.vBadNeedVal")) +
-      R(t("sources.vBadCur"), fv.url.trim().slice(0, 140))
-    );
-  if (st === "link")
-    return (
-      `${t("sources.vLinkTitle")}\n` +
-      R("host", p.host || "") +
-      R(t("sources.vReason"), t("sources.vLinkReasonVal")) +
-      R(t("sources.vAfter"), t("sources.vLinkAfterVal"))
-    );
-  const storeDir = "~/.heron/skills/" + (p.slug || "");
-  const isInstalled = p.slug ? installed.value.has(p.slug) : false;
-  return (
-    `${t("sources.vOkTitle")}\n` +
-    R("host", p.host || "") +
-    R("owner", p.owner || "") +
-    R("repo", p.repo || "") +
-    R(t("sources.vBranch"), p.branch || t("sources.vDefaultBranch")) +
-    R(t("sources.vSub"), p.sub || t("sources.repoRoot")) +
-    R(t("sources.vStoreDir"), storeDir, "to") +
-    (isInstalled
-      ? R(t("sources.vStatus"), t("sources.vInstalled"))
-      : R(t("sources.vAction"), t("sources.vNewAction")))
-  );
+  collect({ name: "", url: input, description: "", market: null });
 }
 
 function fmt(n: number | null): string {
@@ -577,61 +346,6 @@ function planHtml(plan: InstallPlan): string {
   return `<span class="mut">${t("sources.planCmd")}</span> heron install <b>${esc(plan.url)}</b>${ref}${sub} <span class="mut">${t("sources.planNote")}</span>`;
 }
 
-/** 收藏安装后的落点：预览拿到的真实 slug 优先，其次是已装记录里的同一仓库，最后才退回地址解析的猜测。 */
-function favSlug(fav: FavoriteRow): string {
-  const p = favPreviews[fav.id];
-  if (p?.slug) return p.slug.toLowerCase();
-  const byUrl = upstream.value.get(normUrl(fav.url));
-  if (byUrl) return byUrl;
-  const q = parseUrl(fav.url);
-  return q.kind === "repo" ? (q.slug || "").toLowerCase() : "";
-}
-
-/** 收藏是否已安装：按落点 slug 匹配本地库。 */
-function favInstalled(fav: FavoriteRow): boolean {
-  const slug = favSlug(fav);
-  return slug ? installed.value.has(slug) : false;
-}
-
-/**
- * 后端没能替我们定下唯一 skill：仓库里有好几个真正的候选，而作者没有声明哪个是源。
- * 这不是错误，是一次选择——把目录列表摊开让用户点，而不是逼他去手写 tree 地址。
- */
-function favNeedsChoice(fav: FavoriteRow): boolean {
-  const p = favPreviews[fav.id];
-  return !!p && p.selected === null && p.available.length > 1;
-}
-
-/** 收藏展开的安装计划：命令行 + 后端 dry-run 算出的真实落点。 */
-function favPlanHtml(fav: FavoriteRow): string {
-  const p = favPreviews[fav.id];
-  if (!p) return "";
-  const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-  const R = (k: string, v: string, cls = "v") =>
-    `<span class="k">${esc(k)}</span><span class="${cls}">${esc(v)}</span>\n`;
-  const ref = p.ref_name
-    ? ` @ <b>${esc(p.ref_name)}</b>`
-    : ` <span class="mut">${t("sources.planDefaultRef")}</span>`;
-  const sub = p.selected
-    ? ` · ${t("sources.planSubpath")} <b>${esc(p.selected)}</b>`
-    : p.available.length > 1
-      ? ` · <b>${t("sources.planUnchosen", { n: p.available.length })}</b>`
-      : "";
-  // 整仓安装：这个 skill 的代码会回到仓库根去找同级目录（huashu-motion 的 bin/om 就引用
-  // ../../../cli/om.js），只导出 skill 目录会装出一个跑不起来的东西。
-  const whole = p.whole_repo ? R(t("sources.planScope"), t("sources.planWholeRepo")) : "";
-  return (
-    `<span class="mut">${t("sources.planCmd")}</span> heron install <b>${esc(fav.url)}</b>${ref}${sub} <span class="mut">${t("sources.planNote")}</span>\n` +
-    R(t("sources.planSlug"), p.slug) +
-    R(t("sources.vStoreDir"), "~/.heron/skills/" + p.slug, "to") +
-    whole +
-    R(t("sources.planCommit"), p.commit.slice(0, 8)) +
-    (p.existing
-      ? R(t("sources.vStatus"), t("sources.planExisting"), "bad")
-      : R(t("sources.vAction"), t("sources.vNewAction")))
-  );
-}
-
 function stagger(i: number): string {
   return "f" + (i % 3);
 }
@@ -646,7 +360,7 @@ function stagger(i: number): string {
         <p class="h-lead">{{ t("sources.lead") }}</p>
       </div>
       <div class="h-actions">
-        <button class="btn primary" @click="openDrawer()">
+        <button class="btn primary" @click="goFavorites()">
           <AppIcon name="plus" :size="14" /> {{ t("sources.addFavorite") }}
         </button>
       </div>
@@ -720,315 +434,208 @@ function stagger(i: number): string {
       </span>
     </div>
 
-    <!-- 分段：全部来源 / 我的收藏 -->
+    <!-- 在线来源数（「我的收藏」分段已拆成一级页面，这里不再做页内切换） -->
     <div class="h-bar">
-      <div class="seg">
-        <button :class="{ 'is-active': seg === 'all' }" @click="seg = 'all'">
-          {{ t("sources.tabAll") }} <span class="n h-num">{{ totalHits }}</span>
-        </button>
-        <button :class="{ 'is-active': seg === 'fav' }" @click="seg = 'fav'">
-          {{ t("sources.tabFav") }} <span class="n h-num">{{ favorites.length }}</span>
-        </button>
-      </div>
       <span class="tail">{{ t("sources.barTail", { n: onlineCount }) }}</span>
     </div>
 
-    <!-- TAB：全部来源 -->
-    <template v-if="seg === 'all'">
-      <!-- 骨架：真实来源较慢时逐条 shimmer，体现「并发 + 流式」 -->
-      <div v-if="phase === 'loading'" class="h-load">
-        <div class="cap">
-          <span class="spin" style="width:14px;height:14px;border-color:var(--line-strong);border-top-color:var(--accent)"></span>
-          {{ t("sources.concurrent", { n: enabledSearchSources.length, names: enabledSearchSources.map((m) => m.name).join(' · ') }) }}
-        </div>
-        <div class="h-lrow">
-          <span class="sk" style="width:38px;height:38px;border-radius:9px"></span>
-          <span style="flex:1">
-            <span class="sk" style="width:46%;height:13px"></span>
-            <span class="sk" style="width:72%;height:10px;margin-top:6px"></span>
-          </span>
-          <span class="sk" style="width:62px;height:26px"></span>
-        </div>
-        <div class="h-lrow" style="--sd:90ms">
-          <span class="sk" style="width:38px;height:38px;border-radius:9px"></span>
-          <span style="flex:1">
-            <span class="sk" style="width:34%;height:13px"></span>
-            <span class="sk" style="width:66%;height:10px;margin-top:6px"></span>
-          </span>
-          <span class="sk" style="width:62px;height:26px"></span>
-        </div>
-        <div class="h-lrow" style="--sd:180ms">
-          <span class="sk" style="width:38px;height:38px;border-radius:9px"></span>
-          <span style="flex:1">
-            <span class="sk" style="width:52%;height:13px"></span>
-            <span class="sk" style="width:58%;height:10px;margin-top:6px"></span>
-          </span>
-          <span class="sk" style="width:62px;height:26px"></span>
-        </div>
+    <!-- 骨架：真实来源较慢时逐条 shimmer，体现「并发 + 流式」 -->
+    <div v-if="phase === 'loading'" class="h-load">
+      <div class="cap">
+        <span class="spin" style="width:14px;height:14px;border-color:var(--line-strong);border-top-color:var(--accent)"></span>
+        {{ t("sources.concurrent", { n: enabledSearchSources.length, names: enabledSearchSources.map((m) => m.name).join(' · ') }) }}
       </div>
+      <div class="h-lrow">
+        <span class="sk" style="width:38px;height:38px;border-radius:9px"></span>
+        <span style="flex:1">
+          <span class="sk" style="width:46%;height:13px"></span>
+          <span class="sk" style="width:72%;height:10px;margin-top:6px"></span>
+        </span>
+        <span class="sk" style="width:62px;height:26px"></span>
+      </div>
+      <div class="h-lrow" style="--sd:90ms">
+        <span class="sk" style="width:38px;height:38px;border-radius:9px"></span>
+        <span style="flex:1">
+          <span class="sk" style="width:34%;height:13px"></span>
+          <span class="sk" style="width:66%;height:10px;margin-top:6px"></span>
+        </span>
+        <span class="sk" style="width:62px;height:26px"></span>
+      </div>
+      <div class="h-lrow" style="--sd:180ms">
+        <span class="sk" style="width:38px;height:38px;border-radius:9px"></span>
+        <span style="flex:1">
+          <span class="sk" style="width:52%;height:13px"></span>
+          <span class="sk" style="width:58%;height:10px;margin-top:6px"></span>
+        </span>
+        <span class="sk" style="width:62px;height:26px"></span>
+      </div>
+    </div>
 
-      <template v-else>
-        <!-- 未搜索：用一个提示条代替逐来源空卡 -->
-        <div v-if="phase === 'idle'" class="h-idle-hint">
-          <AppIcon name="search" :size="16" />
-          <span>{{ t("sources.idleHint") }}</span>
-        </div>
-        <!-- 逐来源分组卡（先返回的先出现） -->
-        <template v-if="phase === 'done'">
-        <section v-for="m in enabledSearchSources" :key="m.id" class="h-grp">
-          <div v-if="errFor(m.id)" class="h-grp h-grp-empty bad">
-            <div class="h-grp-h">
-              <span class="h-src">
-                <span class="mark">{{ mk(m.id) }}</span>
-                <span class="nm">{{ m.name }}</span>
-                <span class="hdot broken"></span>
-              </span>
-              <span class="chips"><span class="chip bad">{{ t("sources.srcFailed") }}</span></span>
-              <span class="meta">{{ hostOf(m.base_url) }}</span>
-            </div>
-            <div class="h-fail">
-              <span>{{ t("sources.failDesc") }}</span>
-              <span class="g">
-                <button class="btn sm" @click="run(m.id)">{{ t("sources.retry") }}</button>
-                <button class="btn sm ghost" @click="toggleSource(m)">{{ t("sources.disable") }}</button>
-              </span>
-            </div>
-          </div>
-
-          <template v-else-if="hits(m.id)">
-            <div class="h-grp-h">
-              <span class="h-src">
-                <span class="mark">{{ mk(m.id) }}</span>
-                <span class="nm">{{ m.name }}</span>
-                <span class="hdot" :class="probe[m.id]?.health || 'not_scanned'"></span>
-              </span>
-              <span class="chips">
-                <span class="chip good">{{ t("sources.searchInstallable") }}</span>
-              </span>
-              <span class="hits">
-                {{ t("sources.hitCount", { n: hits(m.id) }) }}
-                <template v-if="installedSet(m.id)">
-                  · {{ t("sources.doneIn", { n: installedSet(m.id) }) }}
-                </template>
-              </span>
-              <span class="meta">{{ hostOf(m.base_url) }} · {{ t("sources.probe") }} {{ probe[m.id]?.ms ?? '—' }} ms</span>
-              <span class="acts">
-                <button class="btn sm ghost" @click="openExternal(m.base_url)">
-                  <svg viewBox="0 0 24 24"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" /><path d="M15 3h6v6" /><path d="M10 14 21 3" /></svg>
-                  {{ t("sources.openSource") }}
-                </button>
-              </span>
-            </div>
-            <div class="h-rows">
-              <div
-                v-for="(row, i) in planFor(m.id)!.rows"
-                :key="row.item.key"
-                class="h-res"
-                :class="['f' + (i % 3)]"
-              >
-                <span class="nm">
-                  <b>{{ row.item.name || row.item.key }}</b>
-                  <span v-if="row.item.owner" class="own mono">{{ row.item.owner }}</span>
-                  <span v-if="row.item.version" class="ver mono">{{ row.item.version }}</span>
-                  <span v-if="done(row)" class="badge ok">
-                    <svg viewBox="0 0 24 24"><path d="M20 6L9 17l-5-5" /></svg>{{ t("sources.installedShort") }}
-                  </span>
-                </span>
-                <span class="stat h-num">
-                  <svg viewBox="0 0 24 24"><path d="M12 4v12m0 0l-4-4m4 4l4-4" /><path d="M5 20h14" /></svg>
-                  {{ fmt(row.item.downloads) }}
-                </span>
-                <span class="acts">
-                  <button
-                    v-if="row.installable"
-                    class="btn sm"
-                    :class="{ primary: openPlan.has(row.item.key) }"
-                    @click="togglePlan(row.item.key)"
-                  >
-                    {{ openPlan.has(row.item.key) ? t("sources.collapse") : t("sources.preview") }}
-                  </button>
-                  <button
-                    class="btn primary sm"
-                    :disabled="busyKey === row.item.key"
-                    @click="installRow(row)"
-                  >
-                    <svg viewBox="0 0 24 24"><path d="M12 4v12m0 0l-4-4m4 4l4-4" /><path d="M5 20h14" /></svg>
-                    {{ busyKey === row.item.key ? t("sources.installing") : done(row) ? t("sources.installAgain") : t("sources.install") }}
-                  </button>
-                  <button class="icon-btn" :title="t('sources.collectFav')" @click="favoriteRow(row)">
-                    <AppIcon name="star" :size="14" />
-                  </button>
-                  <button class="icon-btn" :title="t('sources.openDeeplink')" @click="openItem(row)">
-                    <svg viewBox="0 0 24 24"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" /><path d="M15 3h6v6" /><path d="M10 14 21 3" /></svg>
-                  </button>
-                </span>
-                <span class="sum" :title="row.item.summary">{{ row.item.summary }}</span>
-                <div
-                  v-if="openPlan.has(row.item.key) && row.plan?.kind === 'git'"
-                  class="h-plan"
-                  v-html="planHtml(row.plan)"
-                ></div>
-              </div>
-            </div>
-          </template>
-
-          <div v-else class="h-grp h-grp-empty">
-            <div class="h-grp-h">
-              <span class="h-src">
-                <span class="mark">{{ mk(m.id) }}</span>
-                <span class="nm">{{ m.name }}</span>
-                <span class="hdot" :class="probe[m.id]?.health || 'not_scanned'"></span>
-              </span>
-              <span class="hits muted">{{ t("sources.noHit") }}</span>
-            </div>
-          </div>
-        </section>
-
-        <div
-          v-if="phase === 'done' && !enabledSearchSources.length"
-          class="card h-empty"
-        >
-          {{ t("sources.allDisabled") }}
-        </div>
-        <div v-else-if="phase === 'done' && totalHits === 0" class="card h-empty">
-          {{ t("sources.searchEmpty", { q: searchedQ }) }}
-        </div>
-        </template>
-
-        <!-- 仅浏览器来源：不参与统一搜索，给深链 + 可收进收藏 -->
-        <div class="h-sec">
-          <h2>{{ t("sources.browserSources") }}</h2>
-          <span class="line"></span>
-          <span class="hint">{{ t("sources.browserHint", { n: browserSources.length }) }}</span>
-        </div>
-        <div class="h-brow">
-          <div
-            v-for="(m, i) in browserSources"
-            :key="m.id"
-            class="h-brw"
-            :class="[stagger(i), { off: !m.enabled }]"
-          >
+    <template v-else>
+      <!-- 未搜索：用一个提示条代替逐来源空卡 -->
+      <div v-if="phase === 'idle'" class="h-idle-hint">
+        <AppIcon name="search" :size="16" />
+        <span>{{ t("sources.idleHint") }}</span>
+      </div>
+      <!-- 逐来源分组卡（先返回的先出现） -->
+      <template v-if="phase === 'done'">
+      <section v-for="m in enabledSearchSources" :key="m.id" class="h-grp">
+        <div v-if="errFor(m.id)" class="h-grp h-grp-empty bad">
+          <div class="h-grp-h">
             <span class="h-src">
               <span class="mark">{{ mk(m.id) }}</span>
               <span class="nm">{{ m.name }}</span>
-              <span class="hdot" :class="m.enabled ? 'ok' : 'not_scanned'"></span>
+              <span class="hdot broken"></span>
+            </span>
+            <span class="chips"><span class="chip bad">{{ t("sources.srcFailed") }}</span></span>
+            <span class="meta">{{ hostOf(m.base_url) }}</span>
+          </div>
+          <div class="h-fail">
+            <span>{{ t("sources.failDesc") }}</span>
+            <span class="g">
+              <button class="btn sm" @click="run(m.id)">{{ t("sources.retry") }}</button>
+              <button class="btn sm ghost" @click="toggleSource(m)">{{ t("sources.disable") }}</button>
+            </span>
+          </div>
+        </div>
+
+        <template v-else-if="hits(m.id)">
+          <div class="h-grp-h">
+            <span class="h-src">
+              <span class="mark">{{ mk(m.id) }}</span>
+              <span class="nm">{{ m.name }}</span>
+              <span class="hdot" :class="probe[m.id]?.health || 'not_scanned'"></span>
             </span>
             <span class="chips">
-              <span class="chip warn">{{ t("sources.browserOnlyNoInstall") }}</span>
-              <span v-if="!m.enabled" class="chip neutral">{{ t("sources.defaultOff") }}</span>
+              <span class="chip good">{{ t("sources.searchInstallable") }}</span>
             </span>
-            <span class="dp">{{ sourceBrief(m) }}</span>
-            <span class="dl h-path" :title="deepLink(m)">{{ deepLink(m) }}</span>
+            <span class="hits">
+              {{ t("sources.hitCount", { n: hits(m.id) }) }}
+              <template v-if="installedSet(m.id)">
+                · {{ t("sources.doneIn", { n: installedSet(m.id) }) }}
+              </template>
+            </span>
+            <span class="meta">{{ hostOf(m.base_url) }} · {{ t("sources.probe") }} {{ probe[m.id]?.ms ?? '—' }} ms</span>
             <span class="acts">
-              <button class="btn sm" :disabled="!m.enabled" @click="openExternal(deepLink(m))">
+              <button class="btn sm ghost" @click="openExternal(m.base_url)">
                 <svg viewBox="0 0 24 24"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" /><path d="M15 3h6v6" /><path d="M10 14 21 3" /></svg>
-                {{ t("sources.openDeeplink") }}
-              </button>
-              <button class="btn sm ghost" :title="t('sources.addFavorite')" @click="favoriteBrowserSource(m)">
-                <AppIcon name="star" :size="13" /> {{ t("sources.collectFav") }}
-              </button>
-              <button class="btn sm ghost" @click="toggleSource(m)">
-                {{ m.enabled ? t("sources.disable") : t("common.project") }}
+                {{ t("sources.openSource") }}
               </button>
             </span>
-            <span v-if="!m.enabled" class="off">{{ t("sources.offNote") }}</span>
           </div>
-        </div>
-      </template>
-    </template>
+          <div class="h-rows">
+            <div
+              v-for="(row, i) in planFor(m.id)!.rows"
+              :key="row.item.key"
+              class="h-res"
+              :class="['f' + (i % 3)]"
+            >
+              <span class="nm">
+                <b>{{ row.item.name || row.item.key }}</b>
+                <span v-if="row.item.owner" class="own mono">{{ row.item.owner }}</span>
+                <span v-if="row.item.version" class="ver mono">{{ row.item.version }}</span>
+                <span v-if="done(row)" class="badge ok">
+                  <svg viewBox="0 0 24 24"><path d="M20 6L9 17l-5-5" /></svg>{{ t("sources.installedShort") }}
+                </span>
+              </span>
+              <span class="stat h-num">
+                <svg viewBox="0 0 24 24"><path d="M12 4v12m0 0l-4-4m4 4l4-4" /><path d="M5 20h14" /></svg>
+                {{ fmt(row.item.downloads) }}
+              </span>
+              <span class="acts">
+                <button
+                  v-if="row.installable"
+                  class="btn sm"
+                  :class="{ primary: openPlan.has(row.item.key) }"
+                  @click="togglePlan(row.item.key)"
+                >
+                  {{ openPlan.has(row.item.key) ? t("sources.collapse") : t("sources.preview") }}
+                </button>
+                <button
+                  class="btn primary sm"
+                  :disabled="busyKey === row.item.key"
+                  @click="installRow(row)"
+                >
+                  <svg viewBox="0 0 24 24"><path d="M12 4v12m0 0l-4-4m4 4l4-4" /><path d="M5 20h14" /></svg>
+                  {{ busyKey === row.item.key ? t("sources.installing") : done(row) ? t("sources.installAgain") : t("sources.install") }}
+                </button>
+                <button class="icon-btn" :title="t('sources.collectFav')" @click="favoriteRow(row)">
+                  <AppIcon name="star" :size="14" />
+                </button>
+                <button class="icon-btn" :title="t('sources.openDeeplink')" @click="openItem(row)">
+                  <svg viewBox="0 0 24 24"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" /><path d="M15 3h6v6" /><path d="M10 14 21 3" /></svg>
+                </button>
+              </span>
+              <span class="sum" :title="row.item.summary">{{ row.item.summary }}</span>
+              <div
+                v-if="openPlan.has(row.item.key) && row.plan?.kind === 'git'"
+                class="h-plan"
+                v-html="planHtml(row.plan)"
+              ></div>
+            </div>
+          </div>
+        </template>
 
-    <!-- TAB：我的收藏 -->
-    <template v-else>
-      <div class="h-sec">
-        <h2>{{ t("sources.tabFav") }}</h2>
-        <span class="line"></span>
-        <span class="hint">
-          {{ t("sources.favCount", { n: favorites.length, repos: reposFavs.length, links: linkFavs.length }) }}
-        </span>
-        <button class="btn primary sm" @click="openDrawer()">
-          <AppIcon name="plus" :size="14" /> {{ t("sources.addFavorite") }}
-        </button>
-      </div>
-      <div class="card">
-        <div v-for="(f, i) in favorites" :key="f.id" class="h-fav" :class="'f' + (i % 3)">
-          <div class="fk">
-            <b>{{ f.name }}</b>
-            <span v-if="parseUrl(f.url).host" class="chips"><span class="chip neutral plain mono">{{ parseUrl(f.url).host }}</span></span>
-            <span v-if="parseUrl(f.url).kind !== 'repo'" class="chips"><span class="chip warn">{{ t("sources.onlyLink") }}</span></span>
-            <span v-if="favInstalled(f)" class="badge ok">
-              <svg viewBox="0 0 24 24"><path d="M20 6L9 17l-5-5" /></svg>{{ t("sources.installedShort") }}
+        <div v-else class="h-grp h-grp-empty">
+          <div class="h-grp-h">
+            <span class="h-src">
+              <span class="mark">{{ mk(m.id) }}</span>
+              <span class="nm">{{ m.name }}</span>
+              <span class="hdot" :class="probe[m.id]?.health || 'not_scanned'"></span>
             </span>
-          </div>
-          <div v-if="f.description" class="fd" :title="f.description">{{ f.description }}</div>
-          <div class="fu">
-            <span class="h-path" :title="f.url">{{ f.url }}</span>
-            <span v-if="parseUrl(f.url).kind === 'repo'" class="fm mono">
-              {{ parseUrl(f.url).owner }}/{{ parseUrl(f.url).repo }} · {{ parseUrl(f.url).sub || t("sources.repoRoot") }}
-            </span>
-            <span class="fm mono">{{ t("sources.favOn", { d: (f.created_at || '').slice(0, 10) }) }}</span>
-          </div>
-          <div class="acts">
-            <button class="btn sm ghost" :title="t('sources.openInBrowser')" @click="openExternal(f.url)">
-              <svg viewBox="0 0 24 24"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" /><path d="M15 3h6v6" /><path d="M10 14 21 3" /></svg>
-            </button>
-            <button class="btn sm ghost" :title="t('sources.removeFavorite')" @click="removeFavorite(f)">
-              <svg viewBox="0 0 24 24"><path d="M4 7h16" /><path d="M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" /><path d="M6 7l1 13h10l1-13" /></svg>
-            </button>
-            <button
-              v-if="parseUrl(f.url).kind === 'repo'"
-              class="btn sm"
-              :class="{ primary: openPlan.has(`fav:${f.id}`) }"
-              :disabled="busyKey === `fav:${f.id}`"
-              @click="toggleFavPlan(f)"
-            >
-              {{
-                openPlan.has(`fav:${f.id}`)
-                  ? t("sources.collapse")
-                  : busyKey === `fav:${f.id}`
-                    ? t("sources.previewing")
-                    : t("sources.preview")
-              }}
-            </button>
-            <button
-              class="btn sm primary"
-              :disabled="parseUrl(f.url).kind !== 'repo' || busyKey === `fav:${f.id}`"
-              :title="parseUrl(f.url).kind === 'repo' ? t('sources.oneClickInstall') : t('sources.needGitAddress')"
-              @click="installFavorite(f)"
-            >
-              <svg viewBox="0 0 24 24"><path d="M12 4v12m0 0l-4-4m4 4l4-4" /><path d="M5 20h14" /></svg>
-              {{
-                installingFav === f.id
-                  ? t("sources.installing")
-                  : favInstalled(f)
-                    ? t("sources.installAgain")
-                    : t("sources.install")
-              }}
-            </button>
-          </div>
-          <div
-            v-if="openPlan.has(`fav:${f.id}`)"
-            class="h-plan"
-            v-html="favPlanHtml(f)"
-          ></div>
-          <!-- 仓库里有多个候选而作者没声明源：让用户点一下，而不是手写子路径 -->
-          <div v-if="openPlan.has(`fav:${f.id}`) && favNeedsChoice(f)" class="h-pick">
-            <span class="h-pick-hint">{{ t("sources.pickSkill") }}</span>
-            <button
-              v-for="cand in favPreviews[f.id].available"
-              :key="cand"
-              class="btn sm"
-              :disabled="busyKey === `fav:${f.id}`"
-              @click="installFavorite(f, cand)"
-            >
-              {{ cand || "." }}
-            </button>
+            <span class="hits muted">{{ t("sources.noHit") }}</span>
           </div>
         </div>
-        <div v-if="!favorites.length" class="h-empty">
-          {{ t("sources.favEmpty") }}<br />
-          <button class="btn sm" style="margin-top:12px" @click="openDrawer()">
-            <AppIcon name="plus" :size="14" /> {{ t("sources.addFavorite") }}
-          </button>
+      </section>
+
+      <div
+        v-if="phase === 'done' && !enabledSearchSources.length"
+        class="card h-empty"
+      >
+        {{ t("sources.allDisabled") }}
+      </div>
+      <div v-else-if="phase === 'done' && totalHits === 0" class="card h-empty">
+        {{ t("sources.searchEmpty", { q: searchedQ }) }}
+      </div>
+      </template>
+
+      <!-- 仅浏览器来源：不参与统一搜索，给深链 + 可收进收藏 -->
+      <div class="h-sec">
+        <h2>{{ t("sources.browserSources") }}</h2>
+        <span class="line"></span>
+        <span class="hint">{{ t("sources.browserHint", { n: browserSources.length }) }}</span>
+      </div>
+      <div class="h-brow">
+        <div
+          v-for="(m, i) in browserSources"
+          :key="m.id"
+          class="h-brw"
+          :class="[stagger(i), { off: !m.enabled }]"
+        >
+          <span class="h-src">
+            <span class="mark">{{ mk(m.id) }}</span>
+            <span class="nm">{{ m.name }}</span>
+            <span class="hdot" :class="m.enabled ? 'ok' : 'not_scanned'"></span>
+          </span>
+          <span class="chips">
+            <span class="chip warn">{{ t("sources.browserOnlyNoInstall") }}</span>
+            <span v-if="!m.enabled" class="chip neutral">{{ t("sources.defaultOff") }}</span>
+          </span>
+          <span class="dp">{{ sourceBrief(m) }}</span>
+          <span class="dl h-path" :title="deepLink(m)">{{ deepLink(m) }}</span>
+          <span class="acts">
+            <button class="btn sm" :disabled="!m.enabled" @click="openExternal(deepLink(m))">
+              <svg viewBox="0 0 24 24"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" /><path d="M15 3h6v6" /><path d="M10 14 21 3" /></svg>
+              {{ t("sources.openDeeplink") }}
+            </button>
+            <button class="btn sm ghost" :title="t('sources.addFavorite')" @click="favoriteBrowserSource(m)">
+              <AppIcon name="star" :size="13" /> {{ t("sources.collectFav") }}
+            </button>
+            <button class="btn sm ghost" @click="toggleSource(m)">
+              {{ m.enabled ? t("sources.disable") : t("common.project") }}
+            </button>
+          </span>
+          <span v-if="!m.enabled" class="off">{{ t("sources.offNote") }}</span>
         </div>
       </div>
     </template>
@@ -1052,73 +659,7 @@ function stagger(i: number): string {
     </div>
     <div v-if="paste.trim()" class="h-parse" v-html="pasteBlock"></div>
 
-    <!-- 抽屉：添加收藏（地址实时解析） -->
-    <AppOverlay :open="drawer" variant="drawer" @close="drawer = false">
-      <div class="drawer-wrap">
-        <div class="h-drawer-h">
-          <div>
-            <h3>{{ t("sources.favFormTitle") }}</h3>
-            <p>{{ t("sources.drawerSub") }}</p>
-          </div>
-          <button class="icon-btn" :title="t('common.close')" @click="drawer = false">
-            <svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18" /></svg>
-          </button>
-        </div>
-        <div class="h-drawer-b">
-          <div class="fld">
-            <label>{{ t("sources.fieldName") }}</label>
-            <input v-model="fv.name" :placeholder="t('sources.fieldNamePh')" />
-            <span class="hint">{{ t("sources.fieldNameHint") }}</span>
-          </div>
-
-          <div class="fld">
-            <label>{{ t("sources.fieldUrl") }}</label>
-            <input v-model="fv.url" :placeholder="t('sources.fieldUrlPh')" />
-            <span class="hint">{{ t("sources.fieldUrlHint") }}</span>
-            <span class="h-ex">
-              <button @click="fillExample('github')">{{ t("sources.exGithub") }}</button>
-              <button @click="fillExample('gitee')">{{ t("sources.exGitee") }}</button>
-            </span>
-          </div>
-
-          <div class="fld">
-            <label>{{ t("sources.validate") }}</label>
-            <div
-              class="h-parse"
-              :class="fvState === 'bad' ? 'bad' : fvState === 'link' ? 'link' : ''"
-              v-html="favParseBlock()"
-            ></div>
-          </div>
-
-          <div class="fld">
-            <label>{{ t("sources.fieldDesc") }}</label>
-            <textarea v-model="fv.desc" rows="3" :placeholder="t('sources.fieldDescPh')" />
-          </div>
-        </div>
-        <div class="h-drawer-f">
-          <span class="h-mono">{{ t("sources.localOnly") }}</span>
-          <button class="btn ghost" @click="drawer = false">{{ t("common.cancel") }}</button>
-          <button
-            class="btn"
-            :disabled="!fv.name.trim() || fvState === 'idle' || fvState === 'bad'"
-            @click="saveFav(false)"
-          >
-            {{ t("sources.save") }}
-          </button>
-          <button
-            class="btn primary"
-            :disabled="fvState !== 'repo' || !fv.name.trim()"
-            :title="fvState === 'link' ? t('sources.needGitAddress') : ''"
-            @click="saveFav(true)"
-          >
-            <svg viewBox="0 0 24 24"><path d="M12 4v12m0 0l-4-4m4 4l4-4" /><path d="M5 20h14" /></svg>
-            {{ t("sources.saveAndInstall") }}
-          </button>
-        </div>
-      </div>
-    </AppOverlay>
-
-    <FloatBar :hidden="drawer" />
+    <FloatBar />
   </div>
 </template>
 
@@ -1191,11 +732,6 @@ function stagger(i: number): string {
 
 /* —— 分段 tabs —— */
 .h-bar { display: flex; align-items: center; gap: 12px; margin: 16px 0 4px; }
-.seg { display: inline-flex; border: 1px solid var(--line-strong); border-radius: var(--radius-sm); overflow: hidden; background: var(--panel); }
-.seg button { height: 30px; padding: 0 14px; font-size: 12.5px; font-weight: 500; color: var(--dim); display: inline-flex; align-items: center; gap: 6px; }
-.seg button + button { border-left: 1px solid var(--line); }
-.seg button.is-active { background: var(--text); color: var(--bg); font-weight: 600; }
-.seg button .n { font-family: var(--font-mono); font-size: 12px; opacity: 0.8; }
 .h-bar .tail { font-size: 12px; color: var(--faint); margin-left: auto; }
 
 /* —— 加载骨架 —— */
@@ -1243,10 +779,6 @@ function stagger(i: number): string {
 .h-plan :deep(.v) { color: var(--text); }
 .h-plan :deep(.bad) { color: var(--bad); }
 
-/* 候选选择器：仓库里有多个 skill 时用真按钮排开，v-html 里的计划文本挂不了事件 */
-.h-pick { grid-column: 1 / -1; margin-top: 8px; padding: 10px 12px; display: flex; flex-wrap: wrap; align-items: center; gap: 7px; background: var(--raised); border: 1px dashed color-mix(in srgb, var(--accent) 42%, var(--line)); border-radius: 8px; }
-.h-pick-hint { font-size: 12.5px; color: var(--dim); margin-right: 2px; }
-.h-pick .btn { font-family: var(--font-mono); font-size: 12px; }
 
 .badge.ok { display: inline-flex; align-items: center; gap: 4px; height: 19px; padding: 0 7px; border-radius: 999px; background: color-mix(in srgb, var(--good) 14%, transparent); color: var(--good); font-size: 11px; font-weight: 600; }
 .badge.ok svg { width: 11px; height: 11px; stroke: currentColor; fill: none; stroke-width: 2.4; }
@@ -1278,17 +810,6 @@ function stagger(i: number): string {
 .h-brw .acts { display: flex; gap: 7px; flex-wrap: wrap; align-items: center; }
 .h-brw .off { font-family: var(--font-mono); font-size: 12px; color: var(--warn); }
 
-/* —— 收藏行 —— */
-.h-fav { padding: 13px 14px; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px 16px; align-items: center; border-bottom: 1px solid var(--line); }
-.h-fav:last-child { border-bottom: 0; }
-.h-fav:hover { background: color-mix(in srgb, var(--raised) 55%, transparent); }
-.h-fav .fk { grid-column: 1; display: flex; align-items: baseline; gap: 9px; flex-wrap: wrap; min-width: 0; }
-.h-fav .fk b { font-size: 14px; font-weight: 600; }
-.h-fav .fd { grid-column: 1; font-size: 14px; color: var(--dim); line-height: 1.5; max-width: 88ch; }
-.h-fav .fu { grid-column: 1; display: flex; align-items: center; gap: 9px; flex-wrap: wrap; margin-top: 2px; }
-.h-fav .fu .fm { font-family: var(--font-mono); font-size: 12px; color: var(--faint); white-space: nowrap; }
-.h-fav .fu .h-path { flex: 1 1 100%; min-width: 0; }
-.h-fav .acts { grid-column: 2; grid-row: 1 / span 3; display: flex; gap: 7px; align-items: center; }
 
 /* —— 粘贴条 —— */
 .h-paste { display: flex; align-items: center; gap: 8px; height: 40px; padding: 0 8px 0 12px; border: 1px solid var(--line-strong); border-radius: var(--radius); background: var(--panel); }
@@ -1308,29 +829,7 @@ function stagger(i: number): string {
 .h-parse :deep(.bad) { color: var(--bad); }
 .h-parse :deep(b) { color: var(--text); }
 
-/* —— 抽屉：示例按钮 —— */
-.h-ex { display: inline-flex; align-items: center; gap: 6px; margin-top: 8px; }
-.h-ex button { height: 24px; padding: 0 10px; border: 1px solid var(--line-strong); border-radius: 6px; font-family: var(--font-mono); font-size: 12px; color: var(--dim); background: var(--panel); cursor: pointer; }
-.h-ex button:hover { background: var(--raised); color: var(--text); }
 
-/* —— 抽屉内容布局 —— */
-.drawer-wrap { display: flex; flex-direction: column; height: 100%; min-height: 0; }
-.h-drawer-h { display: flex; align-items: flex-start; gap: 12px; padding: 18px 20px 14px; border-bottom: 1px solid var(--line); }
-.h-drawer-h h3 { font-size: 15px; margin: 0; }
-.h-drawer-h p { margin-top: 4px; font-size: 12.5px; color: var(--dim); }
-.h-drawer-h .icon-btn { margin-left: auto; }
-.h-drawer-b { flex: 1; min-height: 0; overflow: auto; padding: 16px 20px; display: flex; flex-direction: column; gap: 16px; }
-.fld { display: flex; flex-direction: column; gap: 5px; }
-.fld label { font-size: 12px; font-weight: 600; color: var(--dim); }
-.fld input, .fld textarea {
-  border: 1px solid var(--line-strong); border-radius: var(--radius-sm); background: var(--panel);
-  padding: 8px 10px; font-size: 13px; color: var(--text); font-family: inherit; resize: vertical;
-}
-.fld input:focus, .fld textarea:focus { border-color: var(--text); box-shadow: 0 0 0 3px var(--accent-weak); outline: none; }
-.fld .hint { font-size: 11.5px; color: var(--faint); }
-.fld .err { font-size: 11.5px; color: var(--bad); }
-.h-drawer-f { display: flex; align-items: center; gap: 8px; padding: 14px 20px; border-top: 1px solid var(--line); }
-.h-drawer-f .h-mono { margin-right: auto; }
 
 /* —— 工具类 —— */
 .h-mono { font-family: var(--font-mono); font-size: 12px; color: var(--dim); }

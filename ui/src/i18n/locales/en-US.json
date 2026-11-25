@@ -24,6 +24,7 @@
     "overview": "Overview",
     "library": "My skills",
     "discover": "Discover",
+    "favorites": "My favourites",
     "sources": "Sources & markets",
     "projects": "Projects",
     "upgrades": "Updates",
@@ -236,6 +237,10 @@
     "copyFailed": "Copy failed — check clipboard permissions",
     "ready": "Ready to adopt"
   },
+  "favorites": {
+    "title": "My favourites",
+    "lead": "Saved addresses: repositories install right here, links only open. “Add to favourites” on the sources page lands on this page too."
+  },
   "sources": {
     "title": "Sources & markets",
     "lead": "One search box hits every enabled source at once; results group by source and install row by row.",
@@ -253,8 +258,6 @@
     "reprobeTitle": "Re-time every enabled source",
     "searchingN": "Searching «{q}» across {n} sources…",
     "sumline": "{hits} results from {sources} sources · {installed} installed · {ms} ms",
-    "tabAll": "All sources",
-    "tabFav": "My favourites",
     "barTail": "{n} searchable sources online · results ranked by relevance",
     "concurrent": "Hitting {n} sources at once: {names}",
     "srcFailed": "request failed",
@@ -389,6 +392,11 @@
     "default": "default",
     "lead": "A target is the directory a client actually reads; project targets only apply to that project.",
     "targets": "Targets",
+    "enableAll": "Enable all",
+    "revokeAll": "Revoke all",
+    "enableAllTip": "Project all {total} library skills into this target; {done} resolve right now.",
+    "revokeAllTip": "Take back the {n} Heron projections in this target so the client stops reading them. You can re-enable them at any time.",
+    "revoked": "Revoked {n} projections",
     "projects": "Projects"
   },
   "upgrades": {
@@ -397,6 +405,8 @@
     "state": "State",
     "installed": "Installed",
     "upgradeAll": "Upgrade all",
+    "selectAll": "Select all upgradable",
+    "notUpgradeable": "“{state}”: no upstream version to upgrade to, so it cannot be selected",
     "conflicts": "conflicts",
     "upToDate": "up to date",
     "states": {

@@ -4,10 +4,21 @@ import { defineStore } from "pinia";
 import { api, onEvent, type AdoptResult, type AppError, type CancelAck, type StartAck } from "../api";
 import { readAutostart, writeAutostart } from "../api/autostart";
 import type {
-  ClientRow, DetectedRow, DoctorDone, DoctorProgress, DoctorReport, Msg, ScanPhase, ScanProgress,
+  ClientRow, DetectedRow, DoctorDone, DoctorProgress, DoctorReport, FavoriteRow, Msg, ScanPhase, ScanProgress,
   SkillRow, TargetRow, UpgradeCandidate, UpgradeOutcome, VerifyDone, VerifyProgress, VisibilityReport,
 } from "../api/types";
 import { messageFor } from "../i18n";
+
+/**
+ * 「收进收藏」留给收藏页的预填表单。一次性的交接而非数据：来源页写好它再跳到 /favorites,
+ * 收藏页用 `consumeFavDraft()` 读出即作废,所以再次进入收藏页不会重开抽屉。
+ */
+export interface FavoriteDraft {
+  name: string;
+  url: string;
+  description: string;
+  market: string | null;
+}
 
 export interface Toast {
   id: number;
@@ -252,6 +263,11 @@ export const useAppStore = defineStore("app", {
     /** The real home directory, only for the display-side `~` abbreviation (utils/paths). */
     home: "",
     skills: [] as SkillRow[],
+    /** 「我的收藏」(favorite 表)。侧栏「我的收藏」的计数徽标与收藏页共用这一份，
+     * 不再由某个视图私有持有——一级页面要在任何时刻都显示正确的条数。 */
+    favorites: [] as FavoriteRow[],
+    /** 见 `FavoriteDraft`：来源页 → 收藏页抽屉的一次性交接。 */
+    favDraft: null as FavoriteDraft | null,
     detected: [] as DetectedRow[],
     targets: [] as TargetRow[],
     clients: [] as ClientRow[],
@@ -448,7 +464,20 @@ export const useAppStore = defineStore("app", {
       }
     },
     async refreshAll() {
-      await Promise.all([this.loadSkills(), this.loadDetected(), this.loadTargets(), this.loadClients(), this.verify()]);
+      await Promise.all([this.loadSkills(), this.loadDetected(), this.loadTargets(), this.loadClients(), this.loadFavorites(), this.verify()]);
+    },
+    async loadFavorites() {
+      try {
+        this.favorites = await api.favorites();
+      } catch (e) {
+        this.fail(e);
+      }
+    },
+    /** 收藏页读出来源页留下的抽屉预填值，读完即清空（再进页面不该重开抽屉）。 */
+    consumeFavDraft(): FavoriteDraft | null {
+      const draft = this.favDraft;
+      this.favDraft = null;
+      return draft;
     },
     async loadSkills() {
       try {

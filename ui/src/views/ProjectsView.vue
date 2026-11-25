@@ -69,6 +69,35 @@ function distributed(targetId: string): number {
     store.visibilityBySlug(s.slug).some((e) => e.target.id === targetId && e.state === "visible"),
   ).length;
 }
+
+const total = computed(() => store.skills.length);
+
+/** A landing that already resolves every library skill has nothing left to project. */
+function covered(targetId: string): boolean {
+  return total.value > 0 && distributed(targetId) === total.value;
+}
+
+/**
+ * Links Heron owns at this target, per the last verify — deliberately wider than `distributed`:
+ * a shadowed or not-yet-restarted landing still holds our link, and that is exactly what the user
+ * has to be able to take back. `verify` only walks the projection table, so a row is ours.
+ */
+function projectedAt(targetId: string): number {
+  const slugs = new Set<string>();
+  for (const row of store.visibility) if (row.target_id === targetId) slugs.add(row.slug);
+  return slugs.size;
+}
+
+async function revokeTarget(targetId: string) {
+  if (store.busy) return;
+  try {
+    const removed = await api.unprojectTarget(targetId);
+    await Promise.all([store.loadTargets(), store.verify()]);
+    store.toast("ok", t("projects.revoked", { n: removed.length }));
+  } catch (e) {
+    store.fail(e);
+  }
+}
 // Enabled count uses the one presence rule, so it agrees with the overview's greyed-out cards.
 const enabledCount = computed(() => store.targets.filter((x) => store.isLiveTarget(x)).length);
 
@@ -99,10 +128,23 @@ onMounted(async () => {
                 <td style="width: 150px"><b>{{ target.kind }}</b> <span v-if="target.is_default" class="chip accent plain">{{ t("projects.default") }}</span></td>
                 <td><span class="path">{{ target.path }}</span></td>
                 <td class="muted" style="width: 70px">{{ target.scope }}</td>
-                <td style="width: 170px; text-align: right; display: flex; gap: 8px; justify-content: flex-end; align-items: center">
+                <td style="width: 250px; text-align: right; display: flex; gap: 8px; justify-content: flex-end; align-items: center">
                   <span class="mono muted dist">{{ distributed(target.id) }}/{{ store.skills.length }}</span>
-                  <button class="btn sm" :disabled="!store.skills.length || store.busy" @click="projectInto(target.id)">
-                    {{ t("common.project") }}
+                  <button
+                    class="btn sm"
+                    :disabled="!store.skills.length || store.busy || covered(target.id)"
+                    :title="t('projects.enableAllTip', { total: store.skills.length, done: distributed(target.id) })"
+                    @click="projectInto(target.id)"
+                  >
+                    {{ t("projects.enableAll") }}
+                  </button>
+                  <button
+                    class="btn sm"
+                    :disabled="!projectedAt(target.id) || store.busy"
+                    :title="t('projects.revokeAllTip', { n: projectedAt(target.id) })"
+                    @click="revokeTarget(target.id)"
+                  >
+                    {{ t("projects.revokeAll") }}
                   </button>
                 </td>
               </tr>

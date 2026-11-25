@@ -593,6 +593,17 @@ fn unproject_skill(state: State<'_, AppState>, slug: String, target_id: String) 
     heron_service::project::unproject(&mut ctx, &slug, &target_id).map_err(err)
 }
 
+/// Retract every projection sitting on one target. Answers with the paths taken back so the UI can
+/// say how many it removed instead of a bare "done".
+#[tauri::command]
+fn target_unproject_all(
+    state: State<'_, AppState>,
+    target_id: String,
+) -> Result<Vec<String>, Msg> {
+    let mut ctx = state.ctx.lock().unwrap();
+    heron_service::project::unproject_target(&mut ctx, &target_id).map_err(err)
+}
+
 /// Delete a skill from the library. `dry_run` answers with the plan (links + trash path) so the
 /// dialog can tell the user exactly what will move before anything happens.
 #[tauri::command]
@@ -1431,6 +1442,7 @@ pub fn run() {
             clients_list,
             project_skill,
             unproject_skill,
+            target_unproject_all,
             skill_remove,
             verify_start,
             verify_cancel,

@@ -541,7 +541,9 @@ impl CompoundRemote {
         write(&work.join("README.md"), "how to install\n");
         git(&work, &["add", "-A"]);
         git(&work, &["commit", "-qm", "v1"]);
-        let bare = tmp.path().join("remote.git");
+        // Named after the project rather than the skill: a whole-repository install takes its store
+        // entry name from the repository.
+        let bare = tmp.path().join("motion-project.git");
         git(
             tmp.path(),
             &[
@@ -592,7 +594,10 @@ fn a_skill_that_needs_its_repository_installs_the_whole_tree() {
     };
 
     let preview = install::preview(&ctx, &req).unwrap();
-    assert_eq!(preview.slug, "hm");
+    assert_eq!(
+        preview.slug, "motion-project",
+        "a whole-repo install is named after the repository, not the inner skill directory"
+    );
     assert_eq!(preview.selected.as_deref(), Some("skills/hm"));
     assert!(preview.whole_repo, "the shim escapes its own directory");
 
@@ -600,7 +605,7 @@ fn a_skill_that_needs_its_repository_installs_the_whole_tree() {
     assert_eq!(report.version, "1.0.0");
 
     // The store entry is the repository: everything `bin/om` reaches for is on disk.
-    let root = ctx.skill_path("hm");
+    let root = ctx.skill_path("motion-project");
     for path in [
         "cli/om.js",
         "runtime/render.sh",
@@ -619,12 +624,32 @@ fn a_skill_that_needs_its_repository_installs_the_whole_tree() {
     );
 
     // And the entrypoint the clients are given is one directory inside it.
-    let skill = ctx.skill_dir_of("hm");
+    let skill = ctx.skill_dir_of("motion-project");
     assert_eq!(skill, root.join("skills/hm"));
     assert!(skill.join("SKILL.md").is_file());
-    assert!(ctx.projectable_path_of("hm").ends_with("skills/hm"));
+    assert!(ctx.projectable_path_of("motion-project").ends_with("skills/hm"));
 
-    let row = heron_store::repos::skill::get(ctx.db.conn(), "hm")
+    // The client sees the entry directory, so the link carries *its* name (`hm`), not the
+    // repository's: a skill directory named after its checkout root would not match the name its
+    // own `SKILL.md` declares.
+    heron_service::clients::sync_catalog(&mut ctx.db, &ctx.dirs.home, true).unwrap();
+    let (plan, request) = project::plan(
+        &ctx,
+        &ProjectRequest {
+            slug: "motion-project".into(),
+            target_id: "claude:global".into(),
+            mode: None,
+            link_name: None,
+        },
+    )
+    .unwrap();
+    assert!(plan.blocked.is_none(), "{:?}", plan.reason);
+    assert_eq!(
+        request.dest.file_name().map(|n| n.to_owned()),
+        Some(std::ffi::OsString::from("hm"))
+    );
+
+    let row = heron_store::repos::skill::get(ctx.db.conn(), "motion-project")
         .unwrap()
         .unwrap();
     assert_eq!(row.subpath.as_deref(), Some("skills/hm"));
@@ -639,9 +664,9 @@ fn a_skill_that_needs_its_repository_installs_the_whole_tree() {
     remote.publish("2.0.0");
     upgrade::refresh_sources(&ctx).unwrap();
     let cands = upgrade::outdated(&ctx, PinPolicy::Semver).unwrap();
-    assert_eq!(cands[0].slug, "hm");
+    assert_eq!(cands[0].slug, "motion-project");
     assert_eq!(cands[0].state, UpgradeState::HasUpdate);
-    match upgrade::upgrade(&mut ctx, "hm", false).unwrap() {
+    match upgrade::upgrade(&mut ctx, "motion-project", false).unwrap() {
         UpgradeOutcome::Upgraded { from, to, .. } => {
             assert_ne!(from, to, "the checkout moved to the new commit");
         }

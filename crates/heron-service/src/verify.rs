@@ -94,13 +94,13 @@ pub fn verify_with_hook(
             }
             continue;
         };
-        // An adopted original keeps its own location (inside a client directory). Judge it by
-        // that client's scan paths; everything else by its target's.
-        let (kind, project) = if let Some((client, _)) = row.link_name.split_once('@') {
-            (client.to_owned(), None)
-        } else {
-            (target_row.kind.clone(), target_row.project_path.clone())
-        };
+        // The row is booked against the directory its link actually sits in, so that target's
+        // client owns the scan paths the landing is judged against. `link_name` carries a
+        // `<client>@` prefix for adopted originals, and trusting that prefix let a landing reached
+        // through another client's symlink (discovered in `.claude/skills`, living in
+        // `.agents/skills`) be measured against the wrong paths and read as `not_scanned` forever.
+        let kind = target_row.kind.clone();
+        let project = target_row.project_path.clone();
         let scan_paths = scan_paths_for(&kind, project.as_deref(), &clients, &targets);
         let occupied = occupied_names(&kind, project.as_deref());
         let path = PathBuf::from(&row.path);
@@ -401,6 +401,34 @@ mod tests {
         let scoped = verify(&mut store.ctx, Some("bravo")).unwrap();
         assert_eq!(scoped.len(), 1);
         assert_eq!(scoped[0].slug, "bravo");
+    }
+
+    /// A landing discovered through *another* client's symlink keeps the discovering client in its
+    /// `link_name` (`.claude/skills/x` resolving into `.agents/skills/x`). That prefix must not
+    /// decide the verdict, or the link is measured against paths it never sits in and reads as
+    /// `not_scanned` no matter how often the user re-verifies.
+    #[test]
+    fn a_link_named_by_another_client_is_judged_by_the_target_it_lands_in() {
+        let mut store = Store::new();
+        store
+            .ctx
+            .db
+            .write(|tx| {
+                tx.conn()
+                    .execute(
+                        "UPDATE projection SET link_name = 'otherclient@deadbeef' WHERE slug = 'alpha'",
+                        [],
+                    )
+                    .map_err(heron_store::sql_err)?;
+                Ok(())
+            })
+            .unwrap();
+
+        let reports = verify(&mut store.ctx, None).unwrap();
+        assert_eq!(reports[0].visibility, Visibility::Visible);
+        let alpha = store.cached("alpha").expect("alpha is cached");
+        assert_eq!(alpha.state, "visible");
+        assert_eq!(alpha.client_id, "testclient");
     }
 
     #[test]

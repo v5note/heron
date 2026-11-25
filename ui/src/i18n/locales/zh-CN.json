@@ -24,6 +24,7 @@
     "overview": "概览",
     "library": "我的 Skill",
     "discover": "发现",
+    "favorites": "我的收藏",
     "sources": "来源与市场",
     "projects": "项目",
     "upgrades": "更新",
@@ -236,6 +237,10 @@
     "copyFailed": "复制失败，请检查系统剪贴板权限",
     "ready": "可以直接收拢"
   },
+  "favorites": {
+    "title": "我的收藏",
+    "lead": "收藏下来的地址：仓库在这里直接装，链接只会打开。在「来源与市场」点「收进收藏」也会落到这一页。"
+  },
   "sources": {
     "title": "来源与市场",
     "lead": "一个搜索框打到所有已启用来源，结果按来源分组、逐行直接安装。",
@@ -253,8 +258,6 @@
     "reprobeTitle": "重新计时所有启用来源",
     "searchingN": "正在 {n} 个来源搜索 «{q}»…",
     "sumline": "共 {hits} 条来自 {sources} 个来源 · 已装 {installed} 条 · 用时 {ms} ms",
-    "tabAll": "全部来源",
-    "tabFav": "我的收藏",
     "barTail": "{n} 个可搜索来源在线 · 结果按来源相关性排序",
     "concurrent": "并发打 {n} 个来源：{names}",
     "srcFailed": "本次请求失败",
@@ -389,6 +392,11 @@
     "default": "默认",
     "lead": "落点就是客户端真正读取的目录；项目落点只对该项目生效。",
     "targets": "落点",
+    "enableAll": "全部启用",
+    "revokeAll": "撤销全部",
+    "enableAllTip": "把库中 {total} 个 Skill 全部投影到这个落点；当前生效 {done} 个。",
+    "revokeAllTip": "收回这个落点上由 Heron 建立的 {n} 处投影，客户端目录里不再读取它们；随时可以重新启用。",
+    "revoked": "已撤销 {n} 处投影",
     "projects": "项目"
   },
   "upgrades": {
@@ -397,6 +405,8 @@
     "state": "状态",
     "installed": "当前版本",
     "upgradeAll": "全部升级",
+    "selectAll": "全选可升级项",
+    "notUpgradeable": "「{state}」：没有可升级的上游版本，无法勾选",
     "conflicts": "冲突",
     "upToDate": "已是最新",
     "states": {

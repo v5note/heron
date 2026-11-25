@@ -35,12 +35,28 @@ pub fn plan(ctx: &Ctx, req: &ProjectRequest) -> Result<(ProjectPlan, ProjectionR
     // scanner wants `SKILL.md` at the top of what it sees.
     let content = ctx.content_path_of(&req.slug);
     let source = ctx.projectable_path_of(&req.slug);
-    let link_name = req.link_name.clone().unwrap_or_else(|| req.slug.clone());
+    // The client loads the entry directory, so that directory names the link. For a skill stored as
+    // its own directory that is the slug; for a whole-repository install the checkout carries the
+    // repository's name (`finesse-skill`) while the skill the client sees is `skills/finesse-ui`,
+    // whose own name is what its `SKILL.md` declares.
+    let source_is_nested = source != content;
+    let link_name = req.link_name.clone().unwrap_or_else(|| {
+        source_is_nested
+            .then(|| {
+                source
+                    .file_name()
+                    .and_then(|n| n.to_str())
+                    .filter(|n| !n.is_empty())
+                    .map(|n| n.to_owned())
+            })
+            .flatten()
+            .unwrap_or_else(|| req.slug.clone())
+    });
     let dest = PathBuf::from(&target.path).join(&link_name);
     let mut mode = req.mode.unwrap_or_else(default_mode);
     // Copying only the inner entry would lift the skill out of its checkout again — exactly the
     // incomplete copy the whole-repo layout exists to prevent — so nested skills link instead.
-    if source != content && matches!(mode, ProjectionMode::Copy) {
+    if source_is_nested && matches!(mode, ProjectionMode::Copy) {
         mode = ProjectionMode::resolve_auto(heron_core::PlatformKind::current());
     }
 
@@ -164,6 +180,22 @@ pub fn unproject(ctx: &mut Ctx, slug: &str, target_id: &str) -> Result<()> {
 /// empty result is fine — the skill may simply never have been projected.
 pub fn unproject_all(ctx: &mut Ctx, slug: &str) -> Result<Vec<String>> {
     let rows = projection::list_for_skill(ctx.db.conn(), slug)?;
+    let mut removed = Vec::with_capacity(rows.len());
+    for row in &rows {
+        remove_link(ctx, row)?;
+        removed.push(row.path.clone());
+    }
+    Ok(removed)
+}
+
+/// Take back **every** link that lands on one target. The Projects view needs this: clearing a
+/// landing point skill by skill means walking the whole library first. Like [`unproject_all`] an
+/// empty result is fine — the target may simply hold nothing of ours.
+pub fn unproject_target(ctx: &mut Ctx, target_id: &str) -> Result<Vec<String>> {
+    let rows = projection::list_all(ctx.db.conn())?
+        .into_iter()
+        .filter(|p| p.target_id == target_id)
+        .collect::<Vec<ProjectionRow>>();
     let mut removed = Vec::with_capacity(rows.len());
     for row in &rows {
         remove_link(ctx, row)?;

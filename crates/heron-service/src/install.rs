@@ -316,6 +316,27 @@ fn first_slug(candidates: impl IntoIterator<Item = String>) -> Option<String> {
         .map(|s| s.as_str().to_owned())
 }
 
+/// What to call the store entry. A subtree export *is* the skill, so the directory it came from
+/// leads. A whole-repository checkout is the repository — its `skills/<x>` entry point is one
+/// directory inside it, and naming the checkout after that inner directory (`finesse-ui`) hides the
+/// project the user installed (`finesse-skill`) — so the repository name leads there.
+fn derived_slug(resolved: &Resolved) -> String {
+    let dir_tail = resolved
+        .skill_dir
+        .as_deref()
+        .and_then(|dir| dir.rsplit('/').next())
+        .unwrap_or("")
+        .to_owned();
+    let skill_name = resolved.skill_name.clone().unwrap_or_default();
+    let repo = repo_name(&resolved.parsed);
+    let candidates: [String; 3] = if resolved.layout.whole_repo() {
+        [repo, dir_tail, skill_name]
+    } else {
+        [dir_tail, skill_name, repo]
+    };
+    first_slug(candidates).unwrap_or_else(|| "root".to_owned())
+}
+
 fn empty_catalog() -> Catalog {
     Catalog {
         source: catalog::CatalogSource::ScanFallback,
@@ -326,20 +347,10 @@ fn empty_catalog() -> Catalog {
 /// Compute what an install would do without touching the store.
 pub fn preview(ctx: &Ctx, req: &InstallRequest) -> Result<InstallPreview> {
     let resolved = resolve_remote(&ctx.dirs, req)?;
-    let slug = req.as_slug.clone().unwrap_or_else(|| {
-        let dir_tail = resolved
-            .skill_dir
-            .as_deref()
-            .and_then(|dir| dir.rsplit('/').next())
-            .unwrap_or("")
-            .to_owned();
-        first_slug([
-            dir_tail,
-            resolved.skill_name.clone().unwrap_or_default(),
-            repo_name(&resolved.parsed),
-        ])
-        .unwrap_or_else(|| "root".to_owned())
-    });
+    let slug = req
+        .as_slug
+        .clone()
+        .unwrap_or_else(|| derived_slug(&resolved));
     let slug = Slug::derive(&slug, SlugPolicy::Lenient)?
         .as_str()
         .to_owned();

@@ -102,6 +102,8 @@ export const api = {
   project: (slug: string, targetId: string, mode: string | null, dryRun: boolean) =>
     call<{ applied: boolean; path: string; mode: string }>("project_skill", { slug, targetId, mode, dryRun }),
   unproject: (slug: string, targetId: string) => call<void>("unproject_skill", { slug, targetId }),
+  /** Retract every Heron-owned link on one target; returns the paths that were taken back. */
+  unprojectTarget: (targetId: string) => call<string[]>("target_unproject_all", { targetId }),
   /**
    * Delete a skill from the library. `dryRun` answers with the plan — which client links are
    * retracted and where the store copy is parked — so the dialog can state it before anything moves.

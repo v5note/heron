@@ -18,6 +18,25 @@ onMounted(() => store.loadUpgrades());
 
 const eligible = computed(() => store.upgrades.filter((u) => u.state === "has_update" || u.state === "diverged"));
 
+// The header box only ever covers the rows that can actually be upgraded; the rest stay disabled.
+const allEligible = computed(
+  () => eligible.value.length > 0 && eligible.value.every((u) => selected.value.includes(u.slug))
+);
+const someEligible = computed(
+  () => !allEligible.value && eligible.value.some((u) => selected.value.includes(u.slug))
+);
+
+function toggleAll() {
+  selected.value = allEligible.value ? [] : eligible.value.map((u) => u.slug);
+}
+
+// A disabled <input> gets no mouse events, so the reason lives on the cell as a tooltip instead.
+function selectHint(state: string) {
+  return state === "has_update" || state === "diverged"
+    ? ""
+    : t("upgrades.notUpgradeable", { state: t(`upgrades.states.${state}`) });
+}
+
 function targetSlugs() {
   return selected.value.length ? selected.value : eligible.value.map((u) => u.slug);
 }
@@ -80,7 +99,16 @@ function shortSha(sha: string | null) {
       <table class="table">
         <thead>
           <tr>
-            <th class="c-check" />
+            <th class="c-check">
+              <input
+                type="checkbox"
+                :checked="allEligible"
+                :indeterminate="someEligible"
+                :disabled="!eligible.length || store.busy"
+                :aria-label="t('upgrades.selectAll')"
+                @change="toggleAll"
+              />
+            </th>
             <th class="c-slug">{{ t("upgrades.slug") }}</th>
             <th class="c-state">{{ t("upgrades.state") }}</th>
             <th class="c-ver">{{ t("upgrades.installed") }}</th>
@@ -92,7 +120,7 @@ function shortSha(sha: string | null) {
         </thead>
         <tbody>
           <tr v-for="candidate in store.upgrades" :key="candidate.slug" :class="{ clickable: candidate.state === 'diverged' }">
-            <td class="c-check">
+            <td class="c-check" :title="selectHint(candidate.state)">
               <input
                 type="checkbox"
                 :checked="selected.includes(candidate.slug)"

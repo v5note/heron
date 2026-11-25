@@ -9,9 +9,14 @@
 //!
 //! For those we materialize the whole repository (`SkillLayout::Repo`) and address the skill at
 //! its subpath inside it, which is exactly what a user gets from `git clone` — the recommended
-//! install in the project's own README.
+//! install in the project's own README. A repository that publishes *one* skill is that case even
+//! when nothing inside it points outward (`mouse-lin/finesse-skill` ships `docs/`, `assets/` and a
+//! README beside `skills/finesse-ui`): the checkout is the project the author ships, so it is what
+//! we keep, booked under the repository's name.
 
 use std::collections::HashSet;
+
+use crate::catalog;
 
 /// What a checkout of `skill_dir` has to contain for the skill to work.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -28,19 +33,6 @@ impl SkillLayout {
         matches!(self, SkillLayout::Repo)
     }
 }
-
-/// Manifests at the repository root: evidence the tree around a skill is a real project and not
-/// an accident of layout.
-const MANIFESTS: &[&str] = &[
-    "package.json",
-    "Cargo.toml",
-    "pyproject.toml",
-    "setup.py",
-    "go.mod",
-    "pom.xml",
-    "build.gradle",
-    "Gemfile",
-];
 
 /// Extensions worth reading for path references. Anything else (images, audio, video) cannot
 /// carry one we can parse.
@@ -144,10 +136,10 @@ fn scannable(path: &str) -> bool {
     }
 }
 
-/// The `huashu-motion` shape: a single skill under a top-level `skills/` directory inside a
-/// repository that is itself a project. Checked even when nothing escaped, because a compiled
-/// shim or a path assembled at runtime is invisible to [`escapes`] — and pulling the whole
-/// repository is the safe direction for a single-skill project.
+/// The `huashu-motion` / `finesse-skill` shape: a repository that publishes exactly one skill, kept
+/// under a top-level `skills/` directory, with the rest of the project shipped around it. Checked
+/// even when nothing escaped, because a compiled shim or a path assembled at runtime is invisible to
+/// [`escapes`] — and an author's README, `docs/` and `assets/` belong with the skill they document.
 fn compound(skill_dir: &str, files: &[String]) -> bool {
     let Some((parent, _)) = skill_dir.rsplit_once('/') else {
         return false;
@@ -155,21 +147,11 @@ fn compound(skill_dir: &str, files: &[String]) -> bool {
     if parent.contains('/') || (parent != "skills" && parent != "skill") {
         return false;
     }
-    if files.iter().any(|p| p == "SKILL.md") {
-        return false;
-    }
-    let under = format!("{parent}/");
-    let siblings = files
-        .iter()
-        .filter_map(|p| p.strip_suffix("/SKILL.md"))
-        .filter(|dir| dir.starts_with(&under) && *dir != skill_dir)
-        .count();
-    if siblings > 0 {
-        // More than one skill under that directory: this is a skill *collection*, and each entry
-        // is meant to be installed on its own.
-        return false;
-    }
-    MANIFESTS.iter().any(|m| files.iter().any(|p| p == m))
+    let published = catalog::published_skill_dirs(files);
+    // Exactly one, and it is the one we are installing. Several means a *collection* whose entries
+    // install on their own; a `SKILL.md` at the root counts as a second one, since that skill is
+    // not what this input named.
+    published.len() == 1 && published[0] == skill_dir
 }
 
 /// Every `../..`-prefixed relative reference in `text`, as it appears.
@@ -240,16 +222,36 @@ mod tests {
         detect(skill_dir, &files, &|p| texts.get(p).map(|s| s.to_string()))
     }
 
+    /// `mouse-lin/finesse-skill`: the skill never references the root, and there is no build
+    /// manifest to prove the root is a project — the README, USAGE, `docs/`, `assets/` and the
+    /// per-client mirrors are simply what the author ships around their one skill.
     #[test]
-    fn a_self_contained_skill_stays_single_directory() {
+    fn a_repository_publishing_one_skill_ships_whole() {
         let l = layout(
-            "skills/wechat-mp",
+            "skills/finesse-ui",
             &[
-                "skills/wechat-mp/SKILL.md",
-                "skills/wechat-mp/references/a.md",
+                "skills/finesse-ui/SKILL.md",
+                "skills/finesse-ui/references/design.md",
+                ".trae/skills/finesse-ui/SKILL.md",
+                ".cursor/skills/finesse-ui/SKILL.md",
+                "assets/cover.jpg",
+                "docs/showcase.html",
+                ".claude-plugin/plugin.json",
+                "AGENTS.md",
                 "README.md",
             ],
-            &[("skills/wechat-mp/SKILL.md", "Run `pandoc` on the file.")],
+            &[("skills/finesse-ui/SKILL.md", "Read `references/design.md`.")],
+        );
+        assert_eq!(l, SkillLayout::Repo);
+    }
+
+    #[test]
+    fn a_root_skill_beside_a_subdirectory_skill_installs_the_subtree() {
+        // Two skills published: the input named one of them, so the rest is not ours to take.
+        let l = layout(
+            "skills/inner",
+            &["SKILL.md", "skills/inner/SKILL.md", "README.md"],
+            &[],
         );
         assert_eq!(l, SkillLayout::Skill);
     }
@@ -280,6 +282,9 @@ mod tests {
             &[
                 "skills/wechat-mp/SKILL.md",
                 "skills/wechat-mp/references/a.md",
+                // A second skill published: only the escape rule is under test here, and a
+                // collection exports the subtree whatever it contains.
+                "skills/tdd/SKILL.md",
             ],
             &[(
                 "skills/wechat-mp/SKILL.md",
@@ -297,6 +302,7 @@ mod tests {
             &[
                 "skills/wechat-mp/SKILL.md",
                 "skills/wechat-mp/references/a.md",
+                "skills/tdd/SKILL.md",
             ],
             &[(
                 "skills/wechat-mp/SKILL.md",
@@ -421,6 +427,7 @@ mod tests {
         let files = vec![
             "skills/wechat-mp/SKILL.md".to_owned(),
             "skills/wechat-mp/bin/x".to_owned(),
+            "skills/tdd/SKILL.md".to_owned(),
         ];
         assert_eq!(
             detect("skills/wechat-mp", &files, &read_nothing),

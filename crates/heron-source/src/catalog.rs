@@ -292,35 +292,10 @@ pub fn parse_heron_toml(text: &str) -> Result<Vec<CatalogItem>> {
 /// used when the repository has nothing else, which keeps a `.claude/skills/`-only repository
 /// installable instead of erroring that no skill exists.
 pub fn scan_for_skills(files: &RepoFiles<'_>) -> Vec<CatalogItem> {
-    const IGNORED: &[&str] = &[
-        "node_modules/",
-        "vendor/",
-        "target/",
-        "dist/",
-        ".github/",
-        "tests/fixtures/",
-    ];
     let mut sources: BTreeMap<String, ()> = BTreeMap::new();
     let mut projections: BTreeMap<String, ()> = BTreeMap::new();
-    for path in files.files.iter() {
-        if !path.ends_with("/SKILL.md") && path != "SKILL.md" {
-            continue;
-        }
-        if IGNORED.iter().any(|prefix| path.contains(prefix)) {
-            continue;
-        }
-        let dir = path
-            .trim_end_matches("SKILL.md")
-            .trim_end_matches('/')
-            .to_owned();
-        if dir.matches('/').count() > 5 {
-            continue;
-        }
-        if dir
-            .split('/')
-            .next()
-            .is_some_and(|head| head.starts_with('.'))
-        {
+    for (dir, projection) in skill_dirs(files.files) {
+        if projection {
             projections.insert(dir, ());
         } else {
             sources.insert(dir, ());
@@ -347,6 +322,58 @@ pub fn scan_for_skills(files: &RepoFiles<'_>) -> Vec<CatalogItem> {
             }
         })
         .collect()
+}
+
+/// Every `SKILL.md` that names a skill directory, as `(directory, is_projection)`: noise is
+/// dropped, and a directory whose first segment starts with `.` is a per-client mirror rather
+/// than something the repository publishes. One place decides what a skill is, because the
+/// install layout asks the same question and must not answer it differently from the catalog.
+fn skill_dirs(files: &[String]) -> Vec<(String, bool)> {
+    const IGNORED: &[&str] = &[
+        "node_modules/",
+        "vendor/",
+        "target/",
+        "dist/",
+        ".github/",
+        "tests/fixtures/",
+    ];
+    let mut out = Vec::new();
+    for path in files {
+        if !path.ends_with("/SKILL.md") && path != "SKILL.md" {
+            continue;
+        }
+        if IGNORED.iter().any(|prefix| path.contains(prefix)) {
+            continue;
+        }
+        let dir = path
+            .trim_end_matches("SKILL.md")
+            .trim_end_matches('/')
+            .to_owned();
+        if dir.matches('/').count() > 5 {
+            continue;
+        }
+        let projection = dir
+            .split('/')
+            .next()
+            .is_some_and(|head| head.starts_with('.'));
+        out.push((dir, projection));
+    }
+    out
+}
+
+/// The directories a repository publishes its own skills in — `SKILL.md` holders that are neither
+/// a per-client mirror (`.trae/skills/x`, `.cursor/skills/x`) nor vendored noise. Exactly one entry
+/// means the repository *is* that skill's project, which is what decides whether an install
+/// exports a subtree or keeps the whole checkout (design §8.2 B).
+pub fn published_skill_dirs(files: &[String]) -> Vec<String> {
+    let mut dirs: Vec<String> = skill_dirs(files)
+        .into_iter()
+        .filter(|(_, projection)| !*projection)
+        .map(|(dir, _)| dir)
+        .collect();
+    dirs.sort();
+    dirs.dedup();
+    dirs
 }
 
 /// Find the skill directory an input refers to.

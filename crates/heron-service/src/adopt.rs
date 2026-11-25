@@ -395,8 +395,6 @@ pub fn execute(ctx: &mut Ctx, plan: &AdoptPlan, placement: AdoptPlacement) -> Re
             // The link takes the place of the entry *where it was found*, so the projection belongs
             // to that client's target, not to some generic one. A mis-booked row makes `verify` name
             // the wrong client and `unproject --on` miss the link.
-            // `<client>@<slot>`: verify reads the client prefix to judge visibility against the
-            // right scan paths.
             let client_kind = plan
                 .detail
                 .client_id
@@ -420,15 +418,13 @@ pub fn execute(ctx: &mut Ctx, plan: &AdoptPlan, placement: AdoptPlacement) -> Re
             // Several copies of one skill may live in the same client directory (e.g. both
             // `.agents/skills/wechat-mp` and `.claude/skills/wechat-mp`), so the recorded link name must be
             // derived from the original location, not from the slug.
-            // `<client>@<slot>`: verify reads the client prefix to judge visibility against the
-            // right scan paths.
-            let client_kind = plan
-                .detail
-                .client_id
-                .clone()
-                .unwrap_or_else(|| "heron".to_owned());
+            // `<client>@<slot>`: the client is the one that owns the landing directory. The detected
+            // row can name a different one — a user-made link inside `.claude/skills` that resolves
+            // into `.agents/skills` is discovered as claude yet lands in agents — and a prefix taken
+            // from the discovery makes `verify` judge the landing against the wrong scan paths.
             let link_name = format!(
-                "{client_kind}@{}",
+                "{}@{}",
+                managed_target.kind,
                 heron_platform::paths::project_key(&dest_link)
             );
             ctx.db.write(|tx| {
@@ -682,8 +678,11 @@ fn live_bind(ctx: &mut Ctx, plan: &AdoptPlan, slug: &str) -> Result<AdoptReport>
         Some(row) => row,
         None => ensure_target_for_dir(ctx, &entry, &client_kind)?,
     };
+    // Same rule as the copy placement: the prefix names the client that owns the directory the
+    // link sits in, which is the target the row is booked against.
     let link_name = format!(
-        "{client_kind}@{}",
+        "{}@{}",
+        managed_target.kind,
         heron_platform::paths::project_key(&entry)
     );
     let entry_key = entry.to_string_lossy().to_string();
