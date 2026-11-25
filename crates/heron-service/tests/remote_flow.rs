@@ -30,7 +30,7 @@ fn write(path: &Path, content: &str) {
     fs::write(path, content).unwrap();
 }
 
-/// Remote with one skill under `skills/pdf`.
+/// Remote with one skill under `skills/wechat-mp`.
 struct Remote {
     tmp: tempfile::TempDir,
     work: PathBuf,
@@ -46,10 +46,10 @@ impl Remote {
         git(&work, &["config", "user.email", "t@example.com"]);
         git(&work, &["config", "user.name", "Test"]);
         write(
-            &work.join("skills/pdf/SKILL.md"),
-            &format!("---\nname: pdf\ndescription: pdf skill\nmetadata:\n  version: \"1.0.0\"\n---\n{body}"),
+            &work.join("skills/wechat-mp/SKILL.md"),
+            &format!("---\nname: wechat-mp\ndescription: wechat-mp skill\nmetadata:\n  version: \"1.0.0\"\n---\n{body}"),
         );
-        write(&work.join("skills/pdf/references/a.md"), "ref v1");
+        write(&work.join("skills/wechat-mp/references/a.md"), "ref v1");
         write(
             &work.join("skills/tdd/SKILL.md"),
             "---\nname: tdd\ndescription: tdd\n---\n",
@@ -72,8 +72,8 @@ impl Remote {
 
     fn publish(&self, body: &str, version: &str) {
         write(
-            &self.work.join("skills/pdf/SKILL.md"),
-            &format!("---\nname: pdf\ndescription: pdf skill\nmetadata:\n  version: \"{version}\"\n---\n{body}"),
+            &self.work.join("skills/wechat-mp/SKILL.md"),
+            &format!("---\nname: wechat-mp\ndescription: wechat-mp skill\nmetadata:\n  version: \"{version}\"\n---\n{body}"),
         );
         git(&self.work, &["add", "-A"]);
         git(&self.work, &["commit", "-qm", version]);
@@ -129,21 +129,21 @@ fn install_from_a_repo_subdirectory() {
 
     let req = InstallRequest {
         input: format!(
-            "{}/tree/main/skills/pdf",
+            "{}/tree/main/skills/wechat-mp",
             remote.url().trim_end_matches(".git")
         ),
         ..Default::default()
     };
     let preview = install::preview(&ctx, &req).unwrap();
-    assert_eq!(preview.slug, "pdf");
+    assert_eq!(preview.slug, "wechat-mp");
     assert!(!preview.existing);
-    assert!(preview.available.iter().any(|p| p == "skills/pdf"));
+    assert!(preview.available.iter().any(|p| p == "skills/wechat-mp"));
 
     let report = install::install(&mut ctx, &req).unwrap();
-    assert_eq!(report.slug, "pdf");
+    assert_eq!(report.slug, "wechat-mp");
     assert_eq!(report.version, "1.0.0");
 
-    let dir = ctx.skill_path("pdf");
+    let dir = ctx.skill_path("wechat-mp");
     assert!(dir.join("SKILL.md").is_file());
     assert!(dir.join("references/a.md").is_file());
     assert!(dir.join(".git").is_dir(), "installed skills are versioned");
@@ -153,7 +153,7 @@ fn install_from_a_repo_subdirectory() {
         .unwrap();
     assert_eq!(
         meta.source.as_ref().unwrap().subpath.as_deref(),
-        Some("skills/pdf")
+        Some("skills/wechat-mp")
     );
     assert_eq!(meta.baseline.version, "1.0.0");
 }
@@ -168,7 +168,7 @@ fn prefetch_fills_the_cache_that_preview_and_install_need() {
     let ctx = env.ctx();
     let req = InstallRequest {
         input: remote.url(),
-        subpath_override: Some("skills/pdf".into()),
+        subpath_override: Some("skills/wechat-mp".into()),
         ..Default::default()
     };
     // The GUI runs this with no state lock held; afterwards the rest of the flow is local.
@@ -178,7 +178,7 @@ fn prefetch_fills_the_cache_that_preview_and_install_need() {
         .flatten()
         .any(|entry| entry.path().join("bare.git").join("HEAD").is_file());
     assert!(seeded, "prefetch must populate the bare cache");
-    assert_eq!(install::preview(&ctx, &req).unwrap().slug, "pdf");
+    assert_eq!(install::preview(&ctx, &req).unwrap().slug, "wechat-mp");
 }
 
 #[test]
@@ -229,7 +229,7 @@ fn install_twice_is_refused_in_favour_of_upgrade() {
     let mut ctx = env.ctx();
     let req = InstallRequest {
         input: remote.url(),
-        subpath_override: Some("skills/pdf".into()),
+        subpath_override: Some("skills/wechat-mp".into()),
         ..Default::default()
     };
     install::install(&mut ctx, &req).unwrap();
@@ -252,7 +252,7 @@ fn outdated_then_upgrade_then_rollback() {
     let mut ctx = env.ctx();
     let req = InstallRequest {
         input: remote.url(),
-        subpath_override: Some("skills/pdf".into()),
+        subpath_override: Some("skills/wechat-mp".into()),
         ..Default::default()
     };
     install::install(&mut ctx, &req).unwrap();
@@ -268,16 +268,16 @@ fn outdated_then_upgrade_then_rollback() {
     let cands = upgrade::outdated(&ctx, PinPolicy::Semver).unwrap();
     assert_eq!(cands[0].state, UpgradeState::HasUpdate);
 
-    match upgrade::upgrade(&mut ctx, "pdf", true).unwrap() {
+    match upgrade::upgrade(&mut ctx, "wechat-mp", true).unwrap() {
         UpgradeOutcome::Upgraded { from, to, .. } => assert_ne!(from, to),
         other => panic!("expected an upgrade, got {other:?}"),
     }
-    let text = fs::read_to_string(ctx.skill_path("pdf").join("SKILL.md")).unwrap();
+    let text = fs::read_to_string(ctx.skill_path("wechat-mp").join("SKILL.md")).unwrap();
     assert!(text.contains("v2 body"));
     assert!(text.contains("version: \"1.1.0\"") || text.contains("version: 1.1.0"));
 
     // The landed version comes from the upstream tag / SKILL.md metadata, never the 0.0.0 fallback.
-    let meta = heron_vcs::SkillRepo::open(ctx.skill_path("pdf"))
+    let meta = heron_vcs::SkillRepo::open(ctx.skill_path("wechat-mp"))
         .read_metadata()
         .unwrap()
         .unwrap();
@@ -285,7 +285,7 @@ fn outdated_then_upgrade_then_rollback() {
         meta.baseline.version, "1.1.0",
         "semantic version is preserved on upgrade"
     );
-    let tags = heron_vcs::SkillRepo::open(ctx.skill_path("pdf"))
+    let tags = heron_vcs::SkillRepo::open(ctx.skill_path("wechat-mp"))
         .list_tags()
         .unwrap();
     assert!(
@@ -294,11 +294,11 @@ fn outdated_then_upgrade_then_rollback() {
     );
 
     // Rolling back restores the first version and keeps a backup tag.
-    let previous = upgrade::rollback(&mut ctx, "pdf", "1.0.0").unwrap();
+    let previous = upgrade::rollback(&mut ctx, "wechat-mp", "1.0.0").unwrap();
     assert!(!previous.is_empty());
-    let text = fs::read_to_string(ctx.skill_path("pdf").join("SKILL.md")).unwrap();
+    let text = fs::read_to_string(ctx.skill_path("wechat-mp").join("SKILL.md")).unwrap();
     assert!(text.contains("v1 body\n"), "rolled back content: {text}");
-    let tags = heron_vcs::SkillRepo::open(ctx.skill_path("pdf"))
+    let tags = heron_vcs::SkillRepo::open(ctx.skill_path("wechat-mp"))
         .list_tags()
         .unwrap();
     assert!(tags.iter().any(|t| t.starts_with("heron-rollback-backup-")));
@@ -315,16 +315,16 @@ fn diff_shows_local_edits_and_conflict_payload_carries_both_sides() {
     let mut ctx = env.ctx();
     let req = InstallRequest {
         input: remote.url(),
-        subpath_override: Some("skills/pdf".into()),
+        subpath_override: Some("skills/wechat-mp".into()),
         ..Default::default()
     };
     install::install(&mut ctx, &req).unwrap();
 
-    let skill_md = ctx.skill_path("pdf").join("SKILL.md");
+    let skill_md = ctx.skill_path("wechat-mp").join("SKILL.md");
     let text = fs::read_to_string(&skill_md).unwrap();
     fs::write(&skill_md, text.replace("line5", "MY-EDIT")).unwrap();
 
-    let diff = heron_service::diff::diff_skill(&ctx, "pdf", None).unwrap();
+    let diff = heron_service::diff::diff_skill(&ctx, "wechat-mp", None).unwrap();
     assert_eq!(diff.against, "local");
     let entry = diff.files.iter().find(|f| f.path == "SKILL.md").unwrap();
     assert!(entry.after.as_deref().unwrap().contains("MY-EDIT"));
@@ -336,15 +336,15 @@ fn diff_shows_local_edits_and_conflict_payload_carries_both_sides() {
     // Upstream rewrites the same line -> genuine conflict.
     remote.publish("line1\nline2\nline3\nline4\nTHEIRS\n", "2.0.0");
     upgrade::refresh_sources(&ctx).unwrap();
-    let payload = heron_service::diff::conflict_payload(&ctx, "pdf").unwrap();
-    assert_eq!(payload.slug, "pdf");
+    let payload = heron_service::diff::conflict_payload(&ctx, "wechat-mp").unwrap();
+    assert_eq!(payload.slug, "wechat-mp");
     let file = payload.files.iter().find(|f| f.path == "SKILL.md").unwrap();
     assert!(file.before.as_deref().unwrap().contains("MY-EDIT"), "ours");
     assert!(file.after.as_deref().unwrap().contains("THEIRS"), "theirs");
 
     // Resolving by hand and retrying produces a clean upgrade.
     let resolved = file.after.clone().unwrap().replace("THEIRS", "RESOLVED");
-    match heron_service::diff::resolve(&mut ctx, "pdf", &[("SKILL.md".to_owned(), resolved)])
+    match heron_service::diff::resolve(&mut ctx, "wechat-mp", &[("SKILL.md".to_owned(), resolved)])
         .unwrap()
     {
         UpgradeOutcome::Upgraded { .. } | UpgradeOutcome::Conflicts { .. } => {}
@@ -368,13 +368,13 @@ fn local_edits_survive_an_upgrade_and_conflicts_are_reported() {
     let mut ctx = env.ctx();
     let req = InstallRequest {
         input: remote.url(),
-        subpath_override: Some("skills/pdf".into()),
+        subpath_override: Some("skills/wechat-mp".into()),
         ..Default::default()
     };
     install::install(&mut ctx, &req).unwrap();
 
     // The user edits the last line locally.
-    let skill_md = ctx.skill_path("pdf").join("SKILL.md");
+    let skill_md = ctx.skill_path("wechat-mp").join("SKILL.md");
     let text = fs::read_to_string(&skill_md).unwrap();
     fs::write(&skill_md, text.replace("line5", "LOCAL-EDIT")).unwrap();
 
@@ -388,7 +388,7 @@ fn local_edits_survive_an_upgrade_and_conflicts_are_reported() {
         "local edits make it diverged"
     );
 
-    match upgrade::upgrade(&mut ctx, "pdf", true).unwrap() {
+    match upgrade::upgrade(&mut ctx, "wechat-mp", true).unwrap() {
         UpgradeOutcome::Upgraded { .. } => {}
         other => panic!("expected clean merge, got {other:?}"),
     }
@@ -401,7 +401,7 @@ fn local_edits_survive_an_upgrade_and_conflicts_are_reported() {
     remote.publish("UPSTREAM\nTHEIR-LINE2\nline3\nline4\nline5\n", "1.2.0");
     upgrade::refresh_sources(&ctx).unwrap();
     let before = fs::read_to_string(&skill_md).unwrap();
-    match upgrade::upgrade(&mut ctx, "pdf", true).unwrap() {
+    match upgrade::upgrade(&mut ctx, "wechat-mp", true).unwrap() {
         UpgradeOutcome::Conflicts { files, .. } => {
             assert!(files.iter().any(|f| f.path == "SKILL.md"), "got {files:?}");
         }
@@ -425,14 +425,14 @@ fn an_overwrite_upgrade_discards_local_edits() {
     let mut ctx = env.ctx();
     let req = InstallRequest {
         input: remote.url(),
-        subpath_override: Some("skills/pdf".into()),
+        subpath_override: Some("skills/wechat-mp".into()),
         ..Default::default()
     };
     install::install(&mut ctx, &req).unwrap();
 
     // The user edits the same line upstream will also change: under the merge mode this would
     // conflict, but overwrite must resolve it in upstream's favour by dropping the local edit.
-    let skill_md = ctx.skill_path("pdf").join("SKILL.md");
+    let skill_md = ctx.skill_path("wechat-mp").join("SKILL.md");
     let text = fs::read_to_string(&skill_md).unwrap();
     fs::write(&skill_md, text.replace("line2", "LOCAL-LINE2")).unwrap();
 
@@ -440,7 +440,7 @@ fn an_overwrite_upgrade_discards_local_edits() {
     upgrade::refresh_sources(&ctx).unwrap();
 
     // keep_local = false.
-    match upgrade::upgrade(&mut ctx, "pdf", false).unwrap() {
+    match upgrade::upgrade(&mut ctx, "wechat-mp", false).unwrap() {
         UpgradeOutcome::Upgraded { .. } => {}
         other => panic!("expected overwrite to upgrade cleanly, got {other:?}"),
     }

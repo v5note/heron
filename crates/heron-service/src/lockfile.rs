@@ -264,11 +264,11 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         let mut skills = BTreeMap::new();
         skills.insert(
-            "pdf".to_owned(),
+            "wechat-mp".to_owned(),
             LockSkill {
                 source: "https://github.com/anthropics/skills.git".into(),
                 ref_name: Some("main".into()),
-                subpath: Some("skills/pdf".into()),
+                subpath: Some("skills/wechat-mp".into()),
                 commit: Some("abc1234".into()),
                 version: Some("1.0.0".into()),
                 content_hash: Some("blake3:deadbeef".into()),
@@ -287,7 +287,7 @@ mod tests {
         let path = write(tmp.path(), &lock).unwrap();
         assert!(path.ends_with(LOCK_FILE_NAME));
         let back = read(&path).unwrap();
-        assert_eq!(back.skills["pdf"].source, lock.skills["pdf"].source);
+        assert_eq!(back.skills["wechat-mp"].source, lock.skills["wechat-mp"].source);
         assert_eq!(back.targets[0].kind, "claude");
     }
 

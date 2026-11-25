@@ -269,8 +269,8 @@ fn projections_require_existing_target_and_cascade() {
         heron_store::repos::skill::insert(
             tx,
             &heron_store::models::SkillRow {
-                slug: "pdf".into(),
-                display_name: "pdf".into(),
+                slug: "wechat-mp".into(),
+                display_name: "wechat-mp".into(),
                 description: String::new(),
                 tags: vec![],
                 status: "active".into(),
@@ -284,10 +284,10 @@ fn projections_require_existing_target_and_cascade() {
         projection::insert(
             tx,
             &ProjectionRow {
-                slug: "pdf".into(),
+                slug: "wechat-mp".into(),
                 target_id: "heron:global".into(),
-                link_name: "pdf".into(),
-                path: "/data/.heron/skills/pdf".into(),
+                link_name: "wechat-mp".into(),
+                path: "/data/.heron/skills/wechat-mp".into(),
                 mode: "symlink".into(),
                 ..Default::default()
             },
@@ -296,7 +296,7 @@ fn projections_require_existing_target_and_cascade() {
     })
     .unwrap();
 
-    let rows = projection::list_for_skill(db.conn(), "pdf").unwrap();
+    let rows = projection::list_for_skill(db.conn(), "wechat-mp").unwrap();
     assert_eq!(rows.len(), 1);
     assert_eq!(rows[0].mode, "symlink");
     assert_eq!(rows[0].state, "ok");
@@ -334,7 +334,7 @@ fn projection_foreign_key_rejects_unknown_skill() {
 fn scan_upsert_and_prune_keeps_ignored_rows() {
     let (_dir, mut db) = temp_db();
     db.write(|tx| {
-        for (path, slug) in [("/a/pdf", "pdf"), ("/a/tdd", "tdd"), ("/a/old", "old")] {
+        for (path, slug) in [("/a/wechat-mp", "wechat-mp"), ("/a/tdd", "tdd"), ("/a/old", "old")] {
             detected::upsert(tx, &detected_row(path, slug))?;
         }
         Ok(())
@@ -345,13 +345,13 @@ fn scan_upsert_and_prune_keeps_ignored_rows() {
     db.write(|tx| detected::set_state(tx, "/a/tdd", "adopted"))
         .unwrap();
 
-    let seen: HashSet<String> = ["/a/pdf", "/a/old"].iter().map(|s| s.to_string()).collect();
+    let seen: HashSet<String> = ["/a/wechat-mp", "/a/old"].iter().map(|s| s.to_string()).collect();
     let removed = db.write(|tx| detected::prune_not_in(tx, &seen)).unwrap();
     assert_eq!(removed, 1, "only the adopted-but-now-absent row is pruned");
 
     let all = detected::list_all(db.conn()).unwrap();
     let paths: Vec<_> = all.iter().map(|d| d.path.as_str()).collect();
-    assert_eq!(paths, vec!["/a/old", "/a/pdf"]);
+    assert_eq!(paths, vec!["/a/old", "/a/wechat-mp"]);
     assert_eq!(
         all[0].adopt_state, "ignored",
         "the user's ignore decision survives"
@@ -361,15 +361,15 @@ fn scan_upsert_and_prune_keeps_ignored_rows() {
 #[test]
 fn upsert_is_idempotent_for_same_path() {
     let (_dir, mut db) = temp_db();
-    db.write(|tx| detected::upsert(tx, &detected_row("/a/pdf", "pdf")))
+    db.write(|tx| detected::upsert(tx, &detected_row("/a/wechat-mp", "wechat-mp")))
         .unwrap();
-    let mut again = detected_row("/a/pdf", "pdf-v2");
+    let mut again = detected_row("/a/wechat-mp", "wechat-mp-v2");
     again.content_hash = Some("blake3:changed".into());
     db.write(|tx| detected::upsert(tx, &again)).unwrap();
 
     let all = detected::list_all(db.conn()).unwrap();
     assert_eq!(all.len(), 1);
-    assert_eq!(all[0].observed_slug.as_deref(), Some("pdf-v2"));
+    assert_eq!(all[0].observed_slug.as_deref(), Some("wechat-mp-v2"));
     assert_eq!(all[0].content_hash.as_deref(), Some("blake3:changed"));
 }
 
@@ -378,7 +378,7 @@ fn count_by_kind_reports_legacy_commands_and_nested_suspects() {
     let (_dir, mut db) = temp_db();
     db.write(|tx| {
         for (path, kind) in [
-            ("/a/pdf", "skill"),
+            ("/a/wechat-mp", "skill"),
             ("/a/tdd", "skill"),
             ("/c/.claude/commands/review.md", "legacy-command"),
             ("/a/skills/.agents/skills/x", "nested-suspect"),
@@ -409,7 +409,7 @@ fn events_record_undo_steps_and_pending() {
     let (_dir, mut db) = temp_db();
     let id = db
         .write(|tx| {
-            let id = event::record(tx, "cli", "adopt", Some("pdf"), Some("{\"n\":1}"), true)?;
+            let id = event::record(tx, "cli", "adopt", Some("wechat-mp"), Some("{\"n\":1}"), true)?;
             event::push_undo_step(tx, id, 0, "{\"kind\":\"created_link\"}")?;
             event::push_undo_step(tx, id, 1, "{\"kind\":\"moved_dir\"}")?;
             Ok(id)

@@ -33,15 +33,15 @@ heron detected
 ```
 
 ```text
-pdf                          agents    global   skill            ~/.agents/skills/pdf/SKILL.md
+wechat-mp                    agents    global   skill            ~/.agents/skills/wechat-mp/SKILL.md
 review                       claude    global   legacy-command   ~/.claude/commands/review.md
-pdf                          claude    global   skill            ~/.claude/skills/pdf/SKILL.md
+wechat-mp                    claude    global   skill            ~/.claude/skills/wechat-mp/SKILL.md
 
    1  legacy-command
    2  skill
 ```
 
-注意这里出现了**两条 `pdf`**：它们在不同目录里，内容相同。这正是 Heron 要去重的情况。
+注意这里出现了**两条 `wechat-mp`**：它们在不同目录里，内容相同。这正是 Heron 要去重的情况。
 
 ---
 
@@ -54,17 +54,17 @@ heron adopt --all --dry-run
 ```
 
 ```text
-would adopt pdf
-  - {"action":"create_store","slug":"pdf","from":"…/.agents/skills/pdf"}
-  - {"action":"backup","from":"…/.agents/skills/pdf","to":"<backups>/adopt"}
-  - {"action":"link_original_path","path":"…/.agents/skills/pdf/SKILL.md","target":"~/.heron/skills/pdf"}
+would adopt wechat-mp
+  - {"action":"create_store","slug":"wechat-mp","from":"…/.agents/skills/wechat-mp"}
+  - {"action":"backup","from":"…/.agents/skills/wechat-mp","to":"<backups>/adopt"}
+  - {"action":"link_original_path","path":"…/.agents/skills/wechat-mp/SKILL.md","target":"~/.heron/skills/wechat-mp"}
 would adopt review
   - {"action":"create_store","slug":"review","from":"…/.claude/commands/review.md"}
   - …
-would adopt pdf (same content as pdf: no second copy)
+would adopt wechat-mp (same content as wechat-mp: no second copy)
 ```
 
-最后一行说明：**第二个 `pdf` 不会再复制一份**，直接把原位置指向已有实体。
+最后一行说明：**第二个 `wechat-mp` 不会再复制一份**，直接把原位置指向已有实体。
 
 确认没问题后执行：
 
@@ -76,13 +76,13 @@ heron adopt --all
 
 ```bash
 ls -la ~/.agents/skills/
-# pdf -> /Users/you/.heron/skills/pdf
+# wechat-mp -> /Users/you/.heron/skills/wechat-mp
 ```
 
 ### 只想收拢指定的几个
 
 ```bash
-heron adopt pdf review
+heron adopt wechat-mp review
 ```
 
 ### 不想动原位置
@@ -90,7 +90,7 @@ heron adopt pdf review
 如果你还在用别的方式管理某个目录，加 `--keep-original`：只登记进 Heron，原目录原样保留。
 
 ```bash
-heron adopt pdf --keep-original
+heron adopt wechat-mp --keep-original
 ```
 
 > 区别：默认模式下原位置会变成指向存储区的链接（改一处处处生效）；
@@ -107,8 +107,8 @@ heron verify
 ````
 
 ```text
-pdf      agents:global      symlink   visible
-review   claude:global      symlink   visible
+wechat-mp      agents:global      symlink   visible
+review         claude:global      symlink   visible
 ```
 
 - `visible` — 客户端会加载
@@ -136,8 +136,8 @@ heron targets
 想装到某个客户端自己的目录：
 
 ```bash
-heron project pdf --on claude:global
-heron project pdf --on agents:global
+heron project wechat-mp --on claude:global
+heron project wechat-mp --on agents:global
 ```
 
 ### 投影方式
@@ -150,7 +150,7 @@ heron project pdf --on agents:global
 | `pointer` | 生成一个指向真实目录的 `SKILL.md` | 只读 `.md` 的扫描器 |
 
 ```bash
-heron project pdf --on claude:global --mode copy
+heron project wechat-mp --on claude:global --mode copy
 ```
 
 > 如果某个客户端明明装了却显示 `not scanned`，多半是它不认链接——换成 `copy` 即可。
@@ -207,9 +207,9 @@ heron outdated
 ```
 
 ```text
-pdf      diverged (local + upstream)   1.0.0
-tdd      up to date                    1.0.0
-review   not tracked                   0.0.0
+wechat-mp      diverged (local + upstream)   1.0.0
+tdd            up to date                    1.0.0
+review         not tracked                   0.0.0
 ```
 
 - `diverged` — 你改过，上游也改了，可以合并
@@ -218,7 +218,7 @@ review   not tracked                   0.0.0
 ### 看看自己改了什么
 
 ```bash
-heron diff pdf
+heron diff wechat-mp
 ```
 
 ```text
@@ -236,7 +236,7 @@ heron upgrade --all
 这是**三方合并**：你的改动的和上游改动都会保留。合并结果里能看到两边的内容：
 
 ```text
-upgraded pdf 153e9707 -> 30edb861
+upgraded wechat-mp 153e9707 -> 30edb861
 ```
 
 ### 真的冲突了
@@ -244,11 +244,11 @@ upgraded pdf 153e9707 -> 30edb861
 如果两边改了同一行：
 
 ```bash
-heron upgrade pdf
+heron upgrade wechat-mp
 ```
 
 ```text
-conflict in pdf:
+conflict in wechat-mp:
   SKILL.md
   the skill was left untouched; resolve it manually or roll back
 ```
@@ -258,8 +258,8 @@ conflict in pdf:
 查看两边内容并选择：
 
 ```bash
-heron conflict pdf      # 列出冲突文件
-heron resolve pdf --take theirs   # 或 --take ours
+heron conflict wechat-mp      # 列出冲突文件
+heron resolve wechat-mp --take theirs   # 或 --take ours
 ```
 
 桌面应用里可以**逐个文件**选择本地或上游，再"保存并重试升级"。
@@ -267,7 +267,7 @@ heron resolve pdf --take theirs   # 或 --take ours
 ### 回滚
 
 ```bash
-heron rollback pdf --to 1.0.0
+heron rollback wechat-mp --to 1.0.0
 ```
 
 回滚本身也会被记录（打一个 `heron-rollback-backup-*` 标签），所以可以再滚回来。

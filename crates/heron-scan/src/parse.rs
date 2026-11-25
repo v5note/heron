@@ -329,13 +329,13 @@ pub fn parse_file(
 mod tests {
     use super::*;
 
-    const GOOD: &str = "---\nname: pdf\ndescription: Extract text from PDFs\nmetadata:\n  version: \"1.4.0\"\n---\n\n# PDF\n";
+    const GOOD: &str = "---\nname: wechat-mp\ndescription: Publish articles to WeChat\nmetadata:\n  version: \"1.4.0\"\n---\n\n# WeChat MP\n";
 
     #[test]
     fn parses_standard_frontmatter() {
         let (fm, issues) = parse_skill_md(GOOD.as_bytes());
         assert_eq!(fm.confidence, Confidence::Full);
-        assert_eq!(fm.name.as_deref(), Some("pdf"));
+        assert_eq!(fm.name.as_deref(), Some("wechat-mp"));
         assert_eq!(fm.metadata_version(), Some("1.4.0"));
         assert!(issues.is_empty(), "unexpected issues: {issues:?}");
         assert!(fm.is_ok());

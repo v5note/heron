@@ -91,17 +91,17 @@ mod tests {
     fn save_then_list_then_remove() {
         let mut db = Db::open_in_memory().unwrap();
         let saved = db
-            .write(|tx| save(tx, &fav("PDF", "https://github.com/o/pdf")))
+            .write(|tx| save(tx, &fav("WeChat MP", "https://github.com/o/wechat-mp")))
             .unwrap();
         assert!(saved.id > 0);
         assert_eq!(list(db.conn()).unwrap().len(), 1);
 
         // Same url updates in place rather than duplicating.
-        db.write(|tx| save(tx, &fav("PDF renamed", "https://github.com/o/pdf")))
+        db.write(|tx| save(tx, &fav("WeChat MP renamed", "https://github.com/o/wechat-mp")))
             .unwrap();
         let rows = list(db.conn()).unwrap();
         assert_eq!(rows.len(), 1);
-        assert_eq!(rows[0].name, "PDF renamed");
+        assert_eq!(rows[0].name, "WeChat MP renamed");
 
         let id = rows[0].id;
         db.write(|tx| remove(tx, id)).unwrap();

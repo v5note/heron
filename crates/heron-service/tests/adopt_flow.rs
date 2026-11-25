@@ -63,27 +63,27 @@ fn find_row(ctx: &Ctx, slug: &str) -> heron_store::models::DetectedRow {
 #[test]
 fn adopt_moves_content_into_store_and_links_the_original() -> Result<()> {
     let env = Env::new();
-    env.write_skill(".agents/skills/pdf", "pdf");
+    env.write_skill(".agents/skills/wechat-mp", "wechat-mp");
     let mut ctx = env.ctx("cli");
     let report = env.scan(&mut ctx);
     assert_eq!(report.skills, 1);
 
-    let row = find_row(&ctx, "pdf");
+    let row = find_row(&ctx, "wechat-mp");
     let plan = adopt::plan(&ctx, &row)?;
-    assert_eq!(plan.slug.as_deref(), Some("pdf"));
+    assert_eq!(plan.slug.as_deref(), Some("wechat-mp"));
     assert!(plan.duplicate_of.is_none());
 
     let result = adopt::execute(&mut ctx, &plan, AdoptPlacement::Replace)?;
-    assert_eq!(result.adopted, vec!["pdf"]);
+    assert_eq!(result.adopted, vec!["wechat-mp"]);
 
     // Store copy exists and is a git repo with metadata.
-    let stored = ctx.skill_path("pdf");
+    let stored = ctx.skill_path("wechat-mp");
     assert!(stored.join("SKILL.md").is_file());
     assert!(stored.join("heron.skill.json").is_file());
     assert!(stored.join(".git").is_dir());
 
     // Original location is now a link to the store.
-    let original = env.home.join(".agents/skills/pdf");
+    let original = env.home.join(".agents/skills/wechat-mp");
     let info = heron_platform::link::probe(&original)?;
     assert!(info.kind.is_link(), "original must become a projection");
     assert!(original.join("SKILL.md").is_file());
@@ -93,7 +93,7 @@ fn adopt_moves_content_into_store_and_links_the_original() -> Result<()> {
     let has_backup = fs::read_dir(&backups)
         .unwrap()
         .flatten()
-        .any(|e| e.path().join("adopt-pdf").join("SKILL.md").is_file());
+        .any(|e| e.path().join("adopt-wechat-mp").join("SKILL.md").is_file());
     assert!(has_backup, "adopt always backs up first");
 
     // The detected row is marked adopted.
@@ -107,8 +107,8 @@ fn adopt_moves_content_into_store_and_links_the_original() -> Result<()> {
 #[test]
 fn adopt_deduplicates_identical_content() -> Result<()> {
     let env = Env::new();
-    env.write_skill(".agents/skills/pdf", "pdf");
-    env.write_skill(".claude/skills/pdf", "pdf");
+    env.write_skill(".agents/skills/wechat-mp", "wechat-mp");
+    env.write_skill(".claude/skills/wechat-mp", "wechat-mp");
     let mut ctx = env.ctx("cli");
     env.scan(&mut ctx);
 
@@ -138,20 +138,20 @@ fn adopt_retries_after_a_store_copy_was_left_behind() -> Result<()> {
     // A previous adopt can fail after copying into the store (disk full, git error, permission on
     // the original). The retry must repair that half-created directory, not fail on its branch.
     let env = Env::new();
-    env.write_skill(".agents/skills/pdf", "pdf");
+    env.write_skill(".agents/skills/wechat-mp", "wechat-mp");
     let mut ctx = env.ctx("cli");
     env.scan(&mut ctx);
-    let row = find_row(&ctx, "pdf");
+    let row = find_row(&ctx, "wechat-mp");
 
     // Simulate the leftover: content already in the store, index unaware of it.
-    let dest = ctx.skill_path("pdf");
-    heron_service::adopt::copy_tree(&env.home.join(".agents/skills/pdf"), &dest)?;
+    let dest = ctx.skill_path("wechat-mp");
+    heron_service::adopt::copy_tree(&env.home.join(".agents/skills/wechat-mp"), &dest)?;
     let repo = heron_vcs::SkillRepo::open(&dest);
-    repo.init(&heron_vcs::SkillMeta::new("pdf", "local", "", "0.0.0"))?;
+    repo.init(&heron_vcs::SkillMeta::new("wechat-mp", "local", "", "0.0.0"))?;
 
     let plan = adopt::plan(&ctx, &row)?;
     let report = adopt::execute(&mut ctx, &plan, AdoptPlacement::KeepOriginal)?;
-    assert_eq!(report.adopted, vec!["pdf".to_owned()]);
+    assert_eq!(report.adopted, vec!["wechat-mp".to_owned()]);
     assert!(report.errors.is_empty(), "{:?}", report.errors);
 
     // Adopting a second time from the same leftover directory is still safe.
@@ -166,35 +166,35 @@ fn adopt_retries_after_a_store_copy_was_left_behind() -> Result<()> {
 #[test]
 fn adopt_keep_original_leaves_the_file_in_place() -> Result<()> {
     let env = Env::new();
-    env.write_skill(".agents/skills/pdf", "pdf");
+    env.write_skill(".agents/skills/wechat-mp", "wechat-mp");
     let mut ctx = env.ctx("cli");
     env.scan(&mut ctx);
-    let row = find_row(&ctx, "pdf");
+    let row = find_row(&ctx, "wechat-mp");
     let plan = adopt::plan(&ctx, &row)?;
     adopt::execute(&mut ctx, &plan, AdoptPlacement::KeepOriginal)?;
 
-    let original = env.home.join(".agents/skills/pdf");
+    let original = env.home.join(".agents/skills/wechat-mp");
     assert!(
         !heron_platform::link::probe(&original)?.kind.is_link(),
         "original untouched"
     );
     assert!(original.join("SKILL.md").is_file());
-    assert!(ctx.skill_path("pdf").join("SKILL.md").is_file());
+    assert!(ctx.skill_path("wechat-mp").join("SKILL.md").is_file());
     Ok(())
 }
 
 #[test]
 fn project_needs_an_explicit_target_and_verify_reports_visibility() -> Result<()> {
     let env = Env::new();
-    env.write_skill(".agents/skills/pdf", "pdf");
+    env.write_skill(".agents/skills/wechat-mp", "wechat-mp");
     let mut ctx = env.ctx("cli");
     env.scan(&mut ctx);
-    let row = find_row(&ctx, "pdf");
+    let row = find_row(&ctx, "wechat-mp");
     let plan = adopt::plan(&ctx, &row)?;
     adopt::execute(&mut ctx, &plan, AdoptPlacement::KeepOriginal)?;
 
     let req = ProjectRequest {
-        slug: "pdf".into(),
+        slug: "wechat-mp".into(),
         target_id: "codex:global".into(),
         mode: None,
         link_name: None,
@@ -203,19 +203,19 @@ fn project_needs_an_explicit_target_and_verify_reports_visibility() -> Result<()
     let outcome = project::apply(&mut ctx, &req, &plan, &request)?;
     assert!(outcome.applied);
     // Compare path components, not a literal string: Windows uses '\' as the separator.
-    let expected_suffix = Path::new("skills").join("pdf");
+    let expected_suffix = Path::new("skills").join("wechat-mp");
     assert!(
         Path::new(&outcome.path).ends_with(&expected_suffix),
         "projected path: {}",
         outcome.path
     );
 
-    let projected = env.home.join(".codex").join("skills").join("pdf");
+    let projected = env.home.join(".codex").join("skills").join("wechat-mp");
     assert!(
         projected.join("SKILL.md").is_file(),
         "projected into the named client target"
     );
-    assert_eq!(projection::list_for_skill(ctx.db.conn(), "pdf")?.len(), 1);
+    assert_eq!(projection::list_for_skill(ctx.db.conn(), "wechat-mp")?.len(), 1);
     assert!(
         heron_store::repos::target::get_default(ctx.db.conn())
             .unwrap()
@@ -223,14 +223,14 @@ fn project_needs_an_explicit_target_and_verify_reports_visibility() -> Result<()
         "the store is not a target, so nothing is a default one"
     );
 
-    let reports = heron_service::verify::verify(&mut ctx, Some("pdf"))?;
+    let reports = heron_service::verify::verify(&mut ctx, Some("wechat-mp"))?;
     assert_eq!(reports.len(), 1);
     assert_eq!(reports[0].visibility, heron_projection::Visibility::Visible);
 
-    project::unproject(&mut ctx, "pdf", "codex:global")?;
+    project::unproject(&mut ctx, "wechat-mp", "codex:global")?;
     assert!(!projected.exists());
     assert!(
-        ctx.skill_path("pdf").join("SKILL.md").is_file(),
+        ctx.skill_path("wechat-mp").join("SKILL.md").is_file(),
         "store copy survives unproject"
     );
     Ok(())
@@ -239,20 +239,20 @@ fn project_needs_an_explicit_target_and_verify_reports_visibility() -> Result<()
 #[test]
 fn project_refuses_to_replace_user_data() -> Result<()> {
     let env = Env::new();
-    env.write_skill(".agents/skills/pdf", "pdf");
+    env.write_skill(".agents/skills/wechat-mp", "wechat-mp");
     let mut ctx = env.ctx("cli");
     env.scan(&mut ctx);
-    let row = find_row(&ctx, "pdf");
+    let row = find_row(&ctx, "wechat-mp");
     let plan = adopt::plan(&ctx, &row)?;
     adopt::execute(&mut ctx, &plan, AdoptPlacement::KeepOriginal)?;
 
     // Somebody else already owns the destination.
-    let occupied = env.home.join(".codex/skills/pdf");
+    let occupied = env.home.join(".codex/skills/wechat-mp");
     fs::create_dir_all(&occupied)?;
     fs::write(occupied.join("user.md"), "precious")?;
 
     let req = ProjectRequest {
-        slug: "pdf".into(),
+        slug: "wechat-mp".into(),
         target_id: "codex:global".into(),
         mode: None,
         link_name: None,
@@ -317,8 +317,8 @@ fn legacy_command_adopts_only_the_command_file() -> Result<()> {
 #[test]
 fn two_copies_of_one_skill_both_register_as_visible() -> Result<()> {
     let env = Env::new();
-    env.write_skill(".agents/skills/pdf", "pdf");
-    env.write_skill(".claude/skills/pdf", "pdf");
+    env.write_skill(".agents/skills/wechat-mp", "wechat-mp");
+    env.write_skill(".claude/skills/wechat-mp", "wechat-mp");
     let mut ctx = env.ctx("cli");
     env.scan(&mut ctx);
 
@@ -332,14 +332,14 @@ fn two_copies_of_one_skill_both_register_as_visible() -> Result<()> {
         "one store copy"
     );
     assert_eq!(
-        projection::list_for_skill(ctx.db.conn(), "pdf")?.len(),
+        projection::list_for_skill(ctx.db.conn(), "wechat-mp")?.len(),
         2,
         "both originals are projections"
     );
 
     // First verify: claude only rescans at session start, so its fresh landing reads as
     // "restart required" (§12.3); the agents client is a watcher, so its copy is simply visible.
-    for report in heron_service::verify::verify(&mut ctx, Some("pdf"))? {
+    for report in heron_service::verify::verify(&mut ctx, Some("wechat-mp"))? {
         let in_claude = Path::new(&report.path)
             .components()
             .any(|c| c.as_os_str() == ".claude");
@@ -357,7 +357,7 @@ fn two_copies_of_one_skill_both_register_as_visible() -> Result<()> {
     }
     // Second verify: the landing is confirmed (the user had a chance to reopen the client),
     // so both copies report plain visible.
-    for report in heron_service::verify::verify(&mut ctx, Some("pdf"))? {
+    for report in heron_service::verify::verify(&mut ctx, Some("wechat-mp"))? {
         assert_eq!(
             report.visibility,
             heron_projection::Visibility::Visible,
@@ -372,15 +372,15 @@ fn two_copies_of_one_skill_both_register_as_visible() -> Result<()> {
 #[test]
 fn client_directories_are_available_as_targets() -> Result<()> {
     let env = Env::new();
-    env.write_skill(".agents/skills/pdf", "pdf");
+    env.write_skill(".agents/skills/wechat-mp", "wechat-mp");
     let mut ctx = env.ctx("cli");
     env.scan(&mut ctx);
-    let row = find_row(&ctx, "pdf");
+    let row = find_row(&ctx, "wechat-mp");
     let plan = adopt::plan(&ctx, &row)?;
     adopt::execute(&mut ctx, &plan, AdoptPlacement::KeepOriginal)?;
 
     let req = ProjectRequest {
-        slug: "pdf".into(),
+        slug: "wechat-mp".into(),
         target_id: "claude:global".into(),
         mode: None,
         link_name: None,
@@ -388,7 +388,7 @@ fn client_directories_are_available_as_targets() -> Result<()> {
     let (plan, request) = project::plan(&ctx, &req)?;
     let outcome = project::apply(&mut ctx, &req, &plan, &request)?;
     assert!(outcome.applied);
-    assert!(env.home.join(".claude/skills/pdf/SKILL.md").is_file());
+    assert!(env.home.join(".claude/skills/wechat-mp/SKILL.md").is_file());
     Ok(())
 }
 
@@ -397,14 +397,14 @@ fn adopt_records_the_description_from_the_file() -> Result<()> {
     // The library row is what the table renders; an adopt that never read the file left every
     // 收拢 skill as a name with no summary.
     let env = Env::new();
-    env.write_skill(".agents/skills/pdf", "pdf");
+    env.write_skill(".agents/skills/wechat-mp", "wechat-mp");
     let mut ctx = env.ctx("cli");
     env.scan(&mut ctx);
-    let row = find_row(&ctx, "pdf");
+    let row = find_row(&ctx, "wechat-mp");
     let plan = adopt::plan(&ctx, &row)?;
     adopt::execute(&mut ctx, &plan, AdoptPlacement::KeepOriginal)?;
 
-    let skill = heron_store::repos::skill::get(ctx.db.conn(), "pdf")?.unwrap();
+    let skill = heron_store::repos::skill::get(ctx.db.conn(), "wechat-mp")?.unwrap();
     assert_eq!(skill.description, "test");
     Ok(())
 }
@@ -414,19 +414,19 @@ fn repair_descriptions_fills_rows_adopted_before_that_fix() -> Result<()> {
     let env = Env::new();
     let mut ctx = env.ctx("cli");
     // The state an older app leaves behind: content in the store, index without a description.
-    let dest = ctx.skill_path("pdf");
+    let dest = ctx.skill_path("wechat-mp");
     fs::create_dir_all(&dest).unwrap();
     fs::write(
         dest.join("SKILL.md"),
-        "---\nname: pdf\ndescription: test\n---\n",
+        "---\nname: wechat-mp\ndescription: test\n---\n",
     )
     .unwrap();
     ctx.db.write(|tx| {
         heron_store::repos::skill::insert(
             tx,
             &heron_store::models::SkillRow {
-                slug: "pdf".into(),
-                display_name: "pdf".into(),
+                slug: "wechat-mp".into(),
+                display_name: "wechat-mp".into(),
                 description: String::new(),
                 tags: vec![],
                 status: "active".into(),
@@ -441,7 +441,7 @@ fn repair_descriptions_fills_rows_adopted_before_that_fix() -> Result<()> {
 
     assert_eq!(adopt::repair_descriptions(&mut ctx)?, 1);
     assert_eq!(
-        heron_store::repos::skill::get(ctx.db.conn(), "pdf")
+        heron_store::repos::skill::get(ctx.db.conn(), "wechat-mp")
             .unwrap()
             .unwrap()
             .description,
@@ -456,7 +456,7 @@ fn repair_descriptions_fills_rows_adopted_before_that_fix() -> Result<()> {
 fn scan_is_available_without_git_installed() {
     // The scan path must not depend on git; only adopt/project/upgrade do.
     let env = Env::new();
-    env.write_skill(".agents/skills/pdf", "pdf");
+    env.write_skill(".agents/skills/wechat-mp", "wechat-mp");
     let mut ctx = env.ctx("cli");
     assert_eq!(env.scan(&mut ctx).skills, 1);
     let _ = clients::builtin().unwrap().len();

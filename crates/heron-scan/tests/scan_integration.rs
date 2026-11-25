@@ -30,10 +30,10 @@ fn fixture() -> (tempfile::TempDir, Classifier) {
 
     write(
         &home,
-        ".claude/skills/pdf/SKILL.md",
-        &skill("pdf", "Extract PDF text"),
+        ".claude/skills/wechat-mp/SKILL.md",
+        &skill("wechat-mp", "Publish articles to WeChat"),
     );
-    write(&home, ".claude/skills/pdf/references/guide.md", "ref");
+    write(&home, ".claude/skills/wechat-mp/references/guide.md", "ref");
     write(
         &home,
         ".claude/commands/review.md",
@@ -93,7 +93,7 @@ fn finds_skills_commands_and_nested_suspects() {
 
     let slugs: Vec<_> = result.hits.iter().filter_map(|h| h.slug.clone()).collect();
     assert!(
-        slugs.contains(&"pdf".to_string()),
+        slugs.contains(&"wechat-mp".to_string()),
         "global claude skill found: {slugs:?}"
     );
     assert!(slugs.contains(&"tdd".to_string()), "agents skill found");

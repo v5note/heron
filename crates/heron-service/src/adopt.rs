@@ -418,7 +418,7 @@ pub fn execute(ctx: &mut Ctx, plan: &AdoptPlan, placement: AdoptPlacement) -> Re
             }
             heron_platform::link::create_dir_link(&ctx.skill_path(&slug), &dest_link, mode)?;
             // Several copies of one skill may live in the same client directory (e.g. both
-            // `.agents/skills/pdf` and `.claude/skills/pdf`), so the recorded link name must be
+            // `.agents/skills/wechat-mp` and `.claude/skills/wechat-mp`), so the recorded link name must be
             // derived from the original location, not from the slug.
             // `<client>@<slot>`: verify reads the client prefix to judge visibility against the
             // right scan paths.

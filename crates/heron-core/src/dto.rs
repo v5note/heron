@@ -172,8 +172,8 @@ mod tests {
 
     #[test]
     fn token_estimate_rounds_up() {
-        // "wechat-mp" (3) + "Extract text" (12) = 15 chars / 3.5 = 4.28 -> 5
-        assert_eq!(estimate_tokens("wechat-mp", "Extract text"), 5);
+        // "wechat-mp" (9) + "Extract text" (12) = 21 chars / 3.5 = 6
+        assert_eq!(estimate_tokens("wechat-mp", "Extract text"), 6);
         assert_eq!(estimate_tokens("a", ""), 1);
     }
 

@@ -227,12 +227,12 @@ mod tests {
 
     fn setup() -> (tempfile::TempDir, ProjectionRequest) {
         let tmp = tempfile::tempdir().unwrap();
-        let source = tmp.path().join("store/pdf");
+        let source = tmp.path().join("store/wechat-mp");
         std::fs::create_dir_all(&source).unwrap();
-        std::fs::write(source.join("SKILL.md"), "---\nname: pdf\n---\n").unwrap();
+        std::fs::write(source.join("SKILL.md"), "---\nname: wechat-mp\n---\n").unwrap();
         let req = ProjectionRequest {
             source,
-            dest: tmp.path().join("skills/pdf"),
+            dest: tmp.path().join("skills/wechat-mp"),
             mode: ProjectionMode::Symlink,
             source_hash: None,
             recorded_hash: None,
@@ -310,7 +310,7 @@ mod tests {
     #[test]
     fn managed_link_pointing_elsewhere_is_replaced() {
         let (tmp, mut req) = setup();
-        let other = tmp.path().join("store/pdf-v2");
+        let other = tmp.path().join("store/wechat-mp-v2");
         std::fs::create_dir_all(&other).unwrap();
         std::fs::create_dir_all(req.dest.parent().unwrap()).unwrap();
         heron_platform::link::create_dir_link(&other, &req.dest, ProjectionMode::Symlink).unwrap();
@@ -326,7 +326,7 @@ mod tests {
         req.already_managed = true;
         let dest = req.dest.clone();
         std::fs::create_dir_all(&dest).unwrap();
-        std::fs::write(dest.join("SKILL.md"), "---\nname: pdf\n---\n").unwrap();
+        std::fs::write(dest.join("SKILL.md"), "---\nname: wechat-mp\n---\n").unwrap();
         let clean = current_hash(&dest).unwrap();
         req.recorded_hash = Some(clean);
         // Untouched copy: rewriting is fine.

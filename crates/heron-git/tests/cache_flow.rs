@@ -51,10 +51,10 @@ impl Remote {
         git(&work, &["config", "user.name", "Test"]);
 
         write(
-            &work.join("skills/pdf/SKILL.md"),
-            "---\nname: pdf\ndescription: v1\n---\n",
+            &work.join("skills/wechat-mp/SKILL.md"),
+            "---\nname: wechat-mp\ndescription: v1\n---\n",
         );
-        write(&work.join("skills/pdf/references/a.md"), "ref");
+        write(&work.join("skills/wechat-mp/references/a.md"), "ref");
         write(
             &work.join("skills/tdd/SKILL.md"),
             "---\nname: tdd\ndescription: v1\n---\n",
@@ -84,8 +84,8 @@ impl Remote {
 
     fn publish_update(&self, description: &str) {
         write(
-            &self.work.join("skills/pdf/SKILL.md"),
-            &format!("---\nname: pdf\ndescription: {description}\n---\n"),
+            &self.work.join("skills/wechat-mp/SKILL.md"),
+            &format!("---\nname: wechat-mp\ndescription: {description}\n---\n"),
         );
         git(&self.work, &["add", "-A"]);
         git(&self.work, &["commit", "-qm", "v2"]);
@@ -175,7 +175,7 @@ fn tree_lists_a_subdirectory_only() {
     repo.ensure().unwrap();
     let head = repo.resolve(Some("main")).unwrap().commit;
 
-    let entries = repo.tree(&head, "skills/pdf").unwrap();
+    let entries = repo.tree(&head, "skills/wechat-mp").unwrap();
     let paths: Vec<_> = entries.iter().map(|e| e.path.as_str()).collect();
     assert_eq!(paths, vec!["SKILL.md", "references/a.md"]);
     assert!(entries
@@ -195,8 +195,8 @@ fn checkout_subdir_materializes_exactly_the_skill() {
     repo.ensure().unwrap();
     let head = repo.resolve(Some("main")).unwrap().commit;
 
-    let dest = dest_root.path().join("pdf");
-    repo.checkout_subdir(&head, "skills/pdf", &dest).unwrap();
+    let dest = dest_root.path().join("wechat-mp");
+    repo.checkout_subdir(&head, "skills/wechat-mp", &dest).unwrap();
 
     assert!(dest.join("SKILL.md").is_file());
     assert!(dest.join("references/a.md").is_file());
@@ -209,7 +209,7 @@ fn checkout_subdir_materializes_exactly_the_skill() {
         "no working tree metadata leaks in"
     );
     assert!(
-        !dest_root.path().join(".pdf-heron-extract").exists(),
+        !dest_root.path().join(".wechat-mp-heron-extract").exists(),
         "temp dir is swapped in"
     );
 }
@@ -223,7 +223,7 @@ fn checkout_subdir_keeps_binary_bytes_intact() {
     // invalid UTF-8 sequence and the archive would either fail to parse or land corrupt files.
     let blob: Vec<u8> = vec![0x89, 0x50, 0x4e, 0x47, 0x00, 0xff, 0xfe, 0x01, 0xc2, 0x20];
     let remote = Remote::new();
-    fs::write(remote.work.join("skills/pdf/logo.png"), &blob).unwrap();
+    fs::write(remote.work.join("skills/wechat-mp/logo.png"), &blob).unwrap();
     git(&remote.work, &["add", "-A"]);
     git(&remote.work, &["commit", "-qm", "binary"]);
     git(
@@ -237,11 +237,11 @@ fn checkout_subdir_keeps_binary_bytes_intact() {
     repo.ensure().unwrap();
     let head = repo.resolve(Some("main")).unwrap().commit;
 
-    let dest = dest_root.path().join("pdf");
-    repo.checkout_subdir(&head, "skills/pdf", &dest).unwrap();
+    let dest = dest_root.path().join("wechat-mp");
+    repo.checkout_subdir(&head, "skills/wechat-mp", &dest).unwrap();
     assert_eq!(fs::read(dest.join("logo.png")).unwrap(), blob);
     assert!(
-        !dest_root.path().join(".pdf-heron.tar").exists(),
+        !dest_root.path().join(".wechat-mp-heron.tar").exists(),
         "tarball is cleaned up"
     );
 }
@@ -258,12 +258,12 @@ fn checkout_refuses_to_overwrite_an_existing_destination() {
     repo.ensure().unwrap();
     let head = repo.resolve(Some("main")).unwrap().commit;
 
-    let dest = dest_root.path().join("pdf");
+    let dest = dest_root.path().join("wechat-mp");
     fs::create_dir_all(&dest).unwrap();
     fs::write(dest.join("user.md"), "mine").unwrap();
 
     let err = repo
-        .checkout_subdir(&head, "skills/pdf", &dest)
+        .checkout_subdir(&head, "skills/wechat-mp", &dest)
         .unwrap_err();
     assert_eq!(err.code(), "E_SAFETY_REFUSED");
     assert!(dest.join("user.md").is_file());

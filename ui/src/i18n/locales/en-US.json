@@ -224,7 +224,7 @@
     "subtitle": "One query asks every enabled source; installable rows install directly, browse-only ones open with your keywords",
     "sourcesLabel": "Sources",
     "toggleHint": "Enable / disable this source",
-    "searchAllPlaceholder": "Search all sources for a skill, e.g. pdf, code review…",
+    "searchAllPlaceholder": "Search all sources for a skill, e.g. wechat-mp, code review…",
     "searchAll": "Search all sources",
     "queryHits": "This query hits",
     "idleHint": "Type a keyword and search — results are grouped by source and appear here. The sources below can be opened in your browser.",

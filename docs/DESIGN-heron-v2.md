@@ -756,7 +756,7 @@ Heron
 ```text
 输入（例）：
   · https://github.com/v5note/wechat-mp
-  · github:anthropics/skills#main:skills/pdf
+  · github:anthropics/skills#main:skills/wechat-mp
   · /local/path/to/skill
   · 在来源浏览页勾选
   │
@@ -1004,7 +1004,7 @@ trait MarketAdapter {
 **版本来源优先级**：
 
 1. 来源 catalog 给出的 `version`；
-2. 仓库 tag 且语义化（`v1.2.3` 或 `pdf-v1.2.3`）；
+2. 仓库 tag 且语义化（`v1.2.3` 或 `wechat-mp-v1.2.3`）；
 3. `SKILL.md` frontmatter 的 `metadata.version`；
 4. 兜底：`0.0.0+<short sha>`（**永不静默**，体检中提示补版本号）。
 

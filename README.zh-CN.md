@@ -214,9 +214,9 @@ heron adopt --all
 收拢完成后，原有路径保持不变，原地转换为指向单一真实源的受管投影：
 ```text
 收拢前                                       收拢后
-~/.agents/skills/pdf/          →             ~/.agents/skills/pdf   ──┐ (符号链接/连接点)
-~/.claude/skills/pdf/          →             ~/.claude/skills/pdf   ──┼─→ ~/.heron/skills/pdf (单一真实源)
-/path/to/project/.cursor/pdf/  →             .../project/.cursor/pdf ─┘
+~/.agents/skills/wechat-mp/          →             ~/.agents/skills/wechat-mp   ──┐ (符号链接/连接点)
+~/.claude/skills/wechat-mp/          →             ~/.claude/skills/wechat-mp   ──┼─→ ~/.heron/skills/wechat-mp (单一真实源)
+/path/to/project/.cursor/wechat-mp/  →             .../project/.cursor/wechat-mp ─┘
 ```
 
 ---

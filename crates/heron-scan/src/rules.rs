@@ -84,13 +84,13 @@ mod tests {
         assert!(rules.is_ignored(Path::new("/p/node_modules/x/SKILL.md")));
         assert!(rules.is_ignored(Path::new("/p/.git/objects")));
         assert!(rules.is_ignored(Path::new("/home/x/.vscode/extensions/foo/.claude/skills/a")));
-        assert!(!rules.is_ignored(Path::new("/home/x/.claude/skills/pdf")));
+        assert!(!rules.is_ignored(Path::new("/home/x/.claude/skills/wechat-mp")));
     }
 
     #[test]
     fn user_excludes_are_added() {
         let rules = IgnoreRules::new(&["/Volumes/**".to_owned()]).unwrap();
-        assert!(rules.is_ignored(Path::new("/Volumes/external/skills/pdf")));
+        assert!(rules.is_ignored(Path::new("/Volumes/external/skills/wechat-mp")));
         assert_eq!(rules.patterns().len(), DEFAULT_EXCLUDES.len() + 1);
     }
 

@@ -11,7 +11,7 @@ use heron_source::market::{adapter, Capability, InstallPlan};
 fn skills_sh_live_search() {
     let market = adapter("skills_sh").unwrap();
     assert_eq!(market.capability(), Capability::Indexed);
-    match market.search("pdf", 5) {
+    match market.search("wechat-mp", 5) {
         Ok(items) => {
             eprintln!("skills.sh returned {} items", items.len());
             for item in items.iter().take(3) {
@@ -42,7 +42,7 @@ fn skills_sh_live_search() {
 #[ignore = "network: run explicitly to re-verify market adapters"]
 fn clawhub_live_search() {
     let market = adapter("clawhub").unwrap();
-    match market.search("pdf", 5) {
+    match market.search("wechat-mp", 5) {
         Ok(items) => {
             eprintln!("clawhub returned {} items", items.len());
             for item in items.iter().take(3) {
@@ -53,7 +53,7 @@ fn clawhub_live_search() {
                     market.install_plan(&item.key)
                 );
             }
-            assert!(!items.is_empty(), "clawhub search should find pdf skills");
+            assert!(!items.is_empty(), "clawhub search should find wechat-mp skills");
         }
         Err(e) => eprintln!(
             "clawhub unavailable ({}) - adapter degrades gracefully",

@@ -243,13 +243,13 @@ mod tests {
     #[test]
     fn a_self_contained_skill_stays_single_directory() {
         let l = layout(
-            "skills/pdf",
+            "skills/wechat-mp",
             &[
-                "skills/pdf/SKILL.md",
-                "skills/pdf/references/a.md",
+                "skills/wechat-mp/SKILL.md",
+                "skills/wechat-mp/references/a.md",
                 "README.md",
             ],
-            &[("skills/pdf/SKILL.md", "Run `pdftotext` on the file.")],
+            &[("skills/wechat-mp/SKILL.md", "Run `pandoc` on the file.")],
         );
         assert_eq!(l, SkillLayout::Skill);
     }
@@ -276,11 +276,11 @@ mod tests {
     #[test]
     fn a_reference_that_only_walks_within_the_skill_is_no_evidence() {
         let l = layout(
-            "skills/pdf",
-            &["skills/pdf/SKILL.md", "skills/pdf/references/a.md"],
+            "skills/wechat-mp",
+            &["skills/wechat-mp/SKILL.md", "skills/wechat-mp/references/a.md"],
             &[(
-                "skills/pdf/SKILL.md",
-                "See [a](../pdf/references/a.md) and `./scripts/run.sh`.",
+                "skills/wechat-mp/SKILL.md",
+                "See [a](../wechat-mp/references/a.md) and `./scripts/run.sh`.",
             )],
         );
         assert_eq!(l, SkillLayout::Skill);
@@ -290,20 +290,20 @@ mod tests {
     fn a_reference_to_a_path_the_repository_does_not_have_is_ignored() {
         // Prose about a sibling the author never committed must not force a whole-repo install.
         let l = layout(
-            "skills/pdf",
-            &["skills/pdf/SKILL.md", "skills/pdf/references/a.md"],
+            "skills/wechat-mp",
+            &["skills/wechat-mp/SKILL.md", "skills/wechat-mp/references/a.md"],
             &[(
-                "skills/pdf/SKILL.md",
+                "skills/wechat-mp/SKILL.md",
                 "Compare with ../missing/tool.md first.",
             )],
         );
         assert_eq!(l, SkillLayout::Skill);
-        let files = ["skills/pdf/SKILL.md".to_owned()];
-        assert!(!escapes("skills/pdf", &files, &|_| {
+        let files = ["skills/wechat-mp/SKILL.md".to_owned()];
+        assert!(!escapes("skills/wechat-mp", &files, &|_| {
             Some("see ../missing/tool.md".to_owned())
         }));
-        let nested = ["skills/pdf/sub/x".to_owned()];
-        assert!(escapes("skills/pdf", &nested, &|_| {
+        let nested = ["skills/wechat-mp/sub/x".to_owned()];
+        assert!(escapes("skills/wechat-mp", &nested, &|_| {
             Some("cd ../.. && ls".to_owned())
         }));
     }
@@ -327,14 +327,14 @@ mod tests {
     #[test]
     fn a_collection_of_sibling_skills_installs_one_at_a_time() {
         let l = layout(
-            "skills/pdf",
+            "skills/wechat-mp",
             &[
-                "skills/pdf/SKILL.md",
+                "skills/wechat-mp/SKILL.md",
                 "skills/tdd/SKILL.md",
-                "skills/pdf/references/a.md",
+                "skills/wechat-mp/references/a.md",
                 "package.json",
             ],
-            &[("skills/pdf/SKILL.md", "# pdf\n")],
+            &[("skills/wechat-mp/SKILL.md", "# wechat-mp\n")],
         );
         assert_eq!(l, SkillLayout::Skill);
     }
@@ -342,9 +342,9 @@ mod tests {
     #[test]
     fn a_deeply_nested_skill_directory_is_not_the_project_shape() {
         let l = layout(
-            "packages/skills/pdf",
+            "packages/skills/wechat-mp",
             &[
-                "packages/skills/pdf/SKILL.md",
+                "packages/skills/wechat-mp/SKILL.md",
                 "packages/skills/tdd/SKILL.md",
                 "packages/package.json",
             ],
@@ -362,11 +362,11 @@ mod tests {
     #[test]
     fn heron_source_toml_overrides_both_directions() {
         let repo = layout(
-            "skills/pdf",
-            &["skills/pdf/SKILL.md", "heron.source.toml"],
+            "skills/wechat-mp",
+            &["skills/wechat-mp/SKILL.md", "heron.source.toml"],
             &[(
                 "heron.source.toml",
-                "layout = \"repo\"\n\n[[skill]]\npath = \"skills/pdf\"\n",
+                "layout = \"repo\"\n\n[[skill]]\npath = \"skills/wechat-mp\"\n",
             )],
         );
         assert_eq!(repo, SkillLayout::Repo);
@@ -395,8 +395,8 @@ mod tests {
             Some("cli/om.js")
         );
         assert_eq!(
-            resolve("skills/p/SKILL.md", "../pdf").as_deref(),
-            Some("skills/pdf")
+            resolve("skills/p/SKILL.md", "../wechat-mp").as_deref(),
+            Some("skills/wechat-mp")
         );
         assert_eq!(resolve("skills/p/SKILL.md", "../.."), None);
     }
@@ -413,11 +413,11 @@ mod tests {
     #[test]
     fn unreadable_files_never_break_detection() {
         let files = vec![
-            "skills/pdf/SKILL.md".to_owned(),
-            "skills/pdf/bin/x".to_owned(),
+            "skills/wechat-mp/SKILL.md".to_owned(),
+            "skills/wechat-mp/bin/x".to_owned(),
         ];
         assert_eq!(
-            detect("skills/pdf", &files, &read_nothing),
+            detect("skills/wechat-mp", &files, &read_nothing),
             SkillLayout::Skill
         );
     }

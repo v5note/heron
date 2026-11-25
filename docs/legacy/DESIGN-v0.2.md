@@ -163,7 +163,7 @@
 
 <Target 目录示例>
 ~/.claude/skills/find-skills  ->  …/heron/store/find-skills/1.4.0   (symlink / junction)
-~/proj/.agents/skills/pdf     ->  …/heron/store/pdf/2.0.1
+~/proj/.agents/skills/wechat-mp     ->  …/heron/store/wechat-mp/2.0.1
 ```
 
 约定：链接失效（store 里版本被清理）时 heron 报 `broken-link` 而不静默删除，交给人决定。
@@ -242,25 +242,25 @@ generated_at = "2026-11-19T00:00:00Z"
 generator = "heron-publish/0.1.0"
 
 [[skill]]
-slug = "pdf"
-name = "PDF Toolkit"
+slug = "wechat-mp"
+name = "WeChat MP Toolkit"
 version = "2.0.1"
-path = "skills/pdf"                       # 相对仓库根
+path = "skills/wechat-mp"                       # 相对仓库根
 sha256 = "9f2c…"                           # 目录规范化内容的哈希
 tags = ["document", "official"]
 min_schema = 1
-changelog_url = "https://github.com/heron-ai/skills/releases/tag/pdf-2.0.1"
+changelog_url = "https://github.com/heron-ai/skills/releases/tag/wechat-mp-2.0.1"
 
 [[skill]]
-slug = "pdf"
+slug = "wechat-mp"
 version = "2.0.0"
-path = "skills/pdf"
+path = "skills/wechat-mp"
 sha256 = "1a7b…"                            # 允许同一 slug 多版本共存 → 支持降级
 ```
 
 版本语义取舍：
 
-* **Git tag 型**（`pdf-v2.0.1`）适合发布节奏明确的官方仓库。
+* **Git tag 型**（`wechat-mp-v2.0.1`）适合发布节奏明确的官方仓库。
 * **commit-SHA 型**适合个人/团队仓库 —— 无需维护 tag，`pin=none` 时永远跟 HEAD。
 * heron 两者都支持，`catalog` 里以 `(version, sha256, commit)` 三元组存在；**没有版本号的 skill 一律视为 `0.0.0+<shortsha>`**，并在 `doctor` 里提示补 `metadata.version`。这直接解决 §1 里"绝大多数 skill 没有版本号所以没法升级"的核心障碍。
 
@@ -390,7 +390,7 @@ heron completion bash|zsh|fish|powershell
 | 保留名 | 无碍 | 拒绝 `CON/NUL/aux.cs 之类` 命名的 slug，`doctor` 报错 |
 | 权限 | 普通用户即可 | 不要求管理员是硬指标 → 这就是为什么选 junction 而非 symlink |
 | 换行/编码 | UTF-8 | 强制 UTF-8 读写，`SKILL.md` 中文描述不会花屏 |
-| 大小写 | 区分 | NTFS 默认不区分 → slug 唯一性检查用"忽略大小写"口径，防 `PDF` 与 `pdf` 双份 |
+| 大小写 | 区分 | NTFS 默认不区分 → slug 唯一性检查用"忽略大小写"口径，防 `WECHAT-MP` 与 `wechat-mp` 双份 |
 | 杀软/OneDrive | — | 文档提醒：把 store 排除在 OneDrive 同步外，否则链接会被云占位符化 |
 
 结论：**junction 方案让 Windows 用户零权限负担**，这是选型阶段就要定死的事，不能留到实现后期补救。

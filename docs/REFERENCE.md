@@ -97,9 +97,9 @@
 | 形式 | 示例 |
 |---|---|
 | GitHub 简写 | `anthropics/skills` |
-| tree 链接 | `https://github.com/o/r/tree/main/skills/pdf` |
-| blob 链接 | `https://github.com/o/r/blob/main/skills/pdf/SKILL.md` |
-| 带前缀 | `github:o/r#main:skills/pdf` |
+| tree 链接 | `https://github.com/o/r/tree/main/skills/wechat-mp` |
+| blob 链接 | `https://github.com/o/r/blob/main/skills/wechat-mp/SKILL.md` |
+| 带前缀 | `github:o/r#main:skills/wechat-mp` |
 | SSH | `git@github.com:o/r.git` |
 | 本地 git 仓库 | `/path/to/repo.git` 或 `file:///path/to/repo.git` |
 

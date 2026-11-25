@@ -114,7 +114,7 @@ mod tests {
     #[test]
     fn visible_when_inside_a_scan_path() {
         let v = classify(&input(
-            "/home/u/.heron/skills/pdf",
+            "/home/u/.heron/skills/wechat-mp",
             &["/home/u/.heron/skills"],
             &[],
             true,
@@ -126,7 +126,7 @@ mod tests {
     #[test]
     fn not_scanned_outside_every_path() {
         let v = classify(&input(
-            "/home/u/store/pdf",
+            "/home/u/store/wechat-mp",
             &["/home/u/.heron/skills"],
             &[],
             true,
@@ -155,9 +155,9 @@ mod tests {
     #[test]
     fn broken_wins_over_everything() {
         let v = classify(&input(
-            "/home/u/.claude/skills/pdf",
+            "/home/u/.claude/skills/wechat-mp",
             &["/home/u/.claude/skills"],
-            &["pdf"],
+            &["wechat-mp"],
             false,
         ))
         .unwrap();
@@ -167,7 +167,7 @@ mod tests {
     #[test]
     fn session_rescan_client_reports_restart_until_confirmed() {
         let mut i = input(
-            "/home/u/.claude/skills/pdf",
+            "/home/u/.claude/skills/wechat-mp",
             &["/home/u/.claude/skills"],
             &[],
             true,
@@ -180,7 +180,7 @@ mod tests {
         assert_eq!(classify(&i).unwrap(), Visibility::Visible);
         // A client that hot-reloads (watch) never owes the user a restart.
         let mut w = input(
-            "/home/u/.agents/skills/pdf",
+            "/home/u/.agents/skills/wechat-mp",
             &["/home/u/.agents/skills"],
             &[],
             true,
@@ -199,17 +199,17 @@ mod tests {
             i
         };
         assert_eq!(
-            classify(&mk("/home/u/.claude/skills/pdf", &[], false)).unwrap(),
+            classify(&mk("/home/u/.claude/skills/wechat-mp", &[], false)).unwrap(),
             Visibility::Broken
         );
         assert_eq!(
-            classify(&mk("/home/u/store/pdf", &[], true)).unwrap(),
+            classify(&mk("/home/u/store/wechat-mp", &[], true)).unwrap(),
             Visibility::NotScanned
         );
         assert_eq!(
-            classify(&mk("/home/u/.claude/skills/pdf", &["pdf"], true)).unwrap(),
+            classify(&mk("/home/u/.claude/skills/wechat-mp", &["wechat-mp"], true)).unwrap(),
             Visibility::Shadowed {
-                by: "pdf".to_owned()
+                by: "wechat-mp".to_owned()
             }
         );
     }
@@ -217,7 +217,7 @@ mod tests {
     #[test]
     fn path_comparison_is_case_insensitive() {
         assert!(is_scanned(
-            Path::new("/Home/U/.Heron/Skills/pdf"),
+            Path::new("/Home/U/.Heron/Skills/wechat-mp"),
             &[PathBuf::from("/home/u/.heron/skills")]
         ));
     }
@@ -225,7 +225,7 @@ mod tests {
     #[test]
     fn sibling_prefix_is_not_a_match() {
         assert!(!is_scanned(
-            Path::new("/home/u/.heron/skills-backup/pdf"),
+            Path::new("/home/u/.heron/skills-backup/wechat-mp"),
             &[PathBuf::from("/home/u/.heron/skills")]
         ));
     }

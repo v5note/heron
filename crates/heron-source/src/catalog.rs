@@ -420,14 +420,14 @@ path = "skills/code-review"
 version = "1.2.0"
 
 [[skill]]
-path = "skills/pdf"
+path = "skills/wechat-mp"
 "#;
         let items = parse_heron_toml(text).unwrap();
         assert_eq!(items.len(), 2);
         assert_eq!(items[0].slug, "code-review");
         assert_eq!(items[0].version.as_deref(), Some("1.2.0"));
         assert_eq!(
-            items[1].slug, "pdf",
+            items[1].slug, "wechat-mp",
             "slug defaults to the last path segment"
         );
     }
@@ -468,7 +468,7 @@ path = "skills/pdf"
     fn fallback_scan_finds_root_and_nested_skills() {
         let (list, contents) = files(
             &[
-                "skills/pdf/SKILL.md",
+                "skills/wechat-mp/SKILL.md",
                 "skills/tdd/SKILL.md",
                 "SKILL.md",
                 "node_modules/x/SKILL.md",
@@ -484,7 +484,7 @@ path = "skills/pdf"
         };
         let items = scan_for_skills(&repo);
         let slugs: Vec<_> = items.iter().map(|i| i.slug.as_str()).collect();
-        assert!(slugs.contains(&"pdf"));
+        assert!(slugs.contains(&"wechat-mp"));
         assert!(slugs.contains(&"tdd"));
         assert!(slugs.contains(&"root"));
         assert!(!slugs.contains(&"x"), "node_modules is ignored");
@@ -701,8 +701,8 @@ path = "skills/pdf"
             source: CatalogSource::ScanFallback,
             items: vec![
                 CatalogItem {
-                    slug: "pdf".into(),
-                    path: "skills/pdf".into(),
+                    slug: "wechat-mp".into(),
+                    path: "skills/wechat-mp".into(),
                     version: None,
                     description: None,
                 },
@@ -714,14 +714,14 @@ path = "skills/pdf"
                 },
             ],
         };
-        let exists = |p: &str| p == "skills/pdf" || p == "skills/tdd";
+        let exists = |p: &str| p == "skills/wechat-mp" || p == "skills/tdd";
         assert_eq!(
-            resolve_skill_dir(Some("skills/pdf"), &catalog, &exists).unwrap(),
-            "skills/pdf"
+            resolve_skill_dir(Some("skills/wechat-mp"), &catalog, &exists).unwrap(),
+            "skills/wechat-mp"
         );
         assert_eq!(
-            resolve_skill_dir(Some("skills/pdf/SKILL.md"), &catalog, &exists).unwrap(),
-            "skills/pdf",
+            resolve_skill_dir(Some("skills/wechat-mp/SKILL.md"), &catalog, &exists).unwrap(),
+            "skills/wechat-mp",
             "a file path resolves to its directory"
         );
         let err = resolve_skill_dir(None, &catalog, &exists).unwrap_err();

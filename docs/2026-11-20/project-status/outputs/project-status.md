@@ -133,11 +133,11 @@ Rust 合计约 **16,670 行**。
 
 ### 4.1 隔离环境端到端演练（已验证）
 
-在 `/tmp` 构造了一个假 HOME（`.claude/skills/pdf`、`.agents/skills/pdf` 同内容，`.codex/skills/foo`，`.claude/commands/review.md`），使用独立 `--data-dir`：
+在 `/tmp` 构造了一个假 HOME（`.claude/skills/wechat-mp`、`.agents/skills/wechat-mp` 同内容，`.codex/skills/foo`，`.claude/commands/review.md`），使用独立 `--data-dir`：
 
 - `scan`：3 个目录、4 ms；识别 3 个 skill、1 个 legacy command。
-- `detected`：4 行（pdf 两份、foo、review），review 标记 needs attention。
-- `adopt --all`：store 中最终 3 个 skill；两份 pdf 只保留一份实体，两个原位置都变成指向同一 store 的 symlink。
+- `detected`：4 行（wechat-mp 两份、foo、review），review 标记 needs attention。
+- `adopt --all`：store 中最终 3 个 skill；两份 wechat-mp 只保留一份实体，两个原位置都变成指向同一 store 的 symlink。
 - `verify`：3 行投影均为 `heron:global` / `symlink` / `visible`。
 - `doctor`：no issues found。
 - `outdated`：三个本地 skill 均为 `not tracked` / `0.0.0`（与文档一致）。
@@ -208,7 +208,7 @@ store.toast("ok", t("common.applied"));
 **实测**：
 
 ```
-heron unproject pdf --on claude:global
+heron unproject wechat-mp --on claude:global
 error[E_NOT_MANAGED]
 ```
 
@@ -219,9 +219,9 @@ error[E_NOT_MANAGED]
 **实测**：把 fixture 的 lock 导入全新数据目录：
 
 ```
-foo   Missing
-pdf   Missing
-review Missing
+foo          Missing
+wechat-mp    Missing
+review       Missing
 installed 0  up to date 0  drift 3
 apply exit=0
 ```

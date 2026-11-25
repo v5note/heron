@@ -396,7 +396,7 @@ mod tests {
         let c = classifier();
 
         let global = c
-            .classify(Path::new("/home/u/.claude/skills/pdf/SKILL.md"), false)
+            .classify(Path::new("/home/u/.claude/skills/wechat-mp/SKILL.md"), false)
             .unwrap();
         assert_eq!(global.kind, HitKind::Skill);
         assert_eq!(global.scope, Scope::Global);
@@ -423,11 +423,11 @@ mod tests {
 
     #[test]
     fn a_projected_directory_is_not_a_discovery() {
-        let c = classifier().with_projections(vec![PathBuf::from("/home/u/.claude/skills/pdf")]);
+        let c = classifier().with_projections(vec![PathBuf::from("/home/u/.claude/skills/wechat-mp")]);
 
         // The library wrote this one, so it is already taken over.
         assert!(c
-            .classify(Path::new("/home/u/.claude/skills/pdf/SKILL.md"), false)
+            .classify(Path::new("/home/u/.claude/skills/wechat-mp/SKILL.md"), false)
             .is_none());
         // Everything else in the same skills directory is still a discovery.
         assert!(c

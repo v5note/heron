@@ -213,9 +213,9 @@ heron adopt --all
 After adoption, original directories remain intact and become links pointing back to the central store:
 ```text
 Before Adoption                               After Adoption
-~/.agents/skills/pdf/          →             ~/.agents/skills/pdf   ──┐ (Symlink / Junction)
-~/.claude/skills/pdf/          →             ~/.claude/skills/pdf   ──┼─→ ~/.heron/skills/pdf (Single Source of Truth)
-/path/to/project/.cursor/pdf/  →             .../project/.cursor/pdf ─┘
+~/.agents/skills/wechat-mp/          →             ~/.agents/skills/wechat-mp   ──┐ (Symlink / Junction)
+~/.claude/skills/wechat-mp/          →             ~/.claude/skills/wechat-mp   ──┼─→ ~/.heron/skills/wechat-mp (Single Source of Truth)
+/path/to/project/.cursor/wechat-mp/  →             .../project/.cursor/wechat-mp ─┘
 ```
 
 ---

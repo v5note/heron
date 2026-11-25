@@ -11,11 +11,11 @@ fn repo(dir: &Path) -> SkillRepo {
     // Enough unchanged context between editable lines so independent edits merge cleanly.
     fs::write(
         dir.join("SKILL.md"),
-        "---\nname: pdf\ndescription: d\n---\nl1\nc2\nc3\nl2\nc5\nc6\nc7\nl3\n",
+        "---\nname: wechat-mp\ndescription: d\n---\nl1\nc2\nc3\nl2\nc5\nc6\nc7\nl3\n",
     )
     .unwrap();
     let repo = SkillRepo::open(dir);
-    repo.init(&SkillMeta::new("pdf", "local", "", "0.0.0"))
+    repo.init(&SkillMeta::new("wechat-mp", "local", "", "0.0.0"))
         .unwrap();
     repo
 }
@@ -39,7 +39,7 @@ fn init_creates_main_and_upstream_and_commits_metadata() {
     assert!(repo.is_repo());
     assert!(tmp.path().join("heron.skill.json").is_file());
     let meta = repo.read_metadata().unwrap().unwrap();
-    assert_eq!(meta.slug, "pdf");
+    assert_eq!(meta.slug, "wechat-mp");
     assert_eq!(meta.schema, 1);
     assert!(!meta.created_at.is_empty());
 
@@ -59,7 +59,7 @@ fn commits_are_recorded_with_heron_identity() {
     let repo = repo(tmp.path());
     fs::write(
         tmp.path().join("SKILL.md"),
-        "---\nname: pdf\ndescription: d\n---\nchanged\n",
+        "---\nname: wechat-mp\ndescription: d\n---\nchanged\n",
     )
     .unwrap();
     let sha = repo.commit_all("heron: local edit").unwrap();
@@ -100,7 +100,7 @@ fn clean_three_way_merge_combines_both_sides() {
     //    from which the local edit diverges in this linear simulation).
     fs::write(
         tmp.path().join("SKILL.md"),
-        "---\nname: pdf\ndescription: d\n---\nl1\nc2\nc3\nTHEIRS\nc5\nc6\nc7\nl3\n",
+        "---\nname: wechat-mp\ndescription: d\n---\nl1\nc2\nc3\nTHEIRS\nc5\nc6\nc7\nl3\n",
     )
     .unwrap();
     let theirs = repo.commit_all("upstream: theirs").unwrap();
@@ -109,7 +109,7 @@ fn clean_three_way_merge_combines_both_sides() {
     // 2) local edit touches a different line, far enough away to be a separate hunk.
     fs::write(
         tmp.path().join("SKILL.md"),
-        "---\nname: pdf\ndescription: d\n---\nl1\nc2\nc3\nl2\nc5\nc6\nc7\nLOCAL\n",
+        "---\nname: wechat-mp\ndescription: d\n---\nl1\nc2\nc3\nl2\nc5\nc6\nc7\nLOCAL\n",
     )
     .unwrap();
     repo.commit_all("heron: local edit").unwrap();
@@ -142,7 +142,7 @@ fn conflicting_merge_reports_files_and_leaves_worktree_untouched() {
     let theirs = {
         fs::write(
             tmp.path().join("SKILL.md"),
-            "---\nname: pdf\ndescription: d\n---\nTHEIRS\n",
+            "---\nname: wechat-mp\ndescription: d\n---\nTHEIRS\n",
         )
         .unwrap();
         repo.commit_all("upstream: rewrite").unwrap()
@@ -150,7 +150,7 @@ fn conflicting_merge_reports_files_and_leaves_worktree_untouched() {
     let ours = {
         fs::write(
             tmp.path().join("SKILL.md"),
-            "---\nname: pdf\ndescription: d\n---\nLOCAL\n",
+            "---\nname: wechat-mp\ndescription: d\n---\nLOCAL\n",
         )
         .unwrap();
         repo.commit_all("heron: local rewrite").unwrap()
@@ -183,7 +183,7 @@ fn reset_to_a_tag_is_reversible() {
 
     fs::write(
         tmp.path().join("SKILL.md"),
-        "---\nname: pdf\ndescription: d\n---\nv2 body\n",
+        "---\nname: wechat-mp\ndescription: d\n---\nv2 body\n",
     )
     .unwrap();
     let v2 = repo.commit_all("heron: v2").unwrap();

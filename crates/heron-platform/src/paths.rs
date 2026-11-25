@@ -148,9 +148,9 @@ mod tests {
     #[test]
     fn inside_checks() {
         let root = Path::new("/data/store");
-        assert!(is_same_or_inside(root, Path::new("/data/store/pdf")));
+        assert!(is_same_or_inside(root, Path::new("/data/store/wechat-mp")));
         assert!(is_same_or_inside(root, Path::new("/data/store")));
-        assert!(!is_same_or_inside(root, Path::new("/data/store-other/pdf")));
+        assert!(!is_same_or_inside(root, Path::new("/data/store-other/wechat-mp")));
         assert!(!is_same_or_inside(root, Path::new("/data")));
     }
 
@@ -158,7 +158,7 @@ mod tests {
     fn inside_is_case_insensitive() {
         assert!(is_same_or_inside(
             Path::new("/Data/Store"),
-            Path::new("/data/store/PDF")
+            Path::new("/data/store/WECHAT-MP")
         ));
     }
 
@@ -180,7 +180,7 @@ mod tests {
     #[test]
     fn display_uses_forward_slashes_and_tilde() {
         let home = home_dir().expect("home");
-        let shown = display(&home.join("skills").join("pdf"));
+        let shown = display(&home.join("skills").join("wechat-mp"));
         assert!(shown.starts_with("~/"), "got {shown}");
         assert!(!shown.contains('\\'));
     }

@@ -224,10 +224,10 @@ mod tests {
     #[test]
     fn normalizes_spaces_underscores_and_case() {
         assert_eq!(
-            Slug::derive("PDF Toolkit", SlugPolicy::Strict)
+            Slug::derive("WeChat MP Toolkit", SlugPolicy::Strict)
                 .unwrap()
                 .as_str(),
-            "pdf-toolkit"
+            "wechat-mp-toolkit"
         );
         assert_eq!(
             Slug::derive("  Huashu_Design  ", SlugPolicy::Strict)
@@ -267,8 +267,8 @@ mod tests {
 
     #[test]
     fn case_insensitive_uniqueness() {
-        let a = Slug::derive("PDF", SlugPolicy::Strict).unwrap();
-        let b = Slug::derive("pdf", SlugPolicy::Strict).unwrap();
+        let a = Slug::derive("WECHAT-MP", SlugPolicy::Strict).unwrap();
+        let b = Slug::derive("wechat-mp", SlugPolicy::Strict).unwrap();
         assert!(a.eq_ci(&b));
         assert_eq!(a.key_ci(), b.key_ci());
     }
@@ -285,8 +285,8 @@ mod tests {
 
     #[test]
     fn parse_exact_rejects_unnormalized_input() {
-        assert!(Slug::parse_exact("PDF Toolkit").is_err());
-        assert!(Slug::parse_exact("pdf-toolkit").is_ok());
+        assert!(Slug::parse_exact("WeChat MP Toolkit").is_err());
+        assert!(Slug::parse_exact("wechat-mp-toolkit").is_ok());
     }
 
     #[test]

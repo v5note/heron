@@ -14,7 +14,7 @@ use tempfile::TempDir;
 fn make_target(root: &TempDir, name: &str) -> PathBuf {
     let target = root.path().join("store").join(name);
     std::fs::create_dir_all(&target).unwrap();
-    std::fs::write(target.join("SKILL.md"), "---\nname: pdf\n---\n").unwrap();
+    std::fs::write(target.join("SKILL.md"), "---\nname: wechat-mp\n---\n").unwrap();
     std::fs::write(target.join("sentinel.txt"), "do not delete me").unwrap();
     target
 }
@@ -35,8 +35,8 @@ fn assert_target_intact(target: &Path) {
 #[test]
 fn l1_junction_create_and_remove_keeps_target() {
     let root = tempfile::tempdir().unwrap();
-    let target = make_target(&root, "pdf");
-    let link_path = root.path().join("skills").join("pdf");
+    let target = make_target(&root, "wechat-mp");
+    let link_path = root.path().join("skills").join("wechat-mp");
 
     let outcome = link::create_dir_link(&target, &link_path, ProjectionMode::Junction).unwrap();
     assert!(matches!(
@@ -56,8 +56,8 @@ fn l1_junction_create_and_remove_keeps_target() {
 #[test]
 fn l2_symlink_degrades_to_junction_without_privilege() {
     let root = tempfile::tempdir().unwrap();
-    let target = make_target(&root, "pdf");
-    let link_path = root.path().join("skills").join("pdf");
+    let target = make_target(&root, "wechat-mp");
+    let link_path = root.path().join("skills").join("wechat-mp");
 
     match link::create_dir_link(&target, &link_path, ProjectionMode::Symlink).unwrap() {
         LinkOutcome::Created(LinkKind::SymbolicDir) => {
@@ -80,7 +80,7 @@ fn l2_symlink_degrades_to_junction_without_privilege() {
 #[test]
 fn l3_probe_distinguishes_junction_from_symlink() {
     let root = tempfile::tempdir().unwrap();
-    let target = make_target(&root, "pdf");
+    let target = make_target(&root, "wechat-mp");
 
     let junction_path = root.path().join("skills").join("j");
     link::create_dir_link(&target, &junction_path, ProjectionMode::Junction).unwrap();
@@ -125,13 +125,13 @@ fn l4_remove_refuses_real_directory() {
 #[test]
 fn l5_long_path_junction_roundtrip() {
     let root = tempfile::tempdir().unwrap();
-    let target = make_target(&root, "pdf");
+    let target = make_target(&root, "wechat-mp");
 
     let mut deep = root.path().to_path_buf();
     for _ in 0..6 {
         deep = deep.join("a-rather-long-directory-segment-for-testing");
     }
-    let link_path = deep.join("pdf");
+    let link_path = deep.join("wechat-mp");
     link::create_dir_link(&target, &link_path, ProjectionMode::Junction).unwrap();
     assert!(link_path.join("sentinel.txt").is_file());
     link::remove_link(&link_path).unwrap();
@@ -142,8 +142,8 @@ fn l5_long_path_junction_roundtrip() {
 #[test]
 fn l6_broken_junction_reports_missing_target() {
     let root = tempfile::tempdir().unwrap();
-    let target = make_target(&root, "pdf");
-    let link_path = root.path().join("skills").join("pdf");
+    let target = make_target(&root, "wechat-mp");
+    let link_path = root.path().join("skills").join("wechat-mp");
     link::create_dir_link(&target, &link_path, ProjectionMode::Junction).unwrap();
 
     std::fs::remove_dir_all(&target).unwrap();

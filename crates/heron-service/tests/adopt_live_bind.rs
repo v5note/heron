@@ -189,16 +189,16 @@ fn a_row_that_still_points_at_a_foreign_link_is_bound_in_place() {
 fn installer_lockfile_provenance_is_recorded_on_adopt() {
     let env = Env::new();
     let skills = env.skills_dir();
-    write_skill(&skills.join("pdf"), "pdf");
+    write_skill(&skills.join("wechat-mp"), "wechat-mp");
     fs::write(
         skills.join("skills-lock.json"),
         serde_json::json!({
             "version": 1,
             "skills": {
-                "pdf": {
+                "wechat-mp": {
                     "source": "someone/repo",
                     "sourceType": "github",
-                    "skillPath": "skills/pdf",
+                    "skillPath": "skills/wechat-mp",
                     "computedHash": "deadbeef"
                 }
             }
@@ -209,7 +209,7 @@ fn installer_lockfile_provenance_is_recorded_on_adopt() {
 
     let mut ctx = env.ctx();
     scan::run(&mut ctx, &env.home, &ScanRequest::default()).unwrap();
-    let plan = adopt::plan(&ctx, &candidate(&ctx, "pdf")).unwrap();
+    let plan = adopt::plan(&ctx, &candidate(&ctx, "wechat-mp")).unwrap();
     let upstream = plan.upstream.clone().expect("lockfile answered");
     assert_eq!(
         upstream.url.as_deref(),
@@ -219,7 +219,7 @@ fn installer_lockfile_provenance_is_recorded_on_adopt() {
     assert_eq!(plan.suggested, AdoptPlacement::Replace);
 
     adopt::execute(&mut ctx, &plan, AdoptPlacement::Replace).unwrap();
-    let rows = binding::get(ctx.db.conn(), "pdf").unwrap();
+    let rows = binding::get(ctx.db.conn(), "wechat-mp").unwrap();
     assert_eq!(rows.len(), 1, "{rows:?}");
     assert_eq!(rows[0].kind, "git");
     assert_eq!(
@@ -234,7 +234,7 @@ fn installer_lockfile_provenance_is_recorded_on_adopt() {
 
     // The replacement link sits inside `.agents/skills`, so the projection belongs to that client.
     // Booked against any other target, `verify` names the wrong client and `unproject --on` misses it.
-    let links = projection::list_for_skill(ctx.db.conn(), "pdf").unwrap();
+    let links = projection::list_for_skill(ctx.db.conn(), "wechat-mp").unwrap();
     assert_eq!(links.len(), 1, "{links:?}");
     assert_eq!(links[0].target_id, "agents:global", "{links:?}");
 }

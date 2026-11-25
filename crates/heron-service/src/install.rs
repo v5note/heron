@@ -75,7 +75,30 @@ struct Resolved {
     ref_name: Option<String>,
 }
 
-/// What a request points at, decided without touching the network.struct Target {
+impl Resolved {
+    /// The directory to install, or the ambiguity error that standing in for the user's choice.
+    ///
+    /// Carries the same `reason` / `count` / `examples` parameters as
+    /// `catalog::resolve_skill_dir`, since that is what the CLI and the UI both expand into a
+    /// candidate list.
+    fn chosen(&self) -> Result<&String> {
+        self.skill_dir.as_ref().ok_or_else(|| {
+            let paths: Vec<&str> = self.catalog.items.iter().map(|i| i.path.as_str()).collect();
+            ErrorCode::SourceAmbiguous
+                .msg()
+                .with("reason", "multiple_skills")
+                .with("count", paths.len().to_string())
+                .with(
+                    "examples",
+                    paths.iter().copied().take(5).collect::<Vec<_>>().join(", "),
+                )
+                .into()
+        })
+    }
+}
+
+/// What a request points at, decided without touching the network.
+struct Target {
     parsed: url::ParsedSource,
     remote: heron_git::RemoteUrl,
     wanted_ref: Option<String>,
@@ -181,12 +204,23 @@ fn resolve_remote(dirs: &Dirs, req: &InstallRequest) -> Result<Resolved> {
                 repo.tree(&commit, p)
                     .map(|e| e.iter().any(|f| f.path == "SKILL.md"))
                     .unwrap_or(false)
-            })?;
-            let layout = detect_layout(&repo, &commit, &skill_dir, &files);
+            });
+            // Ambiguity *with candidates* is a question, not a failure: hand the list to the
+            // preview so the UI can offer a choice. A repository with no skills at all, or one the
+            // caller under-specified some other way, still has to say so.
+            let skill_dir = match skill_dir {
+                Ok(dir) => Some(dir),
+                Err(err) if err.code() == "E_SOURCE_AMBIGUOUS" && catalog.items.len() > 1 => None,
+                Err(err) => return Err(err),
+            };
+            let (skill_name, layout) = match &skill_dir {
+                Some(dir) => (read_skill_name(&repo, &commit, dir), detect_layout(&repo, &commit, dir, &files)),
+                None => (None, heron_source::SkillLayout::Skill),
+            };
             return Ok(Resolved {
                 parsed,
                 catalog,
-                skill_name: read_skill_name(&repo, &commit, &skill_dir),
+                skill_name,
                 skill_dir,
                 layout,
                 commit,
@@ -213,7 +247,7 @@ fn resolve_remote(dirs: &Dirs, req: &InstallRequest) -> Result<Resolved> {
         parsed,
         catalog,
         skill_name: read_skill_name(&repo, &commit, &skill_dir),
-        skill_dir,
+        skill_dir: Some(skill_dir),
         layout,
         commit,
         ref_name: wanted_ref,
@@ -290,8 +324,8 @@ pub fn preview(ctx: &Ctx, req: &InstallRequest) -> Result<InstallPreview> {
     let slug = req.as_slug.clone().unwrap_or_else(|| {
         let dir_tail = resolved
             .skill_dir
-            .rsplit('/')
-            .next()
+            .as_deref()
+            .and_then(|dir| dir.rsplit('/').next())
             .unwrap_or("")
             .to_owned();
         first_slug([
@@ -313,7 +347,7 @@ pub fn preview(ctx: &Ctx, req: &InstallRequest) -> Result<InstallPreview> {
             .iter()
             .map(|i| i.path.clone())
             .collect(),
-        selected: Some(resolved.skill_dir),
+        selected: resolved.skill_dir,
         slug,
         commit: resolved.commit,
         ref_name: resolved.ref_name,
@@ -334,6 +368,8 @@ pub fn install(ctx: &mut Ctx, req: &InstallRequest) -> Result<InstallReport> {
     }
 
     let resolved = resolve_remote(&ctx.dirs, req)?;
+    // Installing needs a decision the preview was allowed to leave open.
+    let skill_dir = resolved.chosen()?.clone();
     let remote_url = match &resolved.parsed.kind {
         SourceKind::Git { url, .. } => url.clone(),
         _ => unreachable!("resolve_remote rejected non-git sources"),
@@ -351,12 +387,12 @@ pub fn install(ctx: &mut Ctx, req: &InstallRequest) -> Result<InstallReport> {
     let _ = std::fs::remove_dir_all(&staging);
     repo.checkout_subdir(
         &resolved.commit,
-        if whole_repo { "" } else { &resolved.skill_dir },
+        if whole_repo { "" } else { &skill_dir },
         &staging,
     )?;
 
     let skill_md = if whole_repo {
-        staging.join(&resolved.skill_dir).join("SKILL.md")
+        staging.join(&skill_dir).join("SKILL.md")
     } else {
         staging.join("SKILL.md")
     };
@@ -365,7 +401,7 @@ pub fn install(ctx: &mut Ctx, req: &InstallRequest) -> Result<InstallReport> {
         return Err(ErrorCode::Frontmatter
             .msg()
             .with("detail", "no SKILL.md at the selected path")
-            .with("path", resolved.skill_dir.clone())
+            .with("path", skill_dir.clone())
             .into());
     }
     let bytes = std::fs::read(&skill_md).map_err(|e| {
@@ -426,7 +462,7 @@ pub fn install(ctx: &mut Ctx, req: &InstallRequest) -> Result<InstallReport> {
         subpath: if whole_repo {
             None
         } else {
-            Some(resolved.skill_dir.clone())
+            Some(skill_dir.clone())
         },
     });
     let vrepo = heron_vcs::SkillRepo::open(&dest);
@@ -462,7 +498,7 @@ pub fn install(ctx: &mut Ctx, req: &InstallRequest) -> Result<InstallReport> {
                 // The DB records the inner entry point for whole-repo installs; upgrades and
                 // projection both resolve `content_path + subpath` from here.
                 subpath: if whole_repo {
-                    Some(resolved.skill_dir.clone())
+                    Some(skill_dir.clone())
                 } else {
                     None
                 },
@@ -540,11 +576,11 @@ mod tests {
     fn directory_name_wins_over_the_frontmatter() {
         let parsed = git("https://github.com/v5note/wechat-mp");
         let got = first_slug([
-            "pdf-tools".to_owned(),
-            "PDF Toolkit".to_owned(),
+            "wechat-mp-tools".to_owned(),
+            "WeChat MP Toolkit".to_owned(),
             repo_name(&parsed),
         ]);
-        assert_eq!(got.as_deref(), Some("pdf-tools"));
+        assert_eq!(got.as_deref(), Some("wechat-mp-tools"));
     }
 
     #[test]

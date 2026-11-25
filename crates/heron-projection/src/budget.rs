@@ -34,7 +34,7 @@ mod tests {
 
     #[test]
     fn estimates_and_warns() {
-        assert_eq!(estimate_tokens("pdf", "Extract text"), 5);
+        assert_eq!(estimate_tokens("wechat-mp", "Extract text"), 6);
         let mut b = BudgetEstimate::default();
         b.add("claude:global", 4_000);
         b.add("heron:global", 2_000);

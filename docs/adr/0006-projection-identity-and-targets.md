@@ -7,8 +7,8 @@
 
 真机演练中发现两个问题：
 
-1. 同一个 skill 同时存在于 `~/.agents/skills/pdf` 与 `~/.claude/skills/pdf` 时，收拢后两处都变成了
-   指向 store 的链接，但索引里两条投影记录都用 `link_name = "pdf"`，
+1. 同一个 skill 同时存在于 `~/.agents/skills/wechat-mp` 与 `~/.claude/skills/wechat-mp` 时，收拢后两处都变成了
+   指向 store 的链接，但索引里两条投影记录都用 `link_name = "wechat-mp"`，
    撞上 `UNIQUE(target_id, link_name)` 约束。
 2. `verify` 把这些"原位置链接"按目标目录（默认落点）去判定，误报 `not scanned`；
    而它们本来就在客户端的扫描目录里，实际是可见的。

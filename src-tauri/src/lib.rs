@@ -1180,7 +1180,7 @@ mod tests {
 
     #[test]
     fn hit_batch_uses_the_camel_case_entry_shape() {
-        let path = PathBuf::from("/Users/me/.claude/skills/pdf");
+        let path = PathBuf::from("/Users/me/.claude/skills/wechat-mp");
         let hit = Hit {
             path: path.clone(),
             real_path: path,
@@ -1188,7 +1188,7 @@ mod tests {
             client: Some("claude".to_string()),
             scope: Some(Scope::Global),
             project: None,
-            slug: Some("pdf".to_string()),
+            slug: Some("wechat-mp".to_string()),
             frontmatter: None,
             issues: vec![],
         };
@@ -1204,8 +1204,8 @@ mod tests {
         // The names the UI reads, and the real path it keys on: a streamed row has to be the same
         // row as the one `detected_list` returns for the same file.
         assert_eq!(entry["clientId"], "claude");
-        assert_eq!(entry["observedSlug"], "pdf");
-        assert_eq!(entry["path"], "/Users/me/.claude/skills/pdf");
+        assert_eq!(entry["observedSlug"], "wechat-mp");
+        assert_eq!(entry["path"], "/Users/me/.claude/skills/wechat-mp");
         assert_eq!(entry["frontmatterOk"], false);
         assert!(entry["projectPath"].is_null());
         assert!(entry["name"].is_null());

@@ -133,7 +133,7 @@ fn local_source(raw: &str, path: &Path) -> ParsedSource {
     }
 }
 
-/// `github:owner/repo#main:skills/pdf`
+/// `github:owner/repo#main:skills/wechat-mp`
 fn parse_github_prefixed(raw: &str, rest: &str) -> Result<ParsedSource> {
     let (repo_part, ref_and_path) = match rest.split_once('#') {
         Some((repo, tail)) => (repo, Some(tail)),
@@ -288,16 +288,16 @@ mod tests {
 
     #[test]
     fn tree_link_carries_ref_and_subpath() {
-        let p = parse_source("https://github.com/anthropics/skills/tree/main/skills/pdf").unwrap();
+        let p = parse_source("https://github.com/anthropics/skills/tree/main/skills/wechat-mp").unwrap();
         assert_eq!(
             p.kind,
             SourceKind::Git {
                 url: "https://github.com/anthropics/skills.git".into(),
                 ref_name: Some("main".into()),
-                subpath: Some("skills/pdf".into())
+                subpath: Some("skills/wechat-mp".into())
             }
         );
-        assert_eq!(p.skill_subpath.as_deref(), Some("skills/pdf"));
+        assert_eq!(p.skill_subpath.as_deref(), Some("skills/wechat-mp"));
     }
 
     #[test]
@@ -333,13 +333,13 @@ mod tests {
 
     #[test]
     fn github_prefixed_form_supports_ref_and_subpath() {
-        let p = parse_source("github:owner/repo#main:skills/pdf").unwrap();
+        let p = parse_source("github:owner/repo#main:skills/wechat-mp").unwrap();
         assert_eq!(
             p.kind,
             SourceKind::Git {
                 url: "https://github.com/owner/repo.git".into(),
                 ref_name: Some("main".into()),
-                subpath: Some("skills/pdf".into())
+                subpath: Some("skills/wechat-mp".into())
             }
         );
     }
@@ -368,7 +368,7 @@ mod tests {
 
     #[test]
     fn describe_is_readable() {
-        let p = parse_source("https://github.com/o/r/tree/main/skills/pdf").unwrap();
-        assert_eq!(describe(&p), "https://github.com/o/r.git @ main skills/pdf");
+        let p = parse_source("https://github.com/o/r/tree/main/skills/wechat-mp").unwrap();
+        assert_eq!(describe(&p), "https://github.com/o/r.git @ main skills/wechat-mp");
     }
 }

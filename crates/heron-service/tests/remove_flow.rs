@@ -74,24 +74,24 @@ fn project(ctx: &mut Ctx, slug: &str, target_id: &str) {
 #[test]
 fn remove_retracts_every_link_and_parks_the_store_copy_in_the_trash() {
     let env = Env::new();
-    write_skill(&env.home.join(".agents/skills/pdf"), "pdf");
+    write_skill(&env.home.join(".agents/skills/wechat-mp"), "wechat-mp");
     let mut ctx = env.ctx();
     scan::run(&mut ctx, &env.home, &ScanRequest::default()).unwrap();
-    let row = candidate(&ctx, "pdf");
+    let row = candidate(&ctx, "wechat-mp");
     let plan = adopt::plan(&ctx, &row).unwrap();
     adopt::execute(&mut ctx, &plan, AdoptPlacement::KeepOriginal).unwrap();
 
     // Two clients both hold a link: removal must clear both, not just the one the user clicked.
-    project(&mut ctx, "pdf", "codex:global");
-    project(&mut ctx, "pdf", "claude:global");
+    project(&mut ctx, "wechat-mp", "codex:global");
+    project(&mut ctx, "wechat-mp", "claude:global");
     assert_eq!(
-        projection::list_for_skill(ctx.db.conn(), "pdf")
+        projection::list_for_skill(ctx.db.conn(), "wechat-mp")
             .unwrap()
             .len(),
         2
     );
 
-    let plan = remove::plan(&ctx, "pdf").unwrap();
+    let plan = remove::plan(&ctx, "wechat-mp").unwrap();
     assert!(plan.owned, "the content is a store copy");
     assert_eq!(plan.links.len(), 2);
     let trash = plan
@@ -104,23 +104,23 @@ fn remove_retracts_every_link_and_parks_the_store_copy_in_the_trash() {
     assert_eq!(outcome.trash.as_deref(), Some(trash.as_str()));
 
     // Links are gone from disk and from the index.
-    assert!(!env.home.join(".codex/skills/pdf").exists());
-    assert!(!env.home.join(".claude/skills/pdf").exists());
-    assert!(projection::list_for_skill(ctx.db.conn(), "pdf")
+    assert!(!env.home.join(".codex/skills/wechat-mp").exists());
+    assert!(!env.home.join(".claude/skills/wechat-mp").exists());
+    assert!(projection::list_for_skill(ctx.db.conn(), "wechat-mp")
         .unwrap()
         .is_empty());
 
     // The store copy moved aside instead of vanishing.
-    assert!(!ctx.skill_path("pdf").exists());
+    assert!(!ctx.skill_path("wechat-mp").exists());
     assert!(Path::new(&trash).join("SKILL.md").is_file());
 
     // The library forgot it, and its source binding cascaded with it.
-    assert!(skill::get(ctx.db.conn(), "pdf").unwrap().is_none());
+    assert!(skill::get(ctx.db.conn(), "wechat-mp").unwrap().is_none());
     let bindings: i64 = ctx
         .db
         .conn()
         .query_row(
-            "SELECT COUNT(*) FROM source_binding WHERE slug = 'pdf'",
+            "SELECT COUNT(*) FROM source_binding WHERE slug = 'wechat-mp'",
             [],
             |r| r.get(0),
         )
@@ -174,24 +174,24 @@ fn remove_of_a_live_bound_skill_never_touches_the_users_directory() {
 #[test]
 fn remove_frees_the_slug_for_a_fresh_index_entry() {
     let env = Env::new();
-    write_skill(&env.home.join(".agents/skills/pdf"), "pdf");
+    write_skill(&env.home.join(".agents/skills/wechat-mp"), "wechat-mp");
     let mut ctx = env.ctx();
     scan::run(&mut ctx, &env.home, &ScanRequest::default()).unwrap();
-    let row = candidate(&ctx, "pdf");
+    let row = candidate(&ctx, "wechat-mp");
     let plan = adopt::plan(&ctx, &row).unwrap();
     adopt::execute(&mut ctx, &plan, AdoptPlacement::KeepOriginal).unwrap();
 
-    let plan = remove::plan(&ctx, "PDF").unwrap();
+    let plan = remove::plan(&ctx, "WECHAT-MP").unwrap();
     assert_eq!(
-        plan.slug, "pdf",
+        plan.slug, "wechat-mp",
         "a differently-cased request finds the row"
     );
     remove::apply(&mut ctx, &plan).unwrap();
 
     // Re-registering under the same slug is what a reinstall does; the primary key must be free.
     let again = heron_store::models::SkillRow {
-        slug: "pdf".to_owned(),
-        display_name: "PDF".to_owned(),
+        slug: "wechat-mp".to_owned(),
+        display_name: "WeChat MP".to_owned(),
         description: String::new(),
         tags: Vec::new(),
         status: "active".to_owned(),

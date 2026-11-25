@@ -14,9 +14,9 @@ use heron_platform::link::{self, LinkKind, LinkOutcome};
 use tempfile::TempDir;
 
 fn make_target(root: &TempDir) -> PathBuf {
-    let target = root.path().join("store").join("pdf");
+    let target = root.path().join("store").join("wechat-mp");
     std::fs::create_dir_all(&target).unwrap();
-    std::fs::write(target.join("SKILL.md"), "---\nname: pdf\n---\n").unwrap();
+    std::fs::write(target.join("SKILL.md"), "---\nname: wechat-mp\n---\n").unwrap();
     std::fs::write(target.join("sentinel.txt"), "do not delete me").unwrap();
     target
 }
@@ -49,7 +49,7 @@ fn create_probe_remove_keeps_target() {
         .join("project")
         .join(".heron")
         .join("skills")
-        .join("pdf");
+        .join("wechat-mp");
 
     let outcome = link::create_dir_link(&target, &link_path, ProjectionMode::Symlink).unwrap();
     match &outcome {
@@ -76,7 +76,7 @@ fn create_probe_remove_keeps_target() {
 fn create_is_idempotent() {
     let root = tempfile::tempdir().unwrap();
     let target = make_target(&root);
-    let link_path = root.path().join("skills").join("pdf");
+    let link_path = root.path().join("skills").join("wechat-mp");
 
     link::create_dir_link(&target, &link_path, ProjectionMode::Symlink).unwrap();
     let second = link::create_dir_link(&target, &link_path, ProjectionMode::Symlink).unwrap();
@@ -89,7 +89,7 @@ fn create_is_idempotent() {
 fn refuses_to_replace_real_directory() {
     let root = tempfile::tempdir().unwrap();
     let target = make_target(&root);
-    let occupied = root.path().join("skills").join("pdf");
+    let occupied = root.path().join("skills").join("wechat-mp");
     std::fs::create_dir_all(&occupied).unwrap();
     std::fs::write(occupied.join("keep.txt"), "precious").unwrap();
 
@@ -140,12 +140,12 @@ fn create_rejects_missing_target() {
 fn relink_switches_target_and_keeps_both() {
     let root = tempfile::tempdir().unwrap();
     let old = make_target(&root);
-    let new = root.path().join("store").join("pdf-v2");
+    let new = root.path().join("store").join("wechat-mp-v2");
     std::fs::create_dir_all(&new).unwrap();
     std::fs::write(new.join("SKILL.md"), "v2").unwrap();
     std::fs::write(new.join("sentinel.txt"), "do not delete me").unwrap();
 
-    let link_path = root.path().join("skills").join("pdf");
+    let link_path = root.path().join("skills").join("wechat-mp");
     link::create_dir_link(&old, &link_path, ProjectionMode::Symlink).unwrap();
     link::relink(&link_path, &new).unwrap();
 
@@ -162,7 +162,7 @@ fn relink_switches_target_and_keeps_both() {
 fn broken_link_is_detected_and_removable() {
     let root = tempfile::tempdir().unwrap();
     let target = make_target(&root);
-    let link_path = root.path().join("skills").join("pdf");
+    let link_path = root.path().join("skills").join("wechat-mp");
     link::create_dir_link(&target, &link_path, ProjectionMode::Symlink).unwrap();
 
     std::fs::remove_dir_all(&target).unwrap();
@@ -184,7 +184,7 @@ fn broken_link_is_detected_and_removable() {
 fn windows_downgraded_junction_behaves_like_a_link() {
     let root = tempfile::tempdir().unwrap();
     let target = make_target(&root);
-    let link_path = root.path().join("skills").join("pdf");
+    let link_path = root.path().join("skills").join("wechat-mp");
 
     link::create_dir_link(&target, &link_path, ProjectionMode::Symlink).unwrap();
     let info = link::probe(&link_path).unwrap();
@@ -217,7 +217,7 @@ fn windows_downgraded_junction_behaves_like_a_link() {
 fn link_layer_rejects_copy_and_pointer() {
     let root = tempfile::tempdir().unwrap();
     let target = make_target(&root);
-    let link_path = root.path().join("skills").join("pdf");
+    let link_path = root.path().join("skills").join("wechat-mp");
     for mode in [ProjectionMode::Copy, ProjectionMode::Pointer] {
         let err = link::create_dir_link(&target, &link_path, mode).unwrap_err();
         assert_eq!(err.code(), "E_INTERNAL");
@@ -241,7 +241,7 @@ fn probe_missing_path() {
 fn creates_missing_parent_directories() {
     let root = tempfile::tempdir().unwrap();
     let target = make_target(&root);
-    let link_path = root.path().join("a").join("b").join("c").join("pdf");
+    let link_path = root.path().join("a").join("b").join("c").join("wechat-mp");
     link::create_dir_link(&target, &link_path, ProjectionMode::Symlink).unwrap();
     assert!(link_path.join("sentinel.txt").is_file());
     assert_target_intact(&target);

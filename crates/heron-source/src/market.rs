@@ -606,7 +606,7 @@ mod tests {
     const SITEMAP: &str = r#"<?xml version="1.0"?>
 <urlset>
   <url><loc>https://www.skills.sh/vercel-labs/skills/find-skills</loc></url>
-  <url><loc>https://www.skills.sh/anthropics/skills/pdf</loc></url>
+  <url><loc>https://www.skills.sh/anthropics/skills/wechat-mp</loc></url>
   <url><loc>https://www.skills.sh/owner</loc></url>
 </urlset>"#;
 
@@ -625,10 +625,10 @@ mod tests {
 
     #[test]
     fn sitemap_search_filters_and_marks_installable() {
-        let items = search_sitemap("https://www.skills.sh", SITEMAP, "pdf", 10);
+        let items = search_sitemap("https://www.skills.sh", SITEMAP, "wechat-mp", 10);
         assert_eq!(items.len(), 1);
-        assert_eq!(items[0].key, "anthropics/skills/pdf");
-        assert_eq!(items[0].name, "pdf");
+        assert_eq!(items[0].key, "anthropics/skills/wechat-mp");
+        assert_eq!(items[0].name, "wechat-mp");
 
         let all = search_sitemap("https://www.skills.sh", SITEMAP, "", 10);
         assert_eq!(all.len(), 2, "owner pages are not skills");
@@ -637,14 +637,14 @@ mod tests {
     #[test]
     fn skills_sh_install_plan_points_at_github() {
         let plan = SkillsSh::default()
-            .install_plan("anthropics/skills/pdf")
+            .install_plan("anthropics/skills/wechat-mp")
             .unwrap();
         assert_eq!(
             plan,
             InstallPlan::Git {
                 url: "https://github.com/anthropics/skills.git".into(),
                 ref_name: None,
-                subpath: "skills/pdf".into()
+                subpath: "skills/wechat-mp".into()
             }
         );
         assert!(SkillsSh::default().install_plan("bad-key").is_err());
@@ -728,7 +728,7 @@ mod tests {
     #[test]
     fn url_encoding_is_minimal_and_correct() {
         assert_eq!(urlencode("a b"), "a%20b");
-        assert_eq!(urlencode("pdf"), "pdf");
+        assert_eq!(urlencode("wechat-mp"), "wechat-mp");
         assert_eq!(urlencode("原型"), "%E5%8E%9F%E5%9E%8B");
     }
 

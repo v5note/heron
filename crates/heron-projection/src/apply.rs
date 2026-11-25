@@ -313,13 +313,13 @@ mod tests {
 
     fn fixture() -> (tempfile::TempDir, ProjectionRequest) {
         let tmp = tempfile::tempdir().unwrap();
-        let source = tmp.path().join("store/pdf");
+        let source = tmp.path().join("store/wechat-mp");
         std::fs::create_dir_all(source.join("references")).unwrap();
-        std::fs::write(source.join("SKILL.md"), "---\nname: pdf\n---\n").unwrap();
+        std::fs::write(source.join("SKILL.md"), "---\nname: wechat-mp\n---\n").unwrap();
         std::fs::write(source.join("references/a.md"), "ref").unwrap();
         let req = ProjectionRequest {
             source,
-            dest: tmp.path().join("skills/pdf"),
+            dest: tmp.path().join("skills/wechat-mp"),
             mode: ProjectionMode::Symlink,
             source_hash: None,
             recorded_hash: None,
@@ -349,7 +349,7 @@ mod tests {
         assert_eq!(applied[0].inode_kind, "dir");
         assert!(req.dest.join("references/a.md").is_file());
         assert!(
-            !req.dest.join(".pdf.heron-tmp").exists(),
+            !req.dest.join(".wechat-mp.heron-tmp").exists(),
             "temp dir is swapped in"
         );
 
@@ -382,7 +382,7 @@ mod tests {
         req.mode = ProjectionMode::Pointer;
         apply_plan(&plan_projection(&req).unwrap()).unwrap();
         let text = std::fs::read_to_string(req.dest.join("SKILL.md")).unwrap();
-        assert!(text.contains("name: pdf"));
+        assert!(text.contains("name: wechat-mp"));
         assert!(text.contains(&req.source.display().to_string()));
     }
 
