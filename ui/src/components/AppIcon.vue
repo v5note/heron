@@ -5,7 +5,7 @@ const props = withDefaults(defineProps<{ name: IconName; size?: number }>(), { s
 export type IconName =
   | "overview" | "library" | "discover" | "sources" | "projects" | "upgrades" | "doctor" | "settings"
   | "sun" | "moon" | "auto" | "search" | "refresh" | "check" | "close" | "plus" | "external" | "alert" | "chevron" | "copy"
-  | "grid" | "list" | "globe" | "spark" | "terminal" | "pointer" | "braces" | "home"
+  | "grid" | "list" | "globe" | "spark" | "terminal" | "pointer" | "braces" | "home" | "help"
   | "robot" | "rocket" | "star" | "cube" | "bolt" | "code" | "sparkles" | "trash";
 
 const PATHS: Record<IconName, string> = {
@@ -40,6 +40,8 @@ const PATHS: Record<IconName, string> = {
   pointer: '<path d="M6 3.5 19 12l-6.2 1.3L9.6 20z"/>',
   braces: '<path d="M9.5 4.5c-1.8 0-2.8.9-2.8 2.9v2.1c0 1.3-.7 2.1-2.2 2.5 1.5.4 2.2 1.2 2.2 2.5v2.1c0 2 1 2.9 2.8 2.9"/><path d="M14.5 4.5c1.8 0 2.8.9 2.8 2.9v2.1c0 1.3.7 2.1 2.2 2.5-1.5.4-2.2 1.2-2.2 2.5v2.1c0 2-1 2.9-2.8 2.9"/>',
   home: '<path d="M4 11.5 12 4l8 7.5"/><path d="M6.5 10.5V20h11v-9.5"/>',
+  // 悬浮说明的锚点：圆环 + 问号。点用 `h.01` + round cap 画成一个小圆点，避免 fill 变成实心。
+  help: '<circle cx="12" cy="12" r="8.5"/><path d="M9.8 9.5a2.3 2.3 0 1 1 3.4 2.1c-.8.5-1.2 1.1-1.2 1.9v.5"/><path d="M12 16.6h.01" stroke-linecap="round"/>',
   robot: '<rect x="5" y="8" width="14" height="11" rx="3"/><path d="M12 4.5V8"/><circle cx="12" cy="3.6" r="1"/><circle cx="9.5" cy="13" r="1.1"/><circle cx="14.5" cy="13" r="1.1"/><path d="M9.5 16.5h5"/>',
   rocket: '<path d="M12 3.5c3 2.6 4.3 5.7 4.3 9.2L12 17.5l-4.3-4.8c0-3.5 1.3-6.6 4.3-9.2z"/><circle cx="12" cy="9.8" r="1.6"/><path d="M7.7 14.5 6 19l3.8-1.4M16.3 14.5 18 19l-3.8-1.4"/>',
   star: '<path d="M12 4l2.4 5.1 5.4.6-4.1 3.8 1.2 5.5-4.9-2.9-4.9 2.9 1.2-5.5-4.1-3.8 5.4-.6z"/>',

@@ -161,6 +161,19 @@ export interface TargetRow {
 }
 
 /**
+ * One candidate project root from `projects_discover` (`heron projects`). `already_registered` is
+ * read back from the index *after* the command has registered what it was asked to, so a row the
+ * user just registered comes back already marked — that is the only way the list can show the effect
+ * of the button.
+ */
+export interface DiscoveredProject {
+  root: string;
+  /** Client ids whose `.<client>/skills` directory was found inside the root. */
+  clients: string[];
+  already_registered: boolean;
+}
+
+/**
  * One `client` row (`clients_list`). Presence is tri-state: `null` means never probed (before the
  * first scan after an upgrade) and must render exactly like a detected row — only `0` is "absent".
  */

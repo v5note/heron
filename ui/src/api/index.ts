@@ -6,7 +6,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import type {
-  AdoptPlan, ClientRow, ConflictPayload, DetectedMeta, DetectedRow, DiffReport, Drift, FavoriteRow, InstallPlan,
+  AdoptPlan, ClientRow, ConflictPayload, DetectedMeta, DetectedRow, DiffReport, DiscoveredProject, Drift, FavoriteRow, InstallPlan,
   InstallPreview, LockFile, MarketInfo, MarketItem, NativeScanStatus, ProxyConfig, RemoveOutcome, RemovePlan, ScanReport, SkillRow,
   TargetRow, UpgradeCandidate, UpgradeOutcome,
 } from "./types";
@@ -160,7 +160,7 @@ export const api = {
   lockExport: (dir: string, write: boolean) => call<LockFile | { path: string }>("lock_export", { dir, write }),
   lockDiff: (file: string) => call<Drift[]>("lock_diff", { file }),
   projects: (roots: string[], register: boolean) =>
-    call<{ root: string; clients: string[] }[]>("projects_discover", { roots, register }),
+    call<DiscoveredProject[]>("projects_discover", { roots, register }),
   diff: (slug: string, against?: string) => call<DiffReport>("diff_skill_cmd", { slug, against: against ?? null }),
   conflict: (slug: string) => call<ConflictPayload>("conflict_payload_cmd", { slug }),
   resolve: (slug: string, resolutions: [string, string][]) =>

@@ -60,15 +60,16 @@ pub enum PlanAction {
     ModifiedCopy { path: PathBuf },
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum BlockedReason {
     /// A real directory/file occupies the destination and Heron does not manage it.
     NotManaged,
     /// The destination is a link owned by something else.
     ForeignLink,
-    /// The store copy is missing.
-    SourceMissing,
+    /// The store copy is missing. `source` is the directory we looked for: without it the only
+    /// path in the report is the destination, which is the one thing that was never in question.
+    SourceMissing { source: PathBuf },
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -100,7 +101,9 @@ pub fn plan_projection(req: &ProjectionRequest) -> Result<ProjectPlan> {
     if !req.source.is_dir() {
         return Ok(blocked(
             &req.dest,
-            BlockedReason::SourceMissing,
+            BlockedReason::SourceMissing {
+                source: req.source.clone(),
+            },
             "projection.source_missing",
         ));
     }
@@ -257,10 +260,19 @@ mod tests {
         assert!(matches!(
             plan.steps[0],
             PlanAction::Blocked {
-                reason: BlockedReason::SourceMissing,
+                reason: BlockedReason::SourceMissing { .. },
                 ..
             }
         ));
+        // The report has to name the directory that is gone, not only the one we were writing to.
+        let PlanAction::Blocked {
+            reason: BlockedReason::SourceMissing { source },
+            ..
+        } = &plan.steps[0]
+        else {
+            unreachable!()
+        };
+        assert_eq!(source, &req.source);
     }
 
     #[test]

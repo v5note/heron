@@ -1016,7 +1016,19 @@ fn cmd_projects(
     } else {
         roots
     };
-    let found = heron_service::projects::discover(home, &scan_roots, depth);
+    let mut found = heron_service::projects::discover(home, &scan_roots, depth);
+    // Register first, print afterwards. The old order returned straight out of the `--json` branch,
+    // so `--register --json` reported a plan it had never executed, and the registration marker below
+    // could not describe anything.
+    let mut registered = 0;
+    if register {
+        for project in &found {
+            if heron_service::projects::register(ctx, &project.root, &project.clients)? {
+                registered += 1;
+            }
+        }
+    }
+    heron_service::projects::stamp_registered(ctx, &mut found)?;
     if json {
         println!("{}", serde_json::to_string_pretty(&found).unwrap());
         return Ok(ExitCode::SUCCESS);
@@ -1027,15 +1039,14 @@ fn cmd_projects(
     }
     for project in &found {
         let shown = heron_platform::paths::display(&project.root);
-        println!("{:<48} {}", shown, project.clients.join(", "));
+        let mark = if project.already_registered {
+            "  · registered"
+        } else {
+            ""
+        };
+        println!("{:<48} {}{}", shown, project.clients.join(", "), mark);
     }
     if register {
-        let mut registered = 0;
-        for project in &found {
-            if heron_service::projects::register(ctx, &project.root, &project.clients)? {
-                registered += 1;
-            }
-        }
         println!();
         println!(
             "registered {registered} project(s); projections into them stay off until enabled"

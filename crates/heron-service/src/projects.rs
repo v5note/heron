@@ -6,6 +6,7 @@
 //! Registration is a **record**, not a permission: nothing is projected into a project until the
 //! user enables it, because project skills often come from somebody else's repository.
 
+use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
 use heron_store::models::TargetRow;
@@ -18,6 +19,8 @@ pub struct DiscoveredProject {
     pub root: PathBuf,
     /// Client ids that showed up inside it.
     pub clients: Vec<String>,
+    /// Whether the index already records this root. The walk cannot answer that — see
+    /// [`stamp_registered`], which is what fills it.
     pub already_registered: bool,
 }
 
@@ -129,6 +132,21 @@ pub fn registered(ctx: &Ctx) -> Result<Vec<PathBuf>> {
         .collect())
 }
 
+/// Fill in `already_registered` from the index.
+///
+/// [`discover`] is filesystem-pure, so it cannot know what was recorded and leaves the flag false;
+/// every caller that shows the list to a human has to ask the database. Ask it **after**
+/// [`register`], not before: the point of the marker is to show the effect of the button the user
+/// just pressed, and a pre-registration snapshot would keep saying "not registered" right up to the
+/// moment the row was written.
+pub fn stamp_registered(ctx: &Ctx, found: &mut [DiscoveredProject]) -> Result<()> {
+    let known: HashSet<PathBuf> = registered(ctx)?.into_iter().collect();
+    for project in found {
+        project.already_registered = known.contains(&project.root);
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -223,5 +241,38 @@ mod tests {
             "project projections need explicit consent"
         );
         assert_eq!(registered(&ctx).unwrap(), vec![project]);
+    }
+
+    #[test]
+    fn already_registered_tracks_the_index_not_the_disk() {
+        use heron_platform::dirs::Dirs;
+        use heron_store::db::Db;
+
+        let tmp = tempfile::tempdir().unwrap();
+        let data = tmp.path().join("data");
+        std::fs::create_dir_all(&data).unwrap();
+        let dirs = Dirs::resolve_with_override("heron", Some(&data)).unwrap();
+        dirs.ensure().unwrap();
+        let db = Db::open(&dirs.db_path()).unwrap();
+        let mut ctx = Ctx::new(dirs, db, "cli");
+        crate::clients::bootstrap(&mut ctx.db, Path::new("/home/u")).unwrap();
+
+        let work = tmp.path().join("work");
+        std::fs::create_dir_all(work.join("proj/.claude/skills")).unwrap();
+        let mut found = discover(Path::new("/home/u"), &[work], 3);
+        stamp_registered(&ctx, &mut found).unwrap();
+        // The directory is on disk and the client dir is there, yet nothing was ever recorded.
+        assert_eq!(found.len(), 1);
+        assert!(
+            !found[0].already_registered,
+            "a discovered root is not a registered one"
+        );
+
+        register(&mut ctx, &found[0].root, &found[0].clients).unwrap();
+        stamp_registered(&ctx, &mut found).unwrap();
+        assert!(
+            found[0].already_registered,
+            "the marker has to flip after the row is written"
+        );
     }
 }

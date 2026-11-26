@@ -41,10 +41,15 @@ pub fn apply_plan(plan: &ProjectPlan) -> Result<Vec<AppliedProjection>> {
                 .into(),
             Some(PlanAction::Blocked {
                 path,
-                reason: crate::plan::BlockedReason::SourceMissing,
+                reason: crate::plan::BlockedReason::SourceMissing { source },
             }) => ErrorCode::LinkTargetMissing
                 .msg()
-                .with("target", path.display().to_string())
+                // ADR-0003 §3: `target` is what the link points at, i.e. the store copy. Naming the
+                // destination here sends people looking in the client's skills folder for a
+                // directory that was never supposed to exist yet.
+                .with("target", source.display().to_string())
+                .with("path", path.display().to_string())
+                .with("detail", "store_content_missing")
                 .into(),
             Some(PlanAction::Blocked { path, .. }) => ErrorCode::NotManaged
                 .msg()
@@ -384,6 +389,24 @@ mod tests {
         let text = std::fs::read_to_string(req.dest.join("SKILL.md")).unwrap();
         assert!(text.contains("name: wechat-mp"));
         assert!(text.contains(&req.source.display().to_string()));
+    }
+
+    #[test]
+    fn a_missing_store_copy_is_reported_as_the_source() {
+        let (_tmp, mut req) = fixture();
+        req.source = req.source.with_file_name("finesse-ui");
+        let err = apply_plan(&plan_projection(&req).unwrap()).unwrap_err();
+        assert_eq!(err.code(), "E_LINK_TARGET_MISSING");
+        let msg = err.as_msg();
+        assert_eq!(
+            msg.params.get("target").map(String::as_str),
+            Some(req.source.to_string_lossy().as_ref()),
+            "the report has to name the store copy that is gone"
+        );
+        assert!(
+            !req.dest.exists(),
+            "a blocked plan must leave nothing in the client's folder"
+        );
     }
 
     #[test]

@@ -1290,13 +1290,17 @@ fn projects_discover(
     } else {
         roots.into_iter().map(PathBuf::from).collect()
     };
-    let found = heron_service::projects::discover(&state.home, &scan_roots, 3);
+    let mut found = heron_service::projects::discover(&state.home, &scan_roots, 3);
     if register {
         for project in &found {
             heron_service::projects::register(&mut ctx, &project.root, &project.clients)
                 .map_err(err)?;
         }
     }
+    // Stamped after the register loop on purpose: the UI reads this list right after pressing
+    // 「登记所选」, so the flag has to describe the index as it is *now* — otherwise registering a
+    // project leaves its row looking exactly as it did before, and the button appears to do nothing.
+    heron_service::projects::stamp_registered(&ctx, &mut found).map_err(err)?;
     Ok(found)
 }
 
