@@ -13,6 +13,8 @@ env:
 jobs:
   rust:
     name: rust (${{ matrix.os }})
+    # On tag pushes, leave the scarce macOS arm64 runner capacity for `release (darwin)`.
+    if: matrix.os != 'macos-latest' || !startsWith(github.ref, 'refs/tags/v')
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false

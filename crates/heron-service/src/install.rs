@@ -303,7 +303,11 @@ fn repo_name(parsed: &url::ParsedSource) -> String {
     let SourceKind::Git { url, .. } = &parsed.kind else {
         return String::new();
     };
-    let tail = url.trim_end_matches('/').rsplit('/').next().unwrap_or("");
+    let tail = url
+        .trim_end_matches(['/', '\\'])
+        .rsplit(['/', '\\', ':'])
+        .next()
+        .unwrap_or("");
     tail.strip_suffix(".git").unwrap_or(tail).to_owned()
 }
 
