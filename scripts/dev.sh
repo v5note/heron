@@ -68,6 +68,17 @@ check_dev_port() {
   exit 1
 }
 
+# ui/ is a standalone pnpm project (no workspace file), so a fresh clone has no
+# ui/node_modules and Vite dies as "command not found: vite" deep inside `dev`.
+# Check up front and run the install the README asks for.
+ensure_ui_deps() {
+  local marker=ui/node_modules/vite/package.json
+  [ -f "$marker" ] && return 0
+  echo "ui/node_modules is missing or incomplete: running pnpm --dir ui install ..." >&2
+  pnpm --dir ui install || { echo "error: pnpm install failed." >&2; return 1; }
+  [ -f "$marker" ] || { echo "error: vite is still missing after install; check the pnpm output above." >&2; return 1; }
+}
+
 # `tauri dev` does two things for us: keep Vite on :5183 and rebuild/launch the shell.
 # The debug binary already reads devUrl from tauri.conf.json, so running both by hand
 # costs only the Rust-side hot reload (re-run `dev` after editing Rust).
@@ -124,6 +135,7 @@ case "${1:-check}" in
     cargo test --workspace --all-targets
     ;;
   ui)
+    ensure_ui_deps
     pnpm --dir ui typecheck
     pnpm --dir ui i18n:check
     pnpm --dir ui ipc:check
@@ -132,12 +144,14 @@ case "${1:-check}" in
   dev)
     # Tauri dev: Vite on :5183 with hot reload, Rust rebuilt on change.
     check_dev_port
+    ensure_ui_deps
     if have_tauri; then
       exec cargo tauri dev
     fi
     run_manual_dev
     ;;
   web)
+    ensure_ui_deps
     exec pnpm --dir ui dev
     ;;
   cli)
@@ -149,6 +163,7 @@ case "${1:-check}" in
       echo "bundle needs tauri-cli: cargo install tauri-cli --version '^2' --locked" >&2
       exit 1
     fi
+    ensure_ui_deps
     pnpm --dir ui build
     exec cargo tauri build
     ;;

@@ -68,8 +68,11 @@ impl Drop for InstanceGuard {
 pub(crate) enum AcquireResult {
     /// This process owns the single-instance lock and should continue booting.
     Primary(InstanceGuard),
-    /// Another instance is already running and has been asked to show/focus its window.
-    NotifiedExisting,
+    /// Another instance is already running; `delivered` is `true` when the wake signal reached it.
+    NotifiedExisting {
+        #[cfg_attr(not(test), allow(dead_code))]
+        delivered: bool,
+    },
 }
 
 /// Acquire the single-instance lock for `data_dir`, or notify the already-running instance.
@@ -87,18 +90,16 @@ pub(crate) fn acquire_or_notify(data_dir: &Path) -> AcquireResult {
             })
         }
         Ok(None) => {
-            notify_existing(&data_dir.join(PORT_FILE_NAME));
-            AcquireResult::NotifiedExisting
+            let delivered = notify_existing(&data_dir.join(PORT_FILE_NAME));
+            AcquireResult::NotifiedExisting { delivered }
         }
         Err(e) => {
             // If locking itself fails (e.g. read-only dir), fall back to notifying any existing
-            // instance; if none answers, let the caller proceed so the user is not locked out.
+            // instance; if none answers, exit cleanly with an error rather than double-opening DB.
             eprintln!("heron: single-instance lock unavailable: {e}");
             if notify_existing(&data_dir.join(PORT_FILE_NAME)) {
-                return AcquireResult::NotifiedExisting;
+                return AcquireResult::NotifiedExisting { delivered: true };
             }
-            // Retry opening a fresh lock is pointless here, so exit only if an existing one answered.
-            // Without a FileLock we cannot construct Primary; surface the error cleanly.
             std::process::exit(1);
         }
     }
@@ -177,10 +178,9 @@ mod tests {
 
         let mut guard = match acquire_or_notify(&dir) {
             AcquireResult::Primary(g) => g,
-            AcquireResult::NotifiedExisting => panic!("first instance must become primary"),
+            AcquireResult::NotifiedExisting { .. } => panic!("first instance must become primary"),
         };
 
-        let has_listener = guard.listener.is_some();
         let activated = Arc::new((Mutex::new(false), Condvar::new()));
         let signal = activated.clone();
         guard.spawn_listener(move || {
@@ -189,12 +189,12 @@ mod tests {
             cvar.notify_all();
         });
 
-        match acquire_or_notify(&dir) {
-            AcquireResult::NotifiedExisting => {}
+        let delivered = match acquire_or_notify(&dir) {
+            AcquireResult::NotifiedExisting { delivered } => delivered,
             AcquireResult::Primary(_) => panic!("second instance must not become primary"),
-        }
+        };
 
-        if has_listener {
+        if delivered {
             let (lock, cvar) = &*activated;
             let result = cvar
                 .wait_timeout_while(lock.lock().unwrap(), Duration::from_secs(2), |done| !*done)
@@ -212,7 +212,9 @@ mod tests {
         );
         match acquire_or_notify(&dir) {
             AcquireResult::Primary(_) => {}
-            AcquireResult::NotifiedExisting => panic!("lock must be free after primary exits"),
+            AcquireResult::NotifiedExisting { .. } => {
+                panic!("lock must be free after primary exits")
+            }
         }
         let _ = std::fs::remove_dir_all(&dir);
     }

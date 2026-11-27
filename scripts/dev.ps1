@@ -149,6 +149,20 @@ function Assert-DevPort {
   exit 1
 }
 
+# ui/ is a standalone pnpm project (no workspace file), so a fresh clone has no
+# ui\node_modules and Vite dies as "'vite' 不是内部或外部命令" deep inside `dev`.
+# Check up front and run the install the README asks for.
+function Assert-UiDeps {
+  $marker = Join-Path $RepoRoot 'ui\node_modules\vite\package.json'
+  if (Test-Path -LiteralPath $marker -PathType Leaf) { return }
+  Write-Host 'ui\node_modules is missing or incomplete: running pnpm --dir ui install ...' -ForegroundColor Yellow
+  Invoke-Checked pnpm @('--dir', 'ui', 'install')
+  if (-not (Test-Path -LiteralPath $marker -PathType Leaf)) {
+    Write-Host 'error: vite is still missing after install; check the pnpm output above.' -ForegroundColor Red
+    exit 1
+  }
+}
+
 # `tauri dev` does two things for us: keep Vite on :5183 and rebuild/launch the shell.
 # The debug binary already reads devUrl from tauri.conf.json, so running both by hand
 # costs only the Rust-side hot reload (re-run `dev` after editing Rust).
@@ -237,6 +251,7 @@ switch ($Command.ToLowerInvariant()) {
     Invoke-Checked cargo @('test', '--workspace', '--all-targets')
   }
   'ui' {
+    Assert-UiDeps
     Invoke-Checked pnpm @('--dir', 'ui', 'typecheck')
     Invoke-Checked pnpm @('--dir', 'ui', 'i18n:check')
     Invoke-Checked pnpm @('--dir', 'ui', 'ipc:check')
@@ -245,6 +260,7 @@ switch ($Command.ToLowerInvariant()) {
   'dev' {
     # Tauri dev: Vite on :5183 with hot reload, Rust rebuilt on change.
     Assert-DevPort
+    Assert-UiDeps
     if (Test-TauriCli) {
       Invoke-Checked cargo @('tauri', 'dev')
       exit 0
@@ -252,6 +268,7 @@ switch ($Command.ToLowerInvariant()) {
     exit (Start-ManualDev)
   }
   'web' {
+    Assert-UiDeps
     Invoke-Checked pnpm @('--dir', 'ui', 'dev')
   }
   'cli' {
@@ -278,6 +295,7 @@ switch ($Command.ToLowerInvariant()) {
       Write-Host "bundle needs tauri-cli: cargo install tauri-cli --version '^2' --locked" -ForegroundColor Red
       exit 1
     }
+    Assert-UiDeps
     Invoke-Checked pnpm @('--dir', 'ui', 'build')
     Invoke-Checked cargo @('tauri', 'build')
   }

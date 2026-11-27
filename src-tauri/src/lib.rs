@@ -43,7 +43,7 @@ pub fn run() {
     // its existing window and exit before opening SQLite or creating a second webview.
     let mut instance_guard = match single_instance::acquire_or_notify(&dirs.data) {
         single_instance::AcquireResult::Primary(guard) => guard,
-        single_instance::AcquireResult::NotifiedExisting => return,
+        single_instance::AcquireResult::NotifiedExisting { .. } => return,
     };
 
     let db = heron_store::db::Db::open(&dirs.db_path()).expect("index database");
