@@ -670,7 +670,7 @@
     "scanDone": "扫描完成：{n} 个 Skill · {commands} 条命令 · {ms} ms",
     "pending": "{n} 待处理",
     "pendingNone": "没有待处理",
-    "pendingHint": "共 {n} 项待处理：未收拢的 Skill、可升级的 Skill 与失效的投影。点开去体检。",
+    "pendingHint": "共 {n} 项待处理：未收拢的 Skill、可升级的 Skill 与失效的投影。点击查看。",
     "gitVersion": "Git {version}",
     "gitHint": "Git 用于拉取和对比 Skill 来源的版本（不是本应用的版本）。点开查看来源。",
     "gitMissingHint": "未检测到 Git：来源的克隆与升级需要它。点开设置查看。",

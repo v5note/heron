@@ -670,7 +670,7 @@
     "scanDone": "Scanned {n} skills · {commands} commands · {ms} ms",
     "pending": "{n} pending",
     "pendingNone": "Nothing to do",
-    "pendingHint": "{n} waiting: unadopted skills, upgradable skills and broken projections. Open the check-up.",
+    "pendingHint": "{n} waiting: unadopted skills, upgradable skills and broken projections. Click to inspect.",
     "gitVersion": "Git {version}",
     "gitHint": "Git fetches and diffs skill sources (this is not the app's version). Open Sources.",
     "gitMissingHint": "Git not found: cloning and upgrading sources need it. Open Settings.",

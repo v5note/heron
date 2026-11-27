@@ -83,6 +83,11 @@ function openGitSettings() {
   void router.push(store.git ? "/sources" : "/settings");
 }
 
+function openPending() {
+  // 「体检」菜单有数据时优先跳转到体检页，否则跳转到「发现」页。
+  void router.push((store.issueCount ?? 0) > 0 ? "/doctor" : "/discover");
+}
+
 /* ---------- the walk, at the shell layer ---------- *
  * The rail and the Esc key live here because the scan does: it outlives every page, and there is no
  * global hotkey system in this app to register a chord with. Both read `store.scan` only. */
@@ -209,7 +214,7 @@ function go(to: string) {
 
       <div class="rail-foot">
         <div class="foot-row">
-          <button type="button" class="foot-status" :title="pendingHint" @click="router.push('/doctor')">
+          <button type="button" class="foot-status" :title="pendingHint" @click="openPending()">
             <span class="health-dot" :class="scanState" />
             <span :class="pendingTone ? `tone-${pendingTone}` : ''">{{ t("shell.pending", { n: pending }) }}</span>
           </button>
