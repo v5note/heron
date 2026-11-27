@@ -68,6 +68,7 @@ pub struct DetectOptions {
     pub supports_app_bundles: bool,
 }
 
+#[allow(clippy::derivable_impls)] // `cfg!(target_os = "macos")` is `false` on Linux/Windows, but `true` on macOS.
 impl Default for DetectOptions {
     fn default() -> Self {
         Self {

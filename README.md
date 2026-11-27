@@ -229,11 +229,11 @@ heron lock apply --file heron.lock      # Install missing skills to reproduce th
 
 - **git 2.38+** (Required: Three-way merges depend on `git merge-tree --write-tree`);
 - **macOS 12+** or **Windows 10 1803+** (Windows uses the built-in WebView2 runtime);
-- Linux core is functional; official release packages currently target macOS (Apple Silicon) and Windows (x64).
+- Linux core is functional; official release packages currently target macOS (Apple Silicon & Intel) and Windows (x64).
 
 ### Install
 
-* **Desktop Application (Recommended)**: Download `Heron_0.1.0_aarch64.dmg` (macOS Apple Silicon) or `Heron_0.1.0_x64-setup.exe` (Windows x64) from [Releases](https://github.com/v5note/heron/releases).
+* **Desktop Application (Recommended)**: Download `Heron_0.1.0_aarch64.dmg` (macOS Apple Silicon), `Heron_0.1.0_x64.dmg` (macOS Intel), or `Heron_0.1.0_x64-setup.exe` (Windows x64) from [Releases](https://github.com/v5note/heron/releases).
   * *First-launch note*: Releases use Tauri's **minisign update signing** without paid OS code-signing certificates. On first launch, right-click → Open on macOS, or click *"More info" → "Run anyway"* on Windows. Subsequent in-app updates are cryptographically verified via minisign. See [`docs/SIGNING.md`](docs/SIGNING.md) for details.
 * **Command Line**: Build from source or use the standalone `heron` binary:
   ```bash

@@ -8,7 +8,6 @@ description = "SQLite index: schema migrations and repositories."
 
 [dependencies]
 heron-core = { path = "../heron-core" }
-heron-platform = { path = "../heron-platform" }
 serde = { workspace = true }
 serde_json = { workspace = true }
 rusqlite = { workspace = true }

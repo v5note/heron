@@ -13,7 +13,6 @@ serde = { workspace = true }
 serde_yaml = { workspace = true }
 blake3 = { workspace = true }
 walkdir = { workspace = true }
-rayon = { workspace = true }
 globset = { workspace = true }
 
 [dev-dependencies]

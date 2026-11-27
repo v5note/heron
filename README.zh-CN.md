@@ -229,11 +229,11 @@ heron lock apply --file heron.lock      # 团队新成员一条命令安装缺�
 
 - **git 2.38+**（核心依赖：三方合并需要 `git merge-tree --write-tree` 支持）；
 - **macOS 12+** 或 **Windows 10 1803+**（Windows 使用系统自带的 WebView2 运行时）；
-- Linux 内核已支持，当前官方发布包以 macOS（Apple Silicon）与 Windows（x64）为主。
+- Linux 内核已支持，当前官方发布包以 macOS（Apple Silicon / Intel）与 Windows（x64）为主。
 
 ### 安装与初始化
 
-* **桌面应用（推荐）**：从 [Releases](https://github.com/v5note/heron/releases) 下载对应平台的 `Heron_0.1.0_aarch64.dmg`（macOS Apple Silicon）或 `Heron_0.1.0_x64-setup.exe`（Windows x64）。
+* **桌面应用（推荐）**：从 [Releases](https://github.com/v5note/heron/releases) 下载对应平台的 `Heron_0.1.0_aarch64.dmg`（macOS Apple Silicon）、`Heron_0.1.0_x64.dmg`（macOS Intel）或 `Heron_0.1.0_x64-setup.exe`（Windows x64）。
   * *首次打开说明*：发布包采用 Tauri 内置的 **minisign 更新签名**（未做付费系统级代码签名）。首次启动时，macOS 请右键点击 → 打开，Windows 请点「更多信息」→「仍要运行」；后续应用内自动更新均经过 minisign 公钥验签。详见 [`docs/SIGNING.md`](docs/SIGNING.md)。
 * **命令行使用**：可从源码编译或使用独立的 `heron` 可执行文件：
   ```bash

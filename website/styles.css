@@ -510,7 +510,7 @@ section { padding: 76px 0; border-top: 1px solid var(--line); }
 .t-acc { color: #7fb59a; }
 .t-good { color: #b2c77a; }
 
-.dl-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.dl-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
 .dl-card {
   background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 22px;
   display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap;

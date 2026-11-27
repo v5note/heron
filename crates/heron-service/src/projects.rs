@@ -276,7 +276,7 @@ mod tests {
 
         // Scanning home must not report home itself, yet it still descends two levels to the
         // project inside it.
-        let from_home = discover(&home, &[home.clone()], 3);
+        let from_home = discover(&home, std::slice::from_ref(&home), 3);
         assert_eq!(
             from_home.len(),
             1,
