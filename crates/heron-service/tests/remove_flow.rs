@@ -128,6 +128,7 @@ fn remove_retracts_every_link_and_parks_the_store_copy_in_the_trash() {
     assert_eq!(bindings, 0);
 }
 
+#[cfg(unix)]
 #[test]
 fn remove_of_a_live_bound_skill_never_touches_the_users_directory() {
     let env = Env::new();

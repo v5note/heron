@@ -99,23 +99,21 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          # Build both Apple Silicon and Intel macOS bundles on a single macos-latest runner so
+          # scarce macOS runner capacity never drops one architecture while publishing the other.
           - os: macos-latest
-            platform: darwin-aarch64
-            target: aarch64-apple-darwin
-            experimental: true
-          - os: macos-latest
-            platform: darwin-x86_64
-            target: x86_64-apple-darwin
+            platform: darwin
+            targets: "aarch64-apple-darwin,x86_64-apple-darwin"
             experimental: true
           - os: windows-2022
             platform: windows-x86_64
-            target: x86_64-pc-windows-msvc
+            targets: "x86_64-pc-windows-msvc"
             experimental: false
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
         with:
-          targets: ${{ matrix.target }}
+          targets: ${{ matrix.targets }}
       - uses: Swatinem/rust-cache@v2
         with:
           key: ${{ matrix.platform }}
@@ -153,7 +151,12 @@ jobs:
         run: |
           pnpm --dir ui build
           cargo install tauri-cli --version "^2" --locked
-          cargo tauri build --target "${{ matrix.target }}"
+          IFS=',' read -ra TARGETS <<< "${{ matrix.targets }}"
+          for target in "${TARGETS[@]}"; do
+            echo "::group::cargo tauri build --target $target"
+            cargo tauri build --target "$target"
+            echo "::endgroup::"
+          done
 
       # Collect what the updater consumes (.app.tar.gz / .nsis.zip plus their .sig) and the
       # installers humans download (.dmg / .exe). Filenames are preserved: Tauri already encodes
@@ -162,19 +165,26 @@ jobs:
         shell: bash
         run: |
           mkdir -p dist
-          B="target/${{ matrix.target }}/release/bundle"
-          # Tauri names the macOS updater payload "Heron.app.tar.gz" with no architecture in it.
-          # Rename it so latest.json (and anyone reading the release) can tell builds apart.
-          if [ "${{ runner.os }}" = "macOS" ] && [ -f "$B/macos/Heron.app.tar.gz" ]; then
-            ARCH="${{ matrix.platform == 'darwin-x86_64' && 'x64' || 'aarch64' }}"
-            VERSION="${{ steps.meta.outputs.version }}"
-            mv "$B/macos/Heron.app.tar.gz" "$B/macos/Heron_${VERSION}_${ARCH}.app.tar.gz"
-            mv "$B/macos/Heron.app.tar.gz.sig" "$B/macos/Heron_${VERSION}_${ARCH}.app.tar.gz.sig"
-          fi
-          find "$B" -maxdepth 3 -type f \( \
-              -name '*.app.tar.gz' -o -name '*.app.tar.gz.sig' \
-              -o -name '*.nsis.zip' -o -name '*.nsis.zip.sig' \
-              -o -name '*.dmg' -o -name '*.exe' \) -exec cp {} dist/ \;
+          VERSION="${{ steps.meta.outputs.version }}"
+          IFS=',' read -ra TARGETS <<< "${{ matrix.targets }}"
+          for target in "${TARGETS[@]}"; do
+            B="target/${target}/release/bundle"
+            # Tauri names the macOS updater payload "Heron.app.tar.gz" with no architecture in it.
+            # Rename it so latest.json (and anyone reading the release) can tell builds apart.
+            if [ "${{ runner.os }}" = "macOS" ] && [ -f "$B/macos/Heron.app.tar.gz" ]; then
+              if [ "$target" = "x86_64-apple-darwin" ]; then
+                ARCH="x64"
+              else
+                ARCH="aarch64"
+              fi
+              mv "$B/macos/Heron.app.tar.gz" "$B/macos/Heron_${VERSION}_${ARCH}.app.tar.gz"
+              mv "$B/macos/Heron.app.tar.gz.sig" "$B/macos/Heron_${VERSION}_${ARCH}.app.tar.gz.sig"
+            fi
+            find "$B" -maxdepth 3 -type f \( \
+                -name '*.app.tar.gz' -o -name '*.app.tar.gz.sig' \
+                -o -name '*.nsis.zip' -o -name '*.nsis.zip.sig' \
+                -o -name '*.dmg' -o -name '*.exe' \) -exec cp {} dist/ \;
+          done
           ls -la dist
 
       - name: Fail when signatures are missing

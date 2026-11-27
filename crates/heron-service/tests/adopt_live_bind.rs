@@ -5,11 +5,15 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use heron_platform::dirs::Dirs;
-use heron_service::adopt::{self, AdoptPlacement, EntryState};
+#[cfg(unix)]
+use heron_service::adopt::EntryState;
+use heron_service::adopt::{self, AdoptPlacement};
 use heron_service::scan::{self, ScanRequest};
 use heron_service::Ctx;
 use heron_store::db::Db;
-use heron_store::repos::{binding, detected, projection, skill};
+#[cfg(unix)]
+use heron_store::repos::skill;
+use heron_store::repos::{binding, detected, projection};
 
 struct Env {
     /// Kept so the temporary home outlives the test body.
@@ -61,6 +65,7 @@ fn candidate(ctx: &Ctx, slug: &str) -> heron_store::models::DetectedRow {
 
 /// A skill reached through a user-made symlink is discovered at its real directory, not the link,
 /// and is then adopted like any other directory.
+#[cfg(unix)]
 #[test]
 fn a_user_symlinked_skill_is_discovered_at_its_real_directory() {
     let env = Env::new();
@@ -137,6 +142,7 @@ fn a_user_symlinked_skill_is_discovered_at_its_real_directory() {
 
 /// A row that still names a user's link (a legacy scan, or an explicit path) is bound in place —
 /// the live-bind path stays intact even though the scanner now resolves links away.
+#[cfg(unix)]
 #[test]
 fn a_row_that_still_points_at_a_foreign_link_is_bound_in_place() {
     let env = Env::new();
