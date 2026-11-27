@@ -101,7 +101,7 @@ onMounted(discover);
           <span class="right mono">{{ projects.length }}</span>
         </div>
         <div class="card-body">
-          <p v-if="!projects.length" class="hint muted">{{ t("projects.emptyHint") }}</p>
+          <p v-if="!projects.length" class="empty">{{ t("projects.emptyHint") }}</p>
           <button
             v-for="project in projects"
             :key="project.root"
@@ -130,9 +130,9 @@ onMounted(discover);
           <span class="right mono">{{ skills.length }}</span>
         </div>
         <div class="card-body">
-          <p v-if="!active" class="hint muted">{{ t("projects.pickProject") }}</p>
-          <p v-else-if="skillsLoading" class="hint muted">{{ t("common.loading") }}</p>
-          <p v-else-if="!skills.length" class="hint muted">{{ t("projects.noSkills") }}</p>
+          <p v-if="!active" class="empty">{{ t("projects.pickProject") }}</p>
+          <p v-else-if="skillsLoading" class="empty">{{ t("common.loading") }}</p>
+          <p v-else-if="!skills.length" class="empty">{{ t("projects.noSkills") }}</p>
           <template v-else>
             <p class="hint muted">{{ active }}</p>
             <div v-for="skill in skills" :key="skill.path" class="skill">
@@ -155,11 +155,20 @@ onMounted(discover);
    比窗口还宽，页面于是出现横向滚动条。归零之后，缩不下的责任交给行自己处理。 */
 .split > .card {
   min-width: 0;
+  display: flex;
+  flex-direction: column;
 }
 .card-body {
+  flex: 1;
   display: flex;
   flex-direction: column;
   gap: 10px;
+  padding: 14px 15px;
+}
+.card-body > .empty {
+  margin: auto 0;
+  padding: 20px 8px;
+  line-height: 1.65;
 }
 .hint {
   margin: 0;
