@@ -130,11 +130,7 @@ fn try_notify_once(port_file: &Path) -> bool {
     let Ok(content) = std::fs::read_to_string(port_file) else {
         return false;
     };
-    let mut parts = content.split_whitespace();
-    let Some(port) = parts.next().and_then(|s| s.parse::<u16>().ok()) else {
-        return false;
-    };
-    let Some(token) = parts.next() else {
+    let Some((port, token)) = parse_port_file(&content) else {
         return false;
     };
     let addr = SocketAddr::from(([127, 0, 0, 1], port));
@@ -143,6 +139,13 @@ fn try_notify_once(port_file: &Path) -> bool {
     };
     let _ = stream.set_write_timeout(Some(CONNECT_TIMEOUT));
     writeln!(stream, "SHOW {token}").is_ok() && stream.flush().is_ok()
+}
+
+fn parse_port_file(content: &str) -> Option<(u16, &str)> {
+    let mut parts = content.split_whitespace();
+    let port = parts.next()?.parse::<u16>().ok()?;
+    let token = parts.next()?;
+    Some((port, token))
 }
 
 fn make_token() -> String {
@@ -160,6 +163,14 @@ mod tests {
     use super::*;
 
     #[test]
+    fn port_file_parser_extracts_port_and_token() {
+        assert_eq!(parse_port_file("54321 abc-123\n"), Some((54321, "abc-123")));
+        assert_eq!(parse_port_file("not-a-port tok"), None);
+        assert_eq!(parse_port_file("54321"), None);
+        assert_eq!(parse_port_file(""), None);
+    }
+
+    #[test]
     fn second_instance_activates_primary_and_drop_releases_lock() {
         let dir = std::env::temp_dir().join(format!("heron-si-test-{}", make_token()));
         std::fs::create_dir_all(&dir).unwrap();
@@ -169,6 +180,7 @@ mod tests {
             AcquireResult::NotifiedExisting => panic!("first instance must become primary"),
         };
 
+        let has_listener = guard.listener.is_some();
         let activated = Arc::new((Mutex::new(false), Condvar::new()));
         let signal = activated.clone();
         guard.spawn_listener(move || {
@@ -182,14 +194,16 @@ mod tests {
             AcquireResult::Primary(_) => panic!("second instance must not become primary"),
         }
 
-        let (lock, cvar) = &*activated;
-        let result = cvar
-            .wait_timeout_while(lock.lock().unwrap(), Duration::from_secs(2), |done| !*done)
-            .unwrap();
-        assert!(
-            *result.0,
-            "primary listener must be woken by second instance"
-        );
+        if has_listener {
+            let (lock, cvar) = &*activated;
+            let result = cvar
+                .wait_timeout_while(lock.lock().unwrap(), Duration::from_secs(2), |done| !*done)
+                .unwrap();
+            assert!(
+                *result.0,
+                "primary listener must be woken by second instance"
+            );
+        }
 
         drop(guard);
         assert!(

@@ -79,7 +79,9 @@ function Test-TauriCli {
   $previous = $ErrorActionPreference
   $ErrorActionPreference = 'SilentlyContinue'
   try {
-    & cargo tauri --version | Out-Null
+    # `cargo: no such command` is cargo's own stderr; silence it or it reads as a
+    # failure of `dev` rather than of the optional tauri-cli probe.
+    & cargo tauri --version *> $null
     return ($LASTEXITCODE -eq 0)
   } catch {
     return $false
@@ -171,8 +173,18 @@ function Start-ManualDev {
     Write-Host "error: 'cargo' not found on PATH." -ForegroundColor Red
     return 127
   }
-  $pnpm = Get-Command pnpm -CommandType Application -ErrorAction SilentlyContinue
-  if (-not $pnpm) {
+  # Get-Command returns *every* PATH match, and a Windows install commonly has two
+  # pnpm.CMD shims (corepack dir + a global prefix). Passing that array straight to
+  # -FilePath fails with "cannot convert System.Object[] to System.String".
+  $pnpmPath = $null
+  foreach ($cmd in @(Get-Command pnpm -CommandType Application -ErrorAction SilentlyContinue)) {
+    foreach ($prop in 'Source', 'Path') {
+      $candidate = [string]$cmd.$prop
+      if ($candidate) { $pnpmPath = $candidate; break }
+    }
+    if ($pnpmPath) { break }
+  }
+  if (-not $pnpmPath) {
     Write-Host "error: 'pnpm' not found on PATH (install it with: corepack enable)." -ForegroundColor Red
     return 127
   }
@@ -183,16 +195,20 @@ function Start-ManualDev {
 
   $vite = $null
   try {
-    # Splat instead of a backtick continuation: a stray space after the backtick
-    # would silently break the line.
     $startVite = @{
-      FilePath         = $pnpm.Source
+      FilePath         = $pnpmPath
       ArgumentList     = @('--dir', 'ui', 'dev')
       WorkingDirectory = $RepoRoot
       NoNewWindow      = $true
       PassThru         = $true
     }
-    $vite = Start-Process @startVite
+    try {
+      $vite = Start-Process @startVite
+    } catch {
+      Write-Host "error: cannot start the Vite server via '$pnpmPath'." -ForegroundColor Red
+      Write-Host "  $($_.Exception.Message)" -ForegroundColor Red
+      return 1
+    }
     # A cold Vite start pre-bundles dependencies, which is slow on Windows: 2 minutes.
     $ready = $false
     for ($i = 0; $i -lt 240; $i++) {
