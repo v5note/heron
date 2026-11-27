@@ -34,8 +34,21 @@ export function setLocale(locale: Locale) {
 export function messageFor(code: string, params: MessageParams = {}): string {
   // Anything that is not an error code (e.g. "adopt.done") is a plain message key.
   if (!code.startsWith("E_")) return render(code, params);
-  const key = code === "E_INTERNAL" && String(params.detail ?? "").trim() ? "errors.E_INTERNAL_DETAIL" : `errors.${code}`;
-  return render(key, params);
+  return render(errorKeyFor(code, params), params);
+}
+
+function errorKeyFor(code: string, params: MessageParams): string {
+  const has = (name: string) => String(params[name] ?? "").trim().length > 0;
+  if (code === "E_INTERNAL" && has("detail")) return "errors.E_INTERNAL_DETAIL";
+  if (code === "E_NOT_MANAGED") {
+    if (has("path")) return "errors.E_NOT_MANAGED_OCCUPIED";
+    if (has("slug")) return "errors.E_NOT_MANAGED_SLUG";
+  }
+  if (code === "E_DRIFTED" && has("path")) {
+    if (params.reason === "foreign_link") return "errors.E_DRIFTED_FOREIGN_LINK";
+    if (params.reason === "copy_modified") return "errors.E_DRIFTED_COPY_MODIFIED";
+  }
+  return `errors.${code}`;
 }
 
 /**

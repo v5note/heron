@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Heron 苍鹭 — 方向 B · 节气编辑部</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,500;0,600;1,400&family=JetBrains+Mono:wght@400;500&family=Manrope:wght@400;500;600;700&family=Noto+Serif+SC:wght@500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    /* Heron 默认：节气暖纸底 + 墨绿强调 */
+    :root {
+      --bg: #f3efe4;
+      --panel: #fbf7ee;
+      --raised: #ebe4d4;
+      --line: #dcd3c1;
+      --line-strong: #c8bca6;
+      --text: #2a2924;
+      --dim: #5d574c;
+      --faint: #7d7568;
+      --accent: #2f5b48;
+      --accent-soft: rgba(47, 91, 72, 0.09);
+      --good: #5c7a2e;
+      --warn: #8a6216;
+      --bad: #a8452f;
+      --shadow: 0 22px 60px rgba(42, 41, 36, 0.11);
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: "Manrope", -apple-system, BlinkMacSystemFont, "PingFang SC", sans-serif;
+      font-size: 15px;
+      line-height: 1.72;
+      -webkit-font-smoothing: antialiased;
+    }
+    .serif { font-family: "EB Garamond", "Noto Serif SC", "Songti SC", Georgia, serif; }
+    .mono { font-family: "JetBrains Mono", ui-monospace, Menlo, monospace; font-variant-numeric: tabular-nums; }
+    a { color: inherit; text-decoration: none; }
+
+    .wrap { max-width: 1180px; margin: 0 auto; padding: 0 36px; }
+
+    /* Editorial Masthead */
+    .masthead {
+      border-bottom: 1px solid var(--line-strong);
+      background: color-mix(in srgb, var(--bg) 90%, transparent);
+      backdrop-filter: blur(10px);
+      position: sticky; top: 0; z-index: 40;
+    }
+    .masthead-inner {
+      height: 64px; display: flex; align-items: center; justify-content: space-between;
+    }
+    .brand { display: flex; align-items: center; gap: 12px; }
+    .brand img { width: 30px; height: 30px; border-radius: 6px; }
+    .brand-name { font-size: 19px; font-weight: 600; letter-spacing: 0.02em; }
+    .brand-tag { font-size: 12px; color: var(--faint); border-left: 1px solid var(--line-strong); padding-left: 12px; }
+    .nav { display: flex; align-items: center; gap: 28px; font-size: 13.5px; color: var(--dim); }
+    .nav a:hover { color: var(--accent); }
+    .pill-cta {
+      padding: 8px 18px; border-radius: 999px; background: var(--accent); color: #fbf7ee;
+      font-size: 13px; font-weight: 600; transition: opacity 0.16s;
+    }
+    .pill-cta:hover { opacity: 0.9; }
+
+    /* Editorial Split Hero */
+    .hero {
+      padding: 78px 0 84px;
+      display: grid; grid-template-columns: 1.05fr 1.15fr; gap: 56px; align-items: center;
+      position: relative;
+    }
+    .epigraph {
+      font-size: 12.5px; letter-spacing: 0.12em; color: var(--accent);
+      margin-bottom: 20px; display: flex; align-items: center; gap: 12px;
+    }
+    .epigraph::before { content: ""; width: 28px; height: 1px; background: var(--accent); }
+    .hero h1 {
+      font-size: clamp(38px, 4.4vw, 54px);
+      font-weight: 600; line-height: 1.22; letter-spacing: -0.01em;
+      margin-bottom: 22px;
+    }
+    .hero-quote {
+      font-size: 17px; color: var(--dim); margin-bottom: 32px;
+      padding-left: 18px; border-left: 2px solid var(--accent);
+    }
+    .hero-cta-row { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; margin-bottom: 34px; }
+    .btn-ink {
+      display: inline-flex; align-items: center; gap: 10px;
+      padding: 13px 24px; border-radius: 8px;
+      background: var(--text); color: var(--panel); font-weight: 600; font-size: 14.5px;
+    }
+    .btn-ink:hover { background: var(--accent); }
+    .btn-line {
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 12px 20px; border-radius: 8px;
+      border: 1px solid var(--line-strong); color: var(--text); font-size: 14px; font-weight: 500;
+    }
+    .btn-line:hover { background: var(--raised); }
+    .meta-footnotes {
+      display: flex; gap: 24px; flex-wrap: wrap;
+      padding-top: 22px; border-top: 1px solid var(--line);
+      font-size: 12.5px; color: var(--faint);
+    }
+
+    /* Right Layered Plates */
+    .plates { position: relative; }
+    .plate-main {
+      background: var(--panel); padding: 10px; border-radius: 14px;
+      border: 1px solid var(--line-strong); box-shadow: var(--shadow);
+    }
+    .plate-main img { width: 100%; display: block; border-radius: 8px; }
+    .plate-caption {
+      display: flex; justify-content: space-between; padding: 10px 6px 2px;
+      font-size: 12px; color: var(--faint);
+    }
+    .heron-bird {
+      position: absolute; right: -18px; bottom: -28px; width: 112px;
+      opacity: 0.92; filter: drop-shadow(0 12px 20px rgba(42,41,36,0.16));
+      pointer-events: none;
+    }
+
+    /* Editorial Chapter Rule */
+    .chapter { padding: 80px 0; border-top: 1px solid var(--line-strong); }
+    .chapter-head {
+      display: grid; grid-template-columns: 220px 1fr; gap: 40px; margin-bottom: 48px; align-items: baseline;
+    }
+    .chapter-num { font-size: 13px; color: var(--accent); letter-spacing: 0.08em; }
+    .chapter-title { font-size: clamp(28px, 3.2vw, 38px); font-weight: 600; line-height: 1.25; }
+    .chapter-sub { color: var(--dim); margin-top: 10px; max-width: 620px; }
+
+    /* Pain Ledger Table */
+    .ledger {
+      width: 100%; border-collapse: collapse; background: var(--panel);
+      border: 1px solid var(--line-strong); border-radius: 12px; overflow: hidden;
+    }
+    .ledger th, .ledger td {
+      padding: 18px 22px; text-align: left; border-bottom: 1px solid var(--line); vertical-align: top;
+    }
+    .ledger th {
+      font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em;
+      color: var(--faint); background: var(--raised);
+    }
+    .ledger tr:last-child td { border-bottom: 0; }
+    .ledger td.col-pain { font-weight: 600; width: 22%; }
+    .ledger td.col-old { color: var(--faint); width: 34%; }
+    .ledger td.col-new { color: var(--text); width: 44%; }
+    .badge-cmd {
+      display: inline-block; padding: 1px 7px; border-radius: 4px;
+      background: var(--accent-soft); color: var(--accent); font-size: 12px; margin-right: 6px;
+    }
+
+    /* Gallery Spread */
+    .spread { display: grid; grid-template-columns: 1fr 1fr; gap: 28px; }
+    .figure {
+      background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+      padding: 12px; transition: transform 0.2s ease;
+    }
+    .figure:hover { transform: translateY(-3px); }
+    .figure img { width: 100%; display: block; border-radius: 7px; border: 1px solid var(--line); }
+    .figure-meta { padding: 14px 6px 4px; }
+    .figure-meta h3 { font-size: 17px; font-weight: 600; margin-bottom: 4px; }
+    .figure-meta p { font-size: 13.5px; color: var(--dim); }
+
+    /* Three Columns Principles */
+    .cols-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 32px; }
+    .col-rule { border-top: 2px solid var(--text); padding-top: 18px; }
+    .col-rule h3 { font-size: 20px; margin-bottom: 10px; }
+    .col-rule p { font-size: 14px; color: var(--dim); }
+
+    /* Quiet CLI Book Box */
+    .book-cli {
+      display: grid; grid-template-columns: 1fr 1.2fr; gap: 40px; align-items: center;
+      background: var(--panel); border: 1px solid var(--line-strong); border-radius: 14px; padding: 36px;
+    }
+    .book-cli pre {
+      background: #23221e; color: #f3efe4; padding: 22px; border-radius: 10px;
+      font-size: 13px; line-height: 1.8; overflow-x: auto;
+    }
+
+    footer {
+      border-top: 1px solid var(--line-strong); padding: 48px 0;
+      display: flex; justify-content: space-between; align-items: center;
+      font-size: 13px; color: var(--faint);
+    }
+
+    @media (max-width: 920px) {
+      .hero, .chapter-head, .spread, .cols-3, .book-cli { grid-template-columns: 1fr; }
+      .nav { display: none; }
+      .heron-bird { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <header class="masthead">
+    <div class="wrap masthead-inner">
+      <a href="#" class="brand">
+        <img src="../../src-tauri/icons/icon-master.png" alt="Heron" />
+        <span class="brand-name serif">苍鹭 Heron</span>
+        <span class="brand-tag">本地 Agent Skill 管理器</span>
+      </a>
+      <nav class="nav">
+        <a href="#why">缘起</a>
+        <a href="#screens">界面图录</a>
+        <a href="#principles">架构契约</a>
+        <a href="#start">开始使用</a>
+        <a class="pill-cta" href="https://github.com/v5note/heron/releases" target="_blank">下载 v0.1.0</a>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    <div class="wrap hero">
+      <div>
+        <div class="epigraph mono">ISSUE 01 · SINGLE SOURCE OF TRUTH</div>
+        <h1 class="serif">静立一处，<br/>注视整片水面。</h1>
+        <p class="hero-quote">
+          Heron 把散落在 Claude Code、Codex、Cursor、Antigravity 与各个工程目录里的 Agent Skill 收拢成一份受 Git 版本管理的实体，再按你的意愿分发，让升级回到一条命令。
+        </p>
+        <div class="hero-cta-row">
+          <a class="btn-ink" href="https://github.com/v5note/heron/releases" target="_blank">获取桌面应用 (macOS / Win)</a>
+          <a class="btn-line mono" href="#start">heron adopt --all</a>
+        </div>
+        <div class="meta-footnotes mono">
+          <span>Rust + Tauri 2</span>
+          <span>12+ AI 客户端</span>
+          <span>5 大内置市场</span>
+          <span>MIT 开源</span>
+        </div>
+      </div>
+
+      <div class="plates">
+        <div class="plate-main">
+          <img src="../../images/首页-浅色.png" alt="Heron 浅色概览" />
+          <div class="plate-caption mono">
+            <span>FIG 01. 概览行动中心（林墨 · 浅色）</span>
+            <span>48 纳管 · 216 生效</span>
+          </div>
+        </div>
+        <img class="heron-bird" src="../../grey-heron-苍鹭.webp" alt="苍鹭" />
+      </div>
+    </div>
+
+    <section class="chapter" id="why">
+      <div class="wrap">
+        <div class="chapter-head">
+          <div class="chapter-num mono">CHAPTER 01<br/>问题与解法</div>
+          <div>
+            <h2 class="chapter-title serif">当 Skill 成为工程资产，复制粘贴不再体面</h2>
+            <p class="chapter-sub">面向同时使用多款 AI 编码工具的开发者，Heron 替换掉所有零散的手工软链与同步脚本。</p>
+          </div>
+        </div>
+
+        <table class="ledger">
+          <thead>
+            <tr>
+              <th>痛点场景</th>
+              <th>传统手工做法</th>
+              <th>Heron 的系统解法</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="col-pain">目录散落与重复拷贝</td>
+              <td class="col-old">在四五个隐藏目录间手工复制，改一处其余全过时</td>
+              <td class="col-new"><span class="badge-cmd mono">heron adopt</span>先备份再哈希去重，收拢至 <span class="mono">~/.heron/skills/</span>，原位替换为受管链接</td>
+            </tr>
+            <tr>
+              <td class="col-pain">生效状态全靠猜</td>
+              <td class="col-old">软链失效或同名压制时静默失败，排错无从下手</td>
+              <td class="col-new"><span class="badge-cmd mono">heron verify</span>四态严格判定：生效中 / 未被扫描 / 被压制 / 坏链，并支持 4 种投影模式</td>
+            </tr>
+            <tr>
+              <td class="col-pain">升级覆盖本地定制</td>
+              <td class="col-old">上游更新后整目录覆盖，手调的提示词每次重打补丁</td>
+              <td class="col-new"><span class="badge-cmd mono">heron upgrade</span>Per-Skill 独立 Git 仓库 + <span class="mono">git merge-tree</span> 三方合并，冲突可视化逐文件解决</td>
+            </tr>
+            <tr>
+              <td class="col-pain">团队环境持续漂移</td>
+              <td class="col-old">新人拉代码缺少项目 Skill，靠口头同步版本</td>
+              <td class="col-new"><span class="badge-cmd mono">heron.lock</span>项目根目录一键导出与复现，成员环境精准对齐</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="chapter" id="screens">
+      <div class="wrap">
+        <div class="chapter-head">
+          <div class="chapter-num mono">CHAPTER 02<br/>界面图录</div>
+          <div>
+            <h2 class="chapter-title serif">克制、诚实、一目了然的桌面工作台</h2>
+            <p class="chapter-sub">内置默认暖纸、林墨、暮色、晚晴四套东方色调，深浅双模式自由切换。</p>
+          </div>
+        </div>
+
+        <div class="spread">
+          <div class="figure">
+            <img src="../../images/我的Skill-浅色.png" alt="我的 Skill" />
+            <div class="figure-meta">
+              <h3 class="serif">我的 Skill · 落点全景</h3>
+              <p>一份实体对应多个客户端落点，圆点矩阵直接读出生效与异常状态。</p>
+            </div>
+          </div>
+          <div class="figure">
+            <img src="../../images/来源与市场-浅色.png" alt="来源与市场" />
+            <div class="figure-meta">
+              <h3 class="serif">来源与市场 · 统一搜索直装</h3>
+              <p>一个搜索框打通 skills.sh、ClawHub 等 5 大生态市场与任意 Git 仓库。</p>
+            </div>
+          </div>
+          <div class="figure">
+            <img src="../../images/更新-浅色.png" alt="更新与三方合并" />
+            <div class="figure-meta">
+              <h3 class="serif">更新 · 三方合并与回滚</h3>
+              <p>清晰区分上游基线与本地改动，未追踪来源诚实标示，绝不误导升级。</p>
+            </div>
+          </div>
+          <div class="figure">
+            <img src="../../images/体检-浅色.png" alt="体检" />
+            <div class="figure-meta">
+              <h3 class="serif">体检 · 只读健康诊断</h3>
+              <p>发现坏链、存储缺失与病态嵌套，只给建议、绝不越权自动删除。</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="chapter" id="principles">
+      <div class="wrap">
+        <div class="chapter-head">
+          <div class="chapter-num mono">CHAPTER 03<br/>架构与契约</div>
+          <div>
+            <h2 class="chapter-title serif">不越界、不隐瞒、不破坏</h2>
+          </div>
+        </div>
+        <div class="cols-3">
+          <div class="col-rule">
+            <h3 class="serif">四态投影，零提权</h3>
+            <p>macOS 默认 <span class="mono">symlink</span>，Windows 默认 <span class="mono">junction</span>（普通用户免提权），另备 <span class="mono">pointer</span> 代理文件与带漂移检测的 <span class="mono">copy</span>。</p>
+          </div>
+          <div class="col-rule">
+            <h3 class="serif">先备份，再事务</h3>
+            <p>任何目录迁移前先完整备份至受管数据目录；遇到未纳管目录或外部漂移立即报 <span class="mono">E_NOT_MANAGED</span> / <span class="mono">E_DRIFTED</span> 停机保护。</p>
+          </div>
+          <div class="col-rule">
+            <h3 class="serif">GUI 与 CLI 完全同构</h3>
+            <p>十余个 Rust Crate 严格单向分层，桌面端与命令行共用同一套 <span class="mono">heron-service</span> 内核，一切操作皆可 Dry-Run 与脚本化。</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="chapter" id="start">
+      <div class="wrap">
+        <div class="book-cli">
+          <div>
+            <div class="chapter-num mono" style="margin-bottom:10px;">QUICK START</div>
+            <h2 class="serif" style="font-size:32px;margin-bottom:12px;">三步收拢整台机器</h2>
+            <p style="color:var(--dim);margin-bottom:20px;">
+              首次执行建议附加 <span class="mono">--dry-run</span> 查看完整变更计划，确认无误后再落地。原有客户端路径保持不变。
+            </p>
+            <a class="btn-ink" href="https://github.com/v5note/heron/releases" target="_blank">前往 GitHub Releases 下载</a>
+          </div>
+          <pre class="mono"># 1. 扫描本机已知客户端与项目目录
+heron scan
+
+# 2. 查看磁盘上尚未纳管的 Skill
+heron detected
+
+# 3. 预览并一键安全收拢（先备份，再去重）
+heron adopt --all --dry-run
+heron adopt --all</pre>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="wrap">
+    <div class="serif" style="font-size:16px;color:var(--text);">苍鹭 Heron — 静立一处，注视整片水面</div>
+    <div class="mono">MIT License · github.com/v5note/heron</div>
+  </footer>
+</body>
+</html>

@@ -51,9 +51,13 @@ pub fn apply_plan(plan: &ProjectPlan) -> Result<Vec<AppliedProjection>> {
                 .with("path", path.display().to_string())
                 .with("detail", "store_content_missing")
                 .into(),
-            Some(PlanAction::Blocked { path, .. }) => ErrorCode::NotManaged
+            Some(PlanAction::Blocked {
+                path,
+                reason: crate::plan::BlockedReason::NotManaged,
+            }) => ErrorCode::NotManaged
                 .msg()
                 .with("path", path.display().to_string())
+                .with("reason", "destination_exists")
                 .into(),
             Some(PlanAction::ModifiedCopy { path }) => ErrorCode::Drifted
                 .msg()
@@ -389,6 +393,26 @@ mod tests {
         assert!(
             !req.dest.exists(),
             "a blocked plan must leave nothing in the client's folder"
+        );
+    }
+
+    #[test]
+    fn an_occupied_destination_reports_path_and_reason() {
+        let (_tmp, req) = fixture();
+        std::fs::create_dir_all(&req.dest).unwrap();
+        std::fs::write(req.dest.join("SKILL.md"), "---\nname: wechat-mp\n---\n").unwrap();
+
+        let err = apply_plan(&plan_projection(&req).unwrap()).unwrap_err();
+        assert_eq!(err.code(), "E_NOT_MANAGED");
+        let msg = err.as_msg();
+        assert_eq!(
+            msg.params.get("path").map(String::as_str),
+            Some(req.dest.to_string_lossy().as_ref()),
+            "the report has to name the conflicting destination path"
+        );
+        assert_eq!(
+            msg.params.get("reason").map(String::as_str),
+            Some("destination_exists")
         );
     }
 

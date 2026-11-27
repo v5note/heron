@@ -1,0 +1,391 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="forest-ink" data-color-mode="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Heron 苍鹭 — 把散落在各处的 Agent Skill 收拢成单一真实源</title>
+  <meta name="description" content="苍鹭静立一处，注视整片水面。Heron 是一款跨平台本地 Agent Skill 管理器：扫描 12+ AI 编码客户端，安全收拢至受 Git 版本管理的单一真实源，按需单向投影，并以三方合并安全升级。" />
+  <link rel="icon" type="image/png" href="./assets/heron-icon.png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,500;0,600;1,500&family=JetBrains+Mono:wght@400;500;600&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+  <header class="nav">
+    <div class="wrap nav-inner">
+      <a href="#" class="brand">
+        <img src="./assets/heron-icon.png" alt="Heron" />
+        <span data-i18n="brand.name">Heron 苍鹭</span>
+        <span class="sub mono">v0.1.0</span>
+      </a>
+      <nav class="nav-links">
+        <a href="#topology" data-i18n="nav.topology">一源拓扑</a>
+        <a href="#workflow" data-i18n="nav.workflow">工作流</a>
+        <a href="#modes" data-i18n="nav.modes">投影机制</a>
+        <a href="#clients" data-i18n="nav.clients">12+ 客户端</a>
+        <a href="#contract" data-i18n="nav.contract">安全契约</a>
+        <a href="#cli" data-i18n="nav.cli">CLI &amp; 下载</a>
+      </nav>
+      <div class="nav-right">
+        <div class="palette-dots" id="paletteDots" title="切换 Heron 四套节气主题">
+          <button class="p-dot active" data-theme="forest-ink" style="background:#6fad8e;" aria-label="Forest Ink"></button>
+          <button class="p-dot" data-theme="default" style="background:#d9cdb8;" aria-label="Default Warm Paper"></button>
+          <button class="p-dot" data-theme="dusk" style="background:#c4a882;" aria-label="Dusk"></button>
+          <button class="p-dot" data-theme="wanqing" style="background:#9aa9d4;" aria-label="Wanqing"></button>
+        </div>
+        <button class="btn mono lang-btn" id="langToggle" type="button" aria-label="Switch language">EN</button>
+        <button class="btn" id="themeToggle" type="button">切换浅色</button>
+        <a class="btn primary" href="#download" data-i18n="nav.download">下载桌面端</a>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <!-- Hero + Real Desktop Showcase -->
+    <div class="wrap hero">
+      <div class="status-pill mono">
+        <span class="dot good"></span>
+        <span>Rust 1.80+ · Tauri 2 · Per-Skill Git · macOS &amp; Windows</span>
+      </div>
+      <h1 data-i18n-html="hero.title">把散落在各处的 Agent Skill，<br />收拢成<em>一份受版本管理的真实源</em></h1>
+      <p class="hero-lead" data-i18n-html="hero.lead">
+        苍鹭静立一处，注视整片水面。扫描本机 12+ AI 编码客户端，去重收拢至 <span class="mono">~/.heron/skills/</span>，按需单向投影，并以 Git 三方合并安全升级。
+      </p>
+      <div class="hero-actions">
+        <a class="btn primary lg" href="#download" data-i18n="hero.cta">下载 macOS / Windows 安装包</a>
+        <button class="btn lg mono copy-btn" type="button" data-copy="heron adopt --all --dry-run">$ heron adopt --all --dry-run</button>
+      </div>
+
+      <div class="readout-strip">
+        <div class="readout-cell">
+          <div class="readout-num mono" data-i18n="readout.n1">1 份</div>
+          <div class="readout-label" data-i18n="readout.l1">单一真实源 · 独立 Git 仓库</div>
+        </div>
+        <div class="readout-cell">
+          <div class="readout-num mono">12+</div>
+          <div class="readout-label" data-i18n="readout.l2">内置主流 AI 客户端落点感知</div>
+        </div>
+        <div class="readout-cell">
+          <div class="readout-num mono" data-i18n="readout.n3">4 种</div>
+          <div class="readout-label">symlink / junction / pointer / copy</div>
+        </div>
+        <div class="readout-cell">
+          <div class="readout-num mono">5–15 MB</div>
+          <div class="readout-label" data-i18n="readout.l4">Tauri 2 原生体积 · 零运行时依赖</div>
+        </div>
+      </div>
+
+      <div class="showcase-shell">
+        <div class="showcase-bar">
+          <div class="showcase-tabs" id="viewTabs">
+            <button class="tab-btn active" data-view="home" data-i18n="tabs.home">概览 · 行动中心</button>
+            <button class="tab-btn" data-view="library" data-i18n="tabs.library">我的 Skill · 落点矩阵</button>
+            <button class="tab-btn" data-view="discover" data-i18n="tabs.discover">发现 · 批量收拢</button>
+            <button class="tab-btn" data-view="market" data-i18n="tabs.market">来源与市场</button>
+            <button class="tab-btn" data-view="updates" data-i18n="tabs.updates">更新 · 三方合并</button>
+            <button class="tab-btn" data-view="doctor" data-i18n="tabs.doctor">体检 · 只读诊断</button>
+            <button class="tab-btn" data-view="settings" data-i18n="tabs.settings">设置 · 四套主题</button>
+          </div>
+          <div class="showcase-meta mono">
+            <span class="dot good"></span>
+            <span id="shotThemeLabel">当前预览：林墨 · 深色</span>
+          </div>
+        </div>
+        <div class="showcase-stage">
+          <img id="shotImg" src="./assets/shot-home-dark.png" alt="Heron desktop screenshot" />
+        </div>
+        <div class="showcase-caption">
+          <span id="shotDesc">概览只列出此刻真正需要你决定的事：坏链、未纳管发现、各客户端真实生效状态。</span>
+          <span class="mono" style="color:var(--faint);" data-i18n="showcase.note">真实运行截图 · 深浅随主题实时联动</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Fused Section: Interactive Single-Source Topology (from Direction C) -->
+    <section id="topology">
+      <div class="wrap">
+        <div class="sec-kicker mono">01 · SINGLE-SOURCE TOPOLOGY</div>
+        <h2 class="sec-title" data-i18n="topo.title">一源多投：看清磁盘上真正发生了什么</h2>
+        <p class="sec-desc" data-i18n="topo.desc">点击切换「收拢 / 分发 / 升级」三种状态，直观查看散落目录、单一真实源与 12+ AI 客户端之间的单向数据流向。</p>
+
+        <div class="topo-box">
+          <div class="topo-head">
+            <div class="flow-switch" id="flowSwitch">
+              <button class="flow-btn active" data-mode="adopt" type="button" data-i18n="topo.tab1">01 收拢 Adopt</button>
+              <button class="flow-btn" data-mode="project" type="button" data-i18n="topo.tab2">02 分发 Project</button>
+              <button class="flow-btn" data-mode="upgrade" type="button" data-i18n="topo.tab3">03 升级 Upgrade</button>
+            </div>
+            <button class="flow-cmd mono" id="flowCmd" type="button" title="Copy command">$ heron adopt --all --dry-run</button>
+          </div>
+
+          <div class="topo-grid">
+            <div class="topo-col">
+              <div class="topo-col-title mono" data-i18n="topo.leftTitle">散落来源 · 磁盘现有拷贝</div>
+              <div class="topo-node lit mono" id="l1">
+                <span>~/.claude/skills/*</span>
+                <span class="tag-warn" data-i18n="topo.l1Tag">未纳管</span>
+              </div>
+              <div class="topo-node lit mono" id="l2">
+                <span>~/.agents/skills/*</span>
+                <span class="tag-warn" data-i18n="topo.l2Tag">重复 45</span>
+              </div>
+              <div class="topo-node mono" id="l3">
+                <span data-i18n="topo.l3Name">github.com · 5 大市场</span>
+                <span class="tag-indigo" data-i18n="topo.l3Tag">上游</span>
+              </div>
+            </div>
+
+            <div class="topo-arrow active mono" id="arr1">
+              <div class="arrow-rail"></div>
+              <span>→</span>
+            </div>
+
+            <div class="topo-core">
+              <img src="./assets/heron-icon.png" alt="Heron Store" />
+              <h3 data-i18n="topo.coreTitle">Heron 统一真相源 (Store)</h3>
+              <div class="store-path mono">~/.heron/skills/&lt;slug&gt;/.git</div>
+              <p id="coreDesc">先全量备份，Blake3 哈希去重，每个 Skill 独立 Git 仓库（main / upstream / v* tag）。</p>
+            </div>
+
+            <div class="topo-arrow mono" id="arr2">
+              <div class="arrow-rail"></div>
+              <span>→</span>
+            </div>
+
+            <div class="topo-col">
+              <div class="topo-col-title mono" data-i18n="topo.rightTitle">按需投影 · 12+ AI 客户端</div>
+              <div class="topo-node mono" id="r1">
+                <span>Claude / Codex / Cursor</span>
+                <span class="tag-good">symlink</span>
+              </div>
+              <div class="topo-node mono" id="r2">
+                <span data-i18n="topo.r2Name">Windows 落点</span>
+                <span class="tag-good">junction</span>
+              </div>
+              <div class="topo-node mono" id="r3">
+                <span>Antigravity / WorkBuddy</span>
+                <span class="tag-good">pointer</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="topo-foot">
+            <span id="flowSummary">收拢后原有路径保持不变，原地转换为指向唯一真实源的受管投影，绝不破坏既有工程。</span>
+            <span class="topo-badge mono">BACKUP FIRST · ZERO SILENT OVERWRITE</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Section 02: 3-Step Closed Loop -->
+    <section id="workflow">
+      <div class="wrap">
+        <div class="sec-kicker mono">02 · CLOSED LOOP</div>
+        <h2 class="sec-title" data-i18n="wf.title">收拢 · 分发 · 升级，一条清晰闭环</h2>
+        <p class="sec-desc" data-i18n="wf.desc">告别在五个隐藏目录间手工复制粘贴。GUI 与 CLI 共用同一套 Rust 业务内核，遵循「计算计划 → 预览确认 → 备份执行」铁律。</p>
+        <div class="loop-grid">
+          <div class="card">
+            <div class="step-no mono"><span>STEP 01</span><span>ADOPT</span></div>
+            <h3 data-i18n="wf.s1Title">安全收拢，哈希去重</h3>
+            <p data-i18n="wf.s1Desc">多线程只读扫描本机已知路径与工作区。收拢前强制全量备份，Blake3 指纹自动合并重复拷贝，原位无缝替换为受管链接。</p>
+            <div class="code-inline mono"><code>$ heron scan &amp;&amp; heron adopt --all</code></div>
+          </div>
+          <div class="card">
+            <div class="step-no mono"><span>STEP 02</span><span>PROJECT</span></div>
+            <h3 data-i18n="wf.s2Title">单向投影，显式开关</h3>
+            <p data-i18n="wf.s2Desc">从唯一存储区按需分发到指定客户端或项目目录。每个 Skill 在每个落点是否真正生效（生效中 / 被压制 / 坏链 / 需重启）一目了然。</p>
+            <div class="code-inline mono"><code>$ heron project code-review --on claude</code></div>
+          </div>
+          <div class="card">
+            <div class="step-no mono"><span>STEP 03</span><span>UPGRADE</span></div>
+            <h3 data-i18n="wf.s3Title">三方合并，不丢定制</h3>
+            <p data-i18n-html="wf.s3Desc">每个 Skill 独立 Git 仓库。升级基于 <span class="mono">git merge-tree</span> 内存级三方合并，保留本地提示词微调，冲突时逐文件可视化解决，随时一键回滚。</p>
+            <div class="code-inline mono"><code>$ heron upgrade --all &amp;&amp; heron verify</code></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Section 03: 4 Projection Modes -->
+    <section id="modes">
+      <div class="wrap">
+        <div class="sec-kicker mono">03 · PROJECTION ENGINE</div>
+        <h2 class="sec-title" data-i18n="modes.title">四种投影模式，直面真实平台的边界</h2>
+        <p class="sec-desc" data-i18n="modes.desc">装得上不等于客户端看得见。Heron 显式区分四种落点机制，在 macOS 与 Windows 上均无需管理员提权。</p>
+        <div class="modes-grid">
+          <div class="mode-card">
+            <div class="mode-head">
+              <span class="mode-tag mono">symlink</span>
+              <span class="mode-os mono">macOS / Linux</span>
+            </div>
+            <h3 data-i18n="modes.m1Title">符号链接</h3>
+            <p data-i18n="modes.m1Desc">macOS / Linux 首选。单点修改处处生效，零额外磁盘占用。</p>
+          </div>
+          <div class="mode-card">
+            <div class="mode-head">
+              <span class="mode-tag mono">junction</span>
+              <span class="mode-os mono" data-i18n="modes.m2Os">Windows 免提权</span>
+            </div>
+            <h3 data-i18n="modes.m2Title">目录连接点</h3>
+            <p data-i18n="modes.m2Desc">Windows 专属。普通用户账户直接创建，彻底告别管理员权限弹窗。</p>
+          </div>
+          <div class="mode-card">
+            <div class="mode-head">
+              <span class="mode-tag mono">pointer</span>
+              <span class="mode-os mono" data-i18n="modes.m3Os">代理 SKILL.md</span>
+            </div>
+            <h3 data-i18n="modes.m3Title">指针文件</h3>
+            <p data-i18n-html="modes.m3Desc">生成轻量代理 <span class="mono">SKILL.md</span>，攻克部分扫描器忽略 symlink 目录的缺陷。</p>
+          </div>
+          <div class="mode-card">
+            <div class="mode-head">
+              <span class="mode-tag mono">copy</span>
+              <span class="mode-os mono" data-i18n="modes.m4Os">E_DRIFTED 防护</span>
+            </div>
+            <h3 data-i18n="modes.m4Title">单向副本</h3>
+            <p data-i18n-html="modes.m4Desc">全平台兜底。内置 <span class="mono">E_DRIFTED</span> 漂移检测，绝不静默覆盖外部手改内容。</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Section 04: 12+ AI Clients -->
+    <section id="clients">
+      <div class="wrap">
+        <div class="clients-panel">
+          <div>
+            <div class="sec-kicker mono">04 · HONEST DETECTION</div>
+            <h2 class="sec-title" data-i18n="clients.title">12+ AI 客户端，诚实探测</h2>
+            <p style="color:var(--dim);" data-i18n="clients.desc">
+              通过目录结构、CLI 版本与 App Bundle 复合信号探测本机安装状态。未安装的客户端只置灰标注，绝不伪造「生效」，绝不擅改配置。
+            </p>
+            <div class="legend-row mono">
+              <span><span class="dot good"></span> <em style="font-style:normal;" data-i18n="clients.live">生效中</em></span>
+              <span><span class="dot warn"></span> <em style="font-style:normal;" data-i18n="clients.shadowed">被压制</em></span>
+              <span><span class="dot bad"></span> <em style="font-style:normal;" data-i18n="clients.broken">坏链</em></span>
+              <span><span class="dot ring"></span> <em style="font-style:normal;" data-i18n="clients.notScanned">未扫描</em></span>
+            </div>
+          </div>
+          <div class="client-grid mono">
+            <div class="client-chip"><span class="dot good"></span>Claude Code</div>
+            <div class="client-chip"><span class="dot good"></span>Codex</div>
+            <div class="client-chip"><span class="dot good"></span>Cursor</div>
+            <div class="client-chip"><span class="dot good"></span>Antigravity</div>
+            <div class="client-chip"><span class="dot good"></span>GitHub Copilot</div>
+            <div class="client-chip"><span class="dot good"></span>Cline</div>
+            <div class="client-chip"><span class="dot good"></span>Trae / Trae CN</div>
+            <div class="client-chip"><span class="dot good"></span>OpenCode</div>
+            <div class="client-chip"><span class="dot good"></span>WorkBuddy</div>
+            <div class="client-chip"><span class="dot good"></span>Qoder</div>
+            <div class="client-chip"><span class="dot good"></span>Grok</div>
+            <div class="client-chip"><span class="dot good"></span><span data-i18n="clients.agents">.agents 共享</span></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Section 05: Safety Contract -->
+    <section id="contract">
+      <div class="wrap">
+        <div class="sec-kicker mono">05 · SAFETY CONTRACT</div>
+        <h2 class="sec-title" data-i18n="contract.title">首要铁律：从不擅自破坏你的既有数据</h2>
+        <p class="sec-desc" data-i18n="contract.desc">所有危险边界都写进编译期契约与错误码，而非靠文档口头提醒。</p>
+        <div class="contract-grid">
+          <div class="contract-item">
+            <span class="contract-code mono">BACKUP FIRST</span>
+            <div>
+              <h3 data-i18n="contract.c1Title">先备份，再动文件</h3>
+              <p data-i18n="contract.c1Desc">任何收拢或变更前强制完整备份至独立数据目录；备份失败则事务立刻中止。</p>
+            </div>
+          </div>
+          <div class="contract-item">
+            <span class="contract-code mono">E_NOT_MANAGED</span>
+            <div>
+              <h3 data-i18n="contract.c2Title">拒绝隐式覆盖</h3>
+              <p data-i18n="contract.c2Desc">投影目标遇到未经纳管的非空目录时立即停下报错，绝不强制删除替换。</p>
+            </div>
+          </div>
+          <div class="contract-item">
+            <span class="contract-code mono">READ-ONLY DOCTOR</span>
+            <div>
+              <h3 data-i18n="contract.c3Title">病态嵌套只诊断不盲动</h3>
+              <p data-i18n="contract.c3Desc">体检全程只读，精准定位重复、坏链与恶性嵌套，每一步修复都由你确认。</p>
+            </div>
+          </div>
+          <div class="contract-item">
+            <span class="contract-code mono">HERON.LOCK</span>
+            <div>
+              <h3 data-i18n="contract.c4Title">团队协同，一条命令复现</h3>
+              <p data-i18n-html="contract.c4Desc">导出项目级锁文件，新人克隆仓库后 <span class="mono">heron lock apply</span> 即可精准对齐整套 Skill。</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Section 06: CLI & Download -->
+    <section id="cli">
+      <div class="wrap">
+        <div class="sec-kicker mono">06 · CLI &amp; TEAM LOCK</div>
+        <h2 class="sec-title" data-i18n="cli.title">桌面端之外，完整的同源命令行</h2>
+        <p class="sec-desc" data-i18n-html="cli.desc">所有命令支持 <span class="mono">--json</span> 机器可读输出与 <span class="mono">--data-dir</span> 沙箱隔离，天然适配脚本与 CI。</p>
+        <div class="term mono">
+          <div class="term-head">
+            <span>heron-cli · zsh · git 2.38+</span>
+            <button class="term-copy" type="button" data-copy="heron scan && heron adopt --all --dry-run" data-i18n="cli.copyBtn">复制命令</button>
+          </div>
+          <pre id="cliPre"><span class="t-dim"># 1. 扫描本机并预览收拢计划（绝不盲动）</span>
+<span class="t-acc">$</span> heron scan
+<span class="t-acc">$</span> heron adopt --all --dry-run
+
+<span class="t-dim"># 2. 从任意 Git 仓库或 5 大内置市场安装</span>
+<span class="t-acc">$</span> heron install https://github.com/owner/repo/tree/main/skills/code-review
+
+<span class="t-dim"># 3. 团队锁文件导出与精准同步</span>
+<span class="t-acc">$</span> heron lock export --write
+<span class="t-acc">$</span> heron lock apply
+<span class="t-good">✓ 48 skills managed · 216/216 projections verified · 0 drifted</span></pre>
+        </div>
+
+        <div id="download" class="dl-grid">
+          <div class="dl-card">
+            <div>
+              <h3>macOS (Apple Silicon)</h3>
+              <p class="mono">Heron_0.1.0_aarch64.dmg · macOS 12+</p>
+            </div>
+            <a class="btn primary" href="https://github.com/v5note/heron/releases/latest" target="_blank" rel="noopener" data-i18n="dl.mac">下载 .dmg</a>
+          </div>
+          <div class="dl-card">
+            <div>
+              <h3>Windows x64</h3>
+              <p class="mono">Heron_0.1.0_x64-setup.exe · Win10 1803+</p>
+            </div>
+            <a class="btn primary" href="https://github.com/v5note/heron/releases/latest" target="_blank" rel="noopener" data-i18n="dl.win">下载安装器</a>
+          </div>
+        </div>
+        <p class="dl-note" data-i18n-html="dl.note">
+          环境要求：本机需安装 <span class="mono">Git 2.38+</span>（用于 <span class="mono">git merge-tree</span> 三方合并）。首次打开未签名安装包放行指引见
+          <a href="https://github.com/v5note/heron/blob/main/docs/SIGNING.md" target="_blank" rel="noopener">docs/SIGNING.md</a>。
+        </p>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <div class="wrap foot-inner">
+      <div data-i18n="footer.copy">Heron 苍鹭 · 本地 Agent Skill 管理器 · 静立一处，注视整片水面</div>
+      <div class="foot-links mono">
+        <a href="https://github.com/v5note/heron" target="_blank" rel="noopener">GitHub</a>
+        <a href="https://github.com/v5note/heron/releases" target="_blank" rel="noopener">Releases</a>
+        <a href="https://github.com/v5note/heron/blob/main/docs/GUIDE.md" target="_blank" rel="noopener" data-i18n="footer.guide">上手指南</a>
+        <span>MIT License</span>
+      </div>
+    </div>
+  </footer>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+  <script src="./main.js"></script>
+</body>
+</html>

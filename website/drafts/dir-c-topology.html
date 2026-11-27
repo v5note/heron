@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Heron 苍鹭 — 方向 C · 单源拓扑台</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <style>
+    /* Heron 晚晴夜蓝 + 默认暖纸 双段高对比 */
+    :root {
+      --night: #12161f;
+      --night-panel: #1a202c;
+      --night-raised: #222938;
+      --night-line: rgba(230, 227, 220, 0.11);
+      --night-text: #ebe8e0;
+      --night-dim: #9fa7b8;
+      --indigo: #8fa2db;
+      --jade: #7fb59a;
+      --good: #b2c77a;
+      --warn: #e3c08a;
+      --bad: #e0a090;
+
+      --paper: #f6f1e7;
+      --paper-card: #fffcf5;
+      --paper-line: #dfd6c7;
+      --ink: #24232d;
+      --ink-dim: #5c5870;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; }
+    body {
+      font-family: "Manrope", -apple-system, BlinkMacSystemFont, "PingFang SC", sans-serif;
+      font-size: 15px; line-height: 1.65; -webkit-font-smoothing: antialiased;
+      background: var(--night); color: var(--night-text);
+    }
+    .mono { font-family: "JetBrains Mono", ui-monospace, Menlo, monospace; font-variant-numeric: tabular-nums; }
+    a { color: inherit; text-decoration: none; }
+    button { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; }
+    .wrap { max-width: 1180px; margin: 0 auto; padding: 0 28px; }
+
+    /* Top Nav */
+    .nav {
+      position: sticky; top: 0; z-index: 40;
+      background: rgba(18, 22, 31, 0.84); backdrop-filter: blur(14px);
+      border-bottom: 1px solid var(--night-line);
+    }
+    .nav-inner { height: 60px; display: flex; align-items: center; gap: 24px; }
+    .brand { display: flex; align-items: center; gap: 10px; font-weight: 700; }
+    .brand img { width: 28px; height: 28px; border-radius: 7px; }
+    .nav-links { display: flex; gap: 22px; margin-left: 14px; font-size: 13.5px; color: var(--night-dim); }
+    .nav-links a:hover { color: #fff; }
+    .nav-cta {
+      margin-left: auto; padding: 8px 16px; border-radius: 8px;
+      background: var(--indigo); color: #12161f; font-weight: 700; font-size: 13px;
+    }
+
+    /* Hero + Interactive Topology Stage */
+    .hero {
+      padding: 64px 0 80px;
+      background:
+        radial-gradient(50% 45% at 50% 0%, rgba(143, 162, 219, 0.16), transparent 72%),
+        linear-gradient(180deg, #12161f 0%, #151a24 100%);
+    }
+    .hero-top { text-align: center; max-width: 780px; margin: 0 auto 44px; }
+    .kicker {
+      display: inline-block; padding: 4px 12px; border-radius: 999px;
+      border: 1px solid rgba(143, 162, 219, 0.35); background: rgba(143, 162, 219, 0.1);
+      color: var(--indigo); font-size: 12px; font-weight: 600; margin-bottom: 18px;
+    }
+    .hero h1 {
+      font-size: clamp(34px, 4.8vw, 54px); font-weight: 800; letter-spacing: -0.03em; line-height: 1.15;
+      margin-bottom: 18px;
+    }
+    .hero p { font-size: 16.5px; color: var(--night-dim); margin-bottom: 26px; }
+    .hero-btns { display: flex; justify-content: center; gap: 12px; flex-wrap: wrap; }
+    .btn-primary {
+      padding: 12px 22px; border-radius: 9px; background: var(--night-text); color: var(--night);
+      font-weight: 700; font-size: 14.5px;
+    }
+    .btn-ghost {
+      padding: 12px 20px; border-radius: 9px; border: 1px solid var(--night-line);
+      background: var(--night-panel); color: var(--night-text); font-size: 14px;
+    }
+
+    /* Interactive Topology Canvas */
+    .topo-box {
+      background: var(--night-panel); border: 1px solid var(--night-line);
+      border-radius: 16px; overflow: hidden;
+      box-shadow: 0 30px 90px rgba(0, 0, 0, 0.45);
+    }
+    .topo-head {
+      display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px;
+      padding: 14px 20px; border-bottom: 1px solid var(--night-line); background: var(--night-raised);
+    }
+    .flow-switch { display: flex; gap: 6px; }
+    .flow-btn {
+      padding: 6px 14px; border-radius: 7px; font-size: 12.5px; font-weight: 600; color: var(--night-dim);
+      border: 1px solid transparent;
+    }
+    .flow-btn.active { background: var(--night-panel); color: #fff; border-color: rgba(143, 162, 219, 0.45); }
+    .topo-grid {
+      display: grid; grid-template-columns: 1fr 64px 1.15fr 64px 1fr; align-items: center;
+      padding: 32px 26px; gap: 8px;
+    }
+    .topo-col { display: flex; flex-direction: column; gap: 10px; }
+    .topo-col-title { font-size: 11.5px; color: var(--night-dim); letter-spacing: 0.06em; margin-bottom: 4px; }
+    .node {
+      padding: 11px 14px; border-radius: 10px; background: var(--night);
+      border: 1px solid var(--night-line); font-size: 12.5px;
+      display: flex; align-items: center; justify-content: space-between; gap: 8px;
+      transition: border-color 0.2s, transform 0.2s;
+    }
+    .node.lit { border-color: var(--jade); box-shadow: 0 0 0 1px rgba(127, 181, 154, 0.25); }
+    .node-core {
+      padding: 24px 20px; border-radius: 14px;
+      background: linear-gradient(180deg, rgba(127, 181, 154, 0.14), rgba(143, 162, 219, 0.08));
+      border: 1.5px solid var(--jade); text-align: center;
+    }
+    .node-core h3 { font-size: 16px; margin: 10px 0 6px; }
+    .node-core .path {
+      display: inline-block; padding: 4px 10px; border-radius: 6px;
+      background: rgba(18, 22, 31, 0.7); font-size: 12px; color: var(--jade);
+    }
+    .arrow-lane { text-align: center; font-size: 20px; color: var(--indigo); }
+    .topo-foot {
+      padding: 14px 20px; border-top: 1px solid var(--night-line);
+      display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;
+      font-size: 13px; color: var(--night-dim);
+    }
+
+    /* Light Paper Section — Bento Feature Grid */
+    .paper-band {
+      background: var(--paper); color: var(--ink); padding: 84px 0;
+    }
+    .band-head { margin-bottom: 40px; display: flex; justify-content: space-between; align-items: flex-end; gap: 20px; flex-wrap: wrap; }
+    .band-head h2 { font-size: clamp(28px, 3.2vw, 38px); font-weight: 800; letter-spacing: -0.025em; }
+    .band-head p { color: var(--ink-dim); max-width: 480px; }
+
+    .bento {
+      display: grid; grid-template-columns: repeat(12, 1fr); gap: 18px;
+    }
+    .b-card {
+      background: var(--paper-card); border: 1px solid var(--paper-line); border-radius: 16px;
+      padding: 24px; overflow: hidden; display: flex; flex-direction: column;
+    }
+    .span-7 { grid-column: span 7; }
+    .span-5 { grid-column: span 5; }
+    .span-6 { grid-column: span 6; }
+    .span-4 { grid-column: span 4; }
+    .span-8 { grid-column: span 8; }
+    .b-tag { font-size: 11.5px; font-weight: 700; color: #4a5a86; letter-spacing: 0.06em; margin-bottom: 8px; }
+    .b-card h3 { font-size: 20px; font-weight: 700; margin-bottom: 8px; }
+    .b-card p { font-size: 14px; color: var(--ink-dim); margin-bottom: 16px; }
+    .b-shot {
+      width: 100%; border-radius: 10px; border: 1px solid var(--paper-line);
+      margin-top: auto; box-shadow: 0 10px 28px rgba(36, 35, 45, 0.08);
+    }
+
+    /* Dark CTA Footer Band */
+    .cta-band {
+      background: var(--night); color: var(--night-text); padding: 72px 0;
+      border-top: 1px solid var(--night-line); text-align: center;
+    }
+    .cta-band h2 { font-size: 32px; font-weight: 800; margin-bottom: 12px; }
+    .cta-band p { color: var(--night-dim); margin-bottom: 26px; }
+
+    @media (max-width: 960px) {
+      .topo-grid { grid-template-columns: 1fr; }
+      .arrow-lane { transform: rotate(90deg); }
+      .span-7, .span-5, .span-6, .span-4, .span-8 { grid-column: span 12; }
+      .nav-links { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <header class="nav">
+    <div class="wrap nav-inner">
+      <a href="#" class="brand">
+        <img src="../../src-tauri/icons/icon-master.png" alt="Heron" />
+        <span>Heron 苍鹭</span>
+      </a>
+      <nav class="nav-links">
+        <a href="#topology">一源多投拓扑</a>
+        <a href="#bento">核心能力</a>
+        <a href="#download">下载</a>
+      </nav>
+      <a class="nav-cta" href="https://github.com/v5note/heron/releases" target="_blank">下载 v0.1.0</a>
+    </div>
+  </header>
+
+  <section class="hero" id="topology">
+    <div class="wrap">
+      <div class="hero-top">
+        <div class="kicker mono">ONE STORE · MULTI-CLIENT PROJECTION · 3-WAY MERGE</div>
+        <h1>一份真实源，<br/>精准投影到每一个 AI 助手</h1>
+        <p>
+          告别散落目录、重复拷贝与升级覆盖。Heron 用 Per-Skill Git 仓库托管你的全部 Agent Skill，以可视化工作台与同源 CLI 驱动整条生命周期。
+        </p>
+        <div class="hero-btns">
+          <a class="btn-primary" href="https://github.com/v5note/heron/releases" target="_blank">下载桌面端（macOS / Windows）</a>
+          <a class="btn-ghost mono" href="#bento">查看真实界面 →</a>
+        </div>
+      </div>
+
+      <div class="topo-box">
+        <div class="topo-head">
+          <div class="flow-switch" id="flowSwitch">
+            <button class="flow-btn active" data-mode="adopt">01 收拢 Adopt</button>
+            <button class="flow-btn" data-mode="project">02 分发 Project</button>
+            <button class="flow-btn" data-mode="upgrade">03 升级 Upgrade</button>
+          </div>
+          <span class="mono" style="font-size:12px;color:var(--jade);" id="flowCmd">$ heron adopt --all --dry-run</span>
+        </div>
+
+        <div class="topo-grid">
+          <div class="topo-col">
+            <div class="topo-col-title mono" id="leftTitle">散落来源 · 磁盘现有拷贝</div>
+            <div class="node lit mono" id="l1"><span>~/.claude/skills/*</span><span style="color:var(--warn);">未纳管</span></div>
+            <div class="node lit mono" id="l2"><span>~/.agents/skills/*</span><span style="color:var(--warn);">重复 45</span></div>
+            <div class="node lit mono" id="l3"><span>github.com · 5 大市场</span><span style="color:var(--indigo);">上游</span></div>
+          </div>
+
+          <div class="arrow-lane mono" id="arr1">→</div>
+
+          <div class="node-core">
+            <img src="../../src-tauri/icons/icon-master.png" alt="Heron" style="width:42px;height:42px;border-radius:10px;" />
+            <h3>Heron 统一真相源 (Store)</h3>
+            <div class="path mono">~/.heron/skills/&lt;slug&gt;/.git</div>
+            <p style="font-size:12.5px;color:var(--night-dim);margin-top:10px;" id="coreDesc">
+              先全量备份，Blake3 哈希去重，每个 Skill 独立 Git 仓库（main / upstream / v* tag）。
+            </p>
+          </div>
+
+          <div class="arrow-lane mono" id="arr2">→</div>
+
+          <div class="topo-col">
+            <div class="topo-col-title mono" id="rightTitle">按需投影 · 12+ AI 客户端</div>
+            <div class="node mono" id="r1"><span>Claude / Codex / Cursor</span><span style="color:var(--good);">symlink</span></div>
+            <div class="node mono" id="r2"><span>Windows 落点</span><span style="color:var(--good);">junction</span></div>
+            <div class="node mono" id="r3"><span>Antigravity / WorkBuddy</span><span style="color:var(--good);">pointer</span></div>
+          </div>
+        </div>
+
+        <div class="topo-foot">
+          <span id="flowSummary">收拢后原有路径保持不变，原地转换为指向唯一真实源的受管投影，绝不破坏既有工程。</span>
+          <span class="mono" style="color:var(--good);">BACKUP FIRST · ZERO SILENT OVERWRITE</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="paper-band" id="bento">
+    <div class="wrap">
+      <div class="band-head">
+        <div>
+          <div class="b-tag mono">REAL INTERFACE · BENTO OVERVIEW</div>
+          <h2>所见即所得的真实工程能力</h2>
+        </div>
+        <p>以下均为 Heron 0.1.0 真实运行截屏。Rust + Tauri 2 构建，安装包仅 5–15 MB，桌面端与 CLI 完全同构。</p>
+      </div>
+
+      <div class="bento">
+        <div class="b-card span-7">
+          <div class="b-tag mono">OVERVIEW · ACTION QUEUE</div>
+          <h3>行动中心：只列需要你决定的事</h3>
+          <p>聚合坏链、待纳管发现与 12+ 客户端实时生效读数，告别在十几个隐藏文件夹里逐一排查。</p>
+          <img class="b-shot" src="../../images/首页-深色.png" alt="概览" />
+        </div>
+
+        <div class="b-card span-5">
+          <div class="b-tag mono">LIBRARY · DRAWER</div>
+          <h3>逐落点开关，四态可见性校验</h3>
+          <p>点开任意 Skill 即可在侧边抽屉中一键启停各客户端投影，清晰区分生效中、被压制、坏链与需重启。</p>
+          <img class="b-shot" src="../../images/我的Skill-深色2.png" alt="详情抽屉" />
+        </div>
+
+        <div class="b-card span-6">
+          <div class="b-tag mono">SOURCES &amp; MARKETS</div>
+          <h3>5 大内置市场 + 任意 Git 地址直装</h3>
+          <p>支持 skills.sh、ClawHub 搜索直装，兼容 HTTPS / SSH / Monorepo 子目录深链与私有团队仓库。</p>
+          <img class="b-shot" src="../../images/来源与市场-浅色.png" alt="来源与市场" />
+        </div>
+
+        <div class="b-card span-6">
+          <div class="b-tag mono">4 THEMES × LIGHT &amp; DARK</div>
+          <h3>默认、林墨、暮色、晚晴四套主题</h3>
+          <p>支持系统跟随与深浅色一键切换，提供默认投影模式、自动体检与三方合并偏好配置。</p>
+          <img class="b-shot" src="../../images/设置-深色.png" alt="设置与主题" />
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="cta-band" id="download">
+    <div class="wrap">
+      <h2>把 Skill 资产交回受控的秩序</h2>
+      <p>支持 macOS 12+ (Apple Silicon) 与 Windows 10/11 (x64)，需本机安装 Git 2.38+。</p>
+      <div class="hero-btns">
+        <a class="btn-primary" href="https://github.com/v5note/heron/releases" target="_blank">下载 Heron 0.1.0</a>
+        <a class="btn-ghost mono" href="https://github.com/v5note/heron" target="_blank">GitHub 源码 (MIT)</a>
+      </div>
+    </div>
+  </section>
+
+  <script>
+    const FLOWS = {
+      adopt: {
+        cmd: "$ heron adopt --all --dry-run",
+        core: "先全量备份，Blake3 哈希去重，每个 Skill 独立 Git 仓库（main / upstream / v* tag）。",
+        summary: "收拢后原有路径保持不变，原地转换为指向唯一真实源的受管投影，绝不破坏既有工程。",
+        lit: ["l1", "l2"]
+      },
+      project: {
+        cmd: "$ heron project ask-matt --on claude --on cursor",
+        core: "根据平台与客户端能力表自动选择 symlink / junction / pointer / copy，并执行可见性验证。",
+        summary: "显式指定目标落点，绝不隐式猜测；遇到未纳管非空目录自动报 E_NOT_MANAGED 停机保护。",
+        lit: ["r1", "r2", "r3"]
+      },
+      upgrade: {
+        cmd: "$ heron upgrade --all && heron lock export --write",
+        core: "调用 git merge-tree 在内存中完成三方合并，上游新特性与本地提示词定制同时保留。",
+        summary: "存在冲突时不污染工作区，提供左右并排可视化合并界面，并支持随时 heron rollback 回滚。",
+        lit: ["l3", "r1", "r2"]
+      }
+    };
+
+    document.getElementById("flowSwitch").addEventListener("click", (e) => {
+      const btn = e.target.closest(".flow-btn");
+      if (!btn) return;
+      document.querySelectorAll(".flow-btn").forEach(b => b.classList.remove("active"));
+      btn.classList.add("active");
+      const cfg = FLOWS[btn.dataset.mode];
+      document.getElementById("flowCmd").textContent = cfg.cmd;
+      document.getElementById("coreDesc").textContent = cfg.core;
+      document.getElementById("flowSummary").textContent = cfg.summary;
+      ["l1","l2","l3","r1","r2","r3"].forEach(id => {
+        document.getElementById(id).classList.toggle("lit", cfg.lit.includes(id));
+      });
+    });
+  </script>
+</body>
+</html>

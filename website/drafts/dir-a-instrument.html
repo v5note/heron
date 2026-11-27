@@ -1,0 +1,557 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-color-mode="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Heron 苍鹭 — 方向 A · 静水观测台</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,500;0,600;1,500&family=JetBrains+Mono:wght@400;500&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <style>
+    /* Heron 林墨 (Forest Ink) — Dark Primary + Light Toggle */
+    :root[data-color-mode="dark"] {
+      color-scheme: dark;
+      --bg: #111814;
+      --panel: #19221c;
+      --raised: #222e26;
+      --line: rgba(226, 238, 230, 0.10);
+      --line-strong: rgba(226, 238, 230, 0.20);
+      --text: #e6efe8;
+      --dim: #a9bdb0;
+      --faint: #7b9284;
+      --on-text: #111814;
+      --good: #b2c77a;
+      --warn: #e3c08a;
+      --bad: #e0a090;
+      --accent: #6fad8e;
+      --accent-weak: rgba(111, 173, 142, 0.14);
+      --shadow: 0 28px 80px rgba(4, 8, 5, 0.65);
+      --glow: radial-gradient(60% 50% at 50% 0%, rgba(111, 173, 142, 0.14), transparent 70%);
+    }
+    :root[data-color-mode="light"] {
+      color-scheme: light;
+      --bg: #eef3ef;
+      --panel: #f8fbf9;
+      --raised: #e1ebe4;
+      --line: #d1ded6;
+      --line-strong: #b6c8bd;
+      --text: #1c2f24;
+      --dim: #495f52;
+      --faint: #6c8275;
+      --on-text: #f8fbf9;
+      --good: #5c7a2e;
+      --warn: #8a6216;
+      --bad: #a8452f;
+      --accent: #2f5b48;
+      --accent-weak: rgba(47, 91, 72, 0.10);
+      --shadow: 0 24px 64px rgba(24, 42, 32, 0.14);
+      --glow: radial-gradient(60% 50% at 50% 0%, rgba(47, 91, 72, 0.08), transparent 70%);
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: "Manrope", -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB", sans-serif;
+      font-size: 15px;
+      line-height: 1.65;
+      -webkit-font-smoothing: antialiased;
+      background-image: var(--glow);
+      background-repeat: no-repeat;
+    }
+    .mono { font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace; font-variant-numeric: tabular-nums; }
+    .serif { font-family: "EB Garamond", "Songti SC", Georgia, serif; }
+    a { color: inherit; text-decoration: none; }
+    button { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; }
+
+    .wrap { max-width: 1160px; margin: 0 auto; padding: 0 28px; }
+
+    /* Top Instrument Bar */
+    .nav {
+      position: sticky; top: 0; z-index: 40;
+      backdrop-filter: blur(14px);
+      background: color-mix(in srgb, var(--bg) 82%, transparent);
+      border-bottom: 1px solid var(--line);
+    }
+    .nav-inner {
+      height: 60px; display: flex; align-items: center; gap: 28px;
+    }
+    .brand { display: flex; align-items: center; gap: 10px; font-weight: 700; letter-spacing: -0.01em; }
+    .brand img { width: 28px; height: 28px; border-radius: 7px; border: 1px solid var(--line-strong); }
+    .brand span.sub { font-size: 12px; font-weight: 500; color: var(--faint); margin-left: 2px; }
+    .nav-links { display: flex; gap: 22px; margin-left: 16px; font-size: 13.5px; color: var(--dim); }
+    .nav-links a:hover { color: var(--text); }
+    .nav-right { margin-left: auto; display: flex; align-items: center; gap: 10px; }
+    .btn {
+      display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+      height: 36px; padding: 0 15px; border-radius: 8px;
+      font-size: 13.5px; font-weight: 600; border: 1px solid var(--line-strong);
+      transition: all 0.16s ease;
+    }
+    .btn:hover { background: var(--raised); border-color: var(--faint); }
+    .btn.primary { background: var(--text); color: var(--on-text); border-color: var(--text); }
+    .btn.primary:hover { opacity: 0.9; }
+    .btn.lg { height: 44px; padding: 0 22px; font-size: 14.5px; border-radius: 9px; }
+
+    /* Hero */
+    .hero { padding: 72px 0 56px; text-align: center; }
+    .status-pill {
+      display: inline-flex; align-items: center; gap: 10px;
+      padding: 6px 14px; border-radius: 999px;
+      background: var(--panel); border: 1px solid var(--line-strong);
+      font-size: 12.5px; color: var(--dim); margin-bottom: 24px;
+    }
+    .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; flex: none; }
+    .dot.good { background: var(--good); box-shadow: 0 0 0 3px color-mix(in srgb, var(--good) 20%, transparent); }
+    .dot.warn { background: var(--warn); }
+    .dot.bad { background: var(--bad); }
+    .dot.ring { border: 1.5px solid var(--faint); background: transparent; }
+
+    .hero h1 {
+      font-size: clamp(36px, 5vw, 56px);
+      font-weight: 800; letter-spacing: -0.03em; line-height: 1.14;
+      max-width: 820px; margin: 0 auto 20px;
+    }
+    .hero h1 em {
+      font-style: normal; color: var(--accent);
+    }
+    .hero-lead {
+      font-size: 17px; color: var(--dim); max-width: 650px; margin: 0 auto 30px;
+    }
+    .hero-actions { display: flex; justify-content: center; gap: 12px; flex-wrap: wrap; margin-bottom: 34px; }
+
+    /* Instrument Readout Strip */
+    .readout-strip {
+      display: grid; grid-template-columns: repeat(4, 1fr);
+      max-width: 920px; margin: 0 auto 44px;
+      background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+      overflow: hidden;
+    }
+    .readout-cell {
+      padding: 16px 20px; text-align: left; border-right: 1px solid var(--line);
+    }
+    .readout-cell:last-child { border-right: 0; }
+    .readout-num { font-size: 26px; font-weight: 700; letter-spacing: -0.02em; line-height: 1.2; }
+    .readout-label { font-size: 12px; color: var(--faint); margin-top: 4px; }
+
+    /* Interactive App Showcase */
+    .showcase-shell {
+      background: var(--panel); border: 1px solid var(--line-strong); border-radius: 16px;
+      box-shadow: var(--shadow); overflow: hidden; text-align: left;
+    }
+    .showcase-bar {
+      display: flex; align-items: center; gap: 8px; padding: 12px 16px;
+      border-bottom: 1px solid var(--line); background: var(--raised); flex-wrap: wrap;
+    }
+    .showcase-tabs { display: flex; gap: 6px; flex-wrap: wrap; }
+    .tab-btn {
+      padding: 6px 12px; border-radius: 7px; font-size: 12.5px; font-weight: 600;
+      color: var(--dim); border: 1px solid transparent; transition: all 0.15s;
+    }
+    .tab-btn:hover { color: var(--text); background: color-mix(in srgb, var(--panel) 60%, transparent); }
+    .tab-btn.active {
+      background: var(--panel); color: var(--text); border-color: var(--line-strong);
+    }
+    .showcase-meta {
+      margin-left: auto; font-size: 12px; color: var(--faint); display: flex; align-items: center; gap: 10px;
+    }
+    .showcase-stage { position: relative; background: var(--bg); }
+    .showcase-stage img {
+      display: block; width: 100%; height: auto;
+    }
+    .showcase-caption {
+      padding: 14px 20px; border-top: 1px solid var(--line);
+      display: flex; align-items: center; justify-content: space-between; gap: 16px;
+      font-size: 13px; color: var(--dim);
+    }
+
+    /* Section */
+    section { padding: 72px 0; border-top: 1px solid var(--line); }
+    .sec-kicker {
+      font-size: 12px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase;
+      color: var(--accent); margin-bottom: 10px;
+    }
+    .sec-title { font-size: clamp(26px, 3vw, 34px); font-weight: 700; letter-spacing: -0.02em; margin-bottom: 12px; }
+    .sec-desc { color: var(--dim); max-width: 640px; margin-bottom: 36px; }
+
+    /* 3-Step Closed Loop */
+    .loop-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; }
+    .card {
+      background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 24px;
+    }
+    .step-no { font-size: 12px; color: var(--accent); margin-bottom: 12px; display: flex; align-items: center; justify-content: space-between; }
+    .card h3 { font-size: 18px; font-weight: 700; margin-bottom: 8px; }
+    .card p { font-size: 14px; color: var(--dim); }
+    .code-inline {
+      margin-top: 16px; padding: 10px 12px; border-radius: 8px;
+      background: var(--bg); border: 1px solid var(--line);
+      font-size: 12px; color: var(--text);
+    }
+
+    /* 4 Projection Modes Matrix */
+    .modes-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
+    .mode-card {
+      background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 20px;
+      display: flex; flex-direction: column; gap: 10px;
+    }
+    .mode-tag {
+      display: inline-flex; align-self: flex-start; padding: 3px 9px; border-radius: 999px;
+      font-size: 11.5px; font-weight: 600; background: var(--accent-weak); color: var(--accent);
+    }
+
+    /* Clients Dot Matrix */
+    .clients-panel {
+      background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 24px;
+      display: grid; grid-template-columns: 1.1fr 1.4fr; gap: 28px; align-items: center;
+    }
+    .client-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+    .client-chip {
+      display: flex; align-items: center; gap: 9px; padding: 10px 12px;
+      background: var(--bg); border: 1px solid var(--line); border-radius: 8px;
+      font-size: 13px; font-weight: 500;
+    }
+
+    /* Safety Contract */
+    .contract-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; }
+    .contract-item {
+      display: flex; gap: 14px; padding: 20px; border-radius: 12px;
+      background: var(--panel); border: 1px solid var(--line);
+    }
+    .contract-code {
+      font-size: 11.5px; color: var(--warn); background: color-mix(in srgb, var(--warn) 12%, transparent);
+      padding: 3px 8px; border-radius: 6px; height: fit-content; white-space: nowrap;
+    }
+
+    /* Terminal Quickstart */
+    .term {
+      background: #0d130f; color: #e2eee6; border: 1px solid var(--line-strong);
+      border-radius: 12px; overflow: hidden;
+    }
+    .term-head {
+      padding: 10px 16px; border-bottom: 1px solid rgba(255,255,255,0.08);
+      display: flex; align-items: center; justify-content: space-between; font-size: 12px; color: #8fa498;
+    }
+    .term pre {
+      padding: 20px; font-size: 13px; line-height: 1.75; overflow-x: auto;
+    }
+    .t-dim { color: #6f8578; }
+    .t-acc { color: #7fb59a; }
+    .t-good { color: #b2c77a; }
+
+    /* Footer */
+    footer {
+      border-top: 1px solid var(--line); padding: 40px 0; font-size: 13px; color: var(--faint);
+    }
+    .foot-inner { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 16px; }
+
+    @media (max-width: 900px) {
+      .readout-strip, .loop-grid, .modes-grid, .clients-panel, .contract-grid { grid-template-columns: 1fr; }
+      .readout-cell { border-right: 0; border-bottom: 1px solid var(--line); }
+      .nav-links { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <header class="nav">
+    <div class="wrap nav-inner">
+      <a href="#" class="brand">
+        <img src="../../src-tauri/icons/icon-master.png" alt="Heron" />
+        <span>Heron 苍鹭</span>
+        <span class="sub mono">v0.1.0</span>
+      </a>
+      <nav class="nav-links">
+        <a href="#workflow">工作流</a>
+        <a href="#modes">投影机制</a>
+        <a href="#clients">12+ 客户端</a>
+        <a href="#contract">安全契约</a>
+        <a href="#cli">CLI</a>
+      </nav>
+      <div class="nav-right">
+        <button class="btn" id="themeToggle" type="button">切换浅色</button>
+        <a class="btn primary" href="https://github.com/v5note/heron/releases" target="_blank">下载桌面端</a>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <div class="wrap hero">
+      <div class="status-pill mono">
+        <span class="dot good"></span>
+        <span>Rust 1.80+ · Tauri 2 · Per-Skill Git · macOS &amp; Windows</span>
+      </div>
+      <h1>把散落在各处的 Agent Skill，<br/>收拢成<em>一份受版本管理的真实源</em></h1>
+      <p class="hero-lead">
+        苍鹭静立一处，注视整片水面。扫描本机 12+ AI 编码客户端，去重收拢至 <span class="mono">~/.heron/skills/</span>，按需单向投影，并以 Git 三方合并安全升级。
+      </p>
+      <div class="hero-actions">
+        <a class="btn primary lg" href="https://github.com/v5note/heron/releases" target="_blank">下载 macOS / Windows 安装包</a>
+        <a class="btn lg mono" href="#cli">$ heron adopt --all --dry-run</a>
+      </div>
+
+      <div class="readout-strip">
+        <div class="readout-cell">
+          <div class="readout-num mono">1 份</div>
+          <div class="readout-label">单一真实源 · 独立 Git 仓库</div>
+        </div>
+        <div class="readout-cell">
+          <div class="readout-num mono">12+</div>
+          <div class="readout-label">内置主流 AI 客户端落点感知</div>
+        </div>
+        <div class="readout-cell">
+          <div class="readout-num mono">4 种</div>
+          <div class="readout-label">symlink / junction / pointer / copy</div>
+        </div>
+        <div class="readout-cell">
+          <div class="readout-num mono">5–15 MB</div>
+          <div class="readout-label">Tauri 2 原生体积 · 零运行时依赖</div>
+        </div>
+      </div>
+
+      <div class="showcase-shell">
+        <div class="showcase-bar">
+          <div class="showcase-tabs" id="viewTabs">
+            <button class="tab-btn active" data-view="home">概览 · 行动中心</button>
+            <button class="tab-btn" data-view="library">我的 Skill · 落点矩阵</button>
+            <button class="tab-btn" data-view="discover">发现 · 批量收拢</button>
+            <button class="tab-btn" data-view="market">来源与市场</button>
+            <button class="tab-btn" data-view="doctor">体检 · 只读诊断</button>
+          </div>
+          <div class="showcase-meta mono">
+            <span class="dot good"></span>
+            <span id="shotThemeLabel">当前预览：深色</span>
+          </div>
+        </div>
+        <div class="showcase-stage">
+          <img id="shotImg" src="../../images/首页-深色.png" alt="Heron 桌面端真实截图" />
+        </div>
+        <div class="showcase-caption">
+          <span id="shotDesc">概览只列出此刻真正需要你决定的事：坏链、未纳管发现、各客户端真实生效状态。</span>
+          <span class="mono" style="color:var(--faint);">真实运行截图 · 非概念渲染</span>
+        </div>
+      </div>
+    </div>
+
+    <section id="workflow">
+      <div class="wrap">
+        <div class="sec-kicker mono">01 · CLOSED LOOP</div>
+        <h2 class="sec-title">收拢 · 分发 · 升级，一条清晰闭环</h2>
+        <p class="sec-desc">告别在五个隐藏目录间手工复制粘贴。GUI 与 CLI 共用同一套 Rust 业务内核，遵循「计算计划 → 预览确认 → 备份执行」铁律。</p>
+        <div class="loop-grid">
+          <div class="card">
+            <div class="step-no mono"><span>STEP 01</span><span>ADOPT</span></div>
+            <h3>安全收拢，哈希去重</h3>
+            <p>多线程只读扫描本机已知路径与工作区。收拢前强制全量备份，Blake3 指纹自动合并重复拷贝，原位无缝替换为受管链接。</p>
+            <div class="code-inline mono">$ heron scan &amp;&amp; heron adopt --all</div>
+          </div>
+          <div class="card">
+            <div class="step-no mono"><span>STEP 02</span><span>PROJECT</span></div>
+            <h3>单向投影，显式开关</h3>
+            <p>从唯一存储区按需分发到指定客户端或项目目录。每个 Skill 在每个落点是否真正生效（生效中 / 被压制 / 坏链 / 需重启）一目了然。</p>
+            <div class="code-inline mono">$ heron project code-review --on claude</div>
+          </div>
+          <div class="card">
+            <div class="step-no mono"><span>STEP 03</span><span>UPGRADE</span></div>
+            <h3>三方合并，不丢定制</h3>
+            <p>每个 Skill 独立 Git 仓库。升级基于 <span class="mono">git merge-tree</span> 内存级三方合并，保留本地提示词微调，冲突时逐文件可视化解决，随时一键回滚。</p>
+            <div class="code-inline mono">$ heron upgrade --all &amp;&amp; heron verify</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="modes">
+      <div class="wrap">
+        <div class="sec-kicker mono">02 · PROJECTION ENGINE</div>
+        <h2 class="sec-title">四种投影模式，直面真实平台的边界</h2>
+        <p class="sec-desc">装得上不等于客户端看得见。Heron 显式区分四种落点机制，在 macOS 与 Windows 上均无需管理员提权。</p>
+        <div class="modes-grid">
+          <div class="mode-card">
+            <span class="mode-tag mono">symlink</span>
+            <h3>符号链接</h3>
+            <p style="font-size:13.5px;color:var(--dim);">macOS / Linux 首选。单点修改处处生效，零额外磁盘占用。</p>
+          </div>
+          <div class="mode-card">
+            <span class="mode-tag mono">junction</span>
+            <h3>目录连接点</h3>
+            <p style="font-size:13.5px;color:var(--dim);">Windows 专属。普通用户账户直接创建，彻底告别管理员权限弹窗。</p>
+          </div>
+          <div class="mode-card">
+            <span class="mode-tag mono">pointer</span>
+            <h3>指针文件</h3>
+            <p style="font-size:13.5px;color:var(--dim);">生成轻量代理 <span class="mono">SKILL.md</span>，攻克部分扫描器忽略 symlink 目录的缺陷。</p>
+          </div>
+          <div class="mode-card">
+            <span class="mode-tag mono">copy</span>
+            <h3>单向副本</h3>
+            <p style="font-size:13.5px;color:var(--dim);">全平台兜底。内置 <span class="mono">E_DRIFTED</span> 漂移检测，绝不静默覆盖外部手改内容。</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="clients">
+      <div class="wrap">
+        <div class="clients-panel">
+          <div>
+            <div class="sec-kicker mono">03 · HONEST DETECTION</div>
+            <h2 class="sec-title">12+ AI 客户端，诚实探测</h2>
+            <p style="color:var(--dim);margin-bottom:18px;">
+              通过目录结构、CLI 版本与 App Bundle 复合信号探测本机安装状态。未安装的客户端只置灰标注，绝不伪造「生效」，绝不擅改配置。
+            </p>
+            <div style="display:flex;gap:16px;font-size:12.5px;color:var(--dim);" class="mono">
+              <span><span class="dot good"></span> 生效中</span>
+              <span><span class="dot warn"></span> 被压制</span>
+              <span><span class="dot bad"></span> 坏链</span>
+              <span><span class="dot ring"></span> 未扫描</span>
+            </div>
+          </div>
+          <div class="client-grid mono">
+            <div class="client-chip"><span class="dot good"></span>Claude Code</div>
+            <div class="client-chip"><span class="dot good"></span>Codex</div>
+            <div class="client-chip"><span class="dot good"></span>Cursor</div>
+            <div class="client-chip"><span class="dot good"></span>Antigravity</div>
+            <div class="client-chip"><span class="dot good"></span>GitHub Copilot</div>
+            <div class="client-chip"><span class="dot good"></span>Cline</div>
+            <div class="client-chip"><span class="dot good"></span>Trae / Trae CN</div>
+            <div class="client-chip"><span class="dot good"></span>OpenCode</div>
+            <div class="client-chip"><span class="dot good"></span>WorkBuddy</div>
+            <div class="client-chip"><span class="dot good"></span>Qoder</div>
+            <div class="client-chip"><span class="dot good"></span>Grok</div>
+            <div class="client-chip"><span class="dot good"></span>.agents 共享</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="contract">
+      <div class="wrap">
+        <div class="sec-kicker mono">04 · SAFETY CONTRACT</div>
+        <h2 class="sec-title">首要铁律：从不擅自破坏你的既有数据</h2>
+        <p class="sec-desc">所有危险边界都写进编译期契约与错误码，而非靠文档口头提醒。</p>
+        <div class="contract-grid">
+          <div class="contract-item">
+            <span class="contract-code mono">BACKUP FIRST</span>
+            <div>
+              <h3 style="font-size:16px;margin-bottom:4px;">先备份，再动文件</h3>
+              <p style="font-size:13.5px;color:var(--dim);">任何收拢或变更前强制完整备份至独立数据目录；备份失败则事务立刻中止。</p>
+            </div>
+          </div>
+          <div class="contract-item">
+            <span class="contract-code mono">E_NOT_MANAGED</span>
+            <div>
+              <h3 style="font-size:16px;margin-bottom:4px;">拒绝隐式覆盖</h3>
+              <p style="font-size:13.5px;color:var(--dim);">投影目标遇到未经纳管的非空目录时立即停下报错，绝不强制删除替换。</p>
+            </div>
+          </div>
+          <div class="contract-item">
+            <span class="contract-code mono">READ-ONLY DOCTOR</span>
+            <div>
+              <h3 style="font-size:16px;margin-bottom:4px;">病态嵌套只诊断不盲动</h3>
+              <p style="font-size:13.5px;color:var(--dim);">体检全程只读，精准定位重复、坏链与恶性嵌套，每一步修复都由你确认。</p>
+            </div>
+          </div>
+          <div class="contract-item">
+            <span class="contract-code mono">HERON.LOCK</span>
+            <div>
+              <h3 style="font-size:16px;margin-bottom:4px;">团队协同，一条命令复现</h3>
+              <p style="font-size:13.5px;color:var(--dim);">导出项目级锁文件，新人克隆仓库后 <span class="mono">heron lock apply</span> 即可精准对齐整套 Skill。</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="cli">
+      <div class="wrap">
+        <div class="sec-kicker mono">05 · CLI &amp; TEAM LOCK</div>
+        <h2 class="sec-title">桌面端之外，完整的同源命令行</h2>
+        <p class="sec-desc">所有命令支持 <span class="mono">--json</span> 机器可读输出与 <span class="mono">--data-dir</span> 沙箱隔离，天然适配脚本与 CI。</p>
+        <div class="term mono">
+          <div class="term-head">
+            <span>heron-cli · zsh</span>
+            <span>git 2.38+ · MIT License</span>
+          </div>
+          <pre><span class="t-dim"># 1. 扫描本机并预览收拢计划（绝不盲动）</span>
+<span class="t-acc">$</span> heron scan
+<span class="t-acc">$</span> heron adopt --all --dry-run
+
+<span class="t-dim"># 2. 从任意 Git 仓库或 5 大内置市场安装</span>
+<span class="t-acc">$</span> heron install https://github.com/owner/repo/tree/main/skills/code-review
+
+<span class="t-dim"># 3. 团队锁文件导出与精准同步</span>
+<span class="t-acc">$</span> heron lock export --write
+<span class="t-acc">$</span> heron lock apply
+<span class="t-good">✓ 48 skills managed · 216/216 projections verified · 0 drifted</span></pre>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <div class="wrap foot-inner">
+      <div>Heron 苍鹭 · 本地 Agent Skill 管理器 · MIT License</div>
+      <div class="mono">github.com/v5note/heron</div>
+    </div>
+  </footer>
+
+  <script>
+    const SHOTS = {
+      home: {
+        dark: "../../images/首页-深色.png",
+        light: "../../images/首页-浅色.png",
+        desc: "概览只列出此刻真正需要你决定的事：坏链、未纳管发现、各客户端真实生效状态。"
+      },
+      library: {
+        dark: "../../images/我的Skill-深色.png",
+        light: "../../images/我的Skill-浅色.png",
+        desc: "资产全景看板：一份实体，多个落点。支持列表/网格双视图与逐客户端一键投影开关。"
+      },
+      discover: {
+        dark: "../../images/发现-深色.png",
+        light: "../../images/发现-浅色.png",
+        desc: "扫描磁盘上已存在但尚未接管的 Skill，支持 Dry-Run 预览与一键安全收拢。"
+      },
+      market: {
+        dark: "../../images/来源与市场-深色.png",
+        light: "../../images/来源与市场-浅色.png",
+        desc: "一个搜索框打到所有启用来源：内置 skills.sh、ClawHub 等 5 大市场与任意 Git 仓库直装。"
+      },
+      doctor: {
+        dark: "../../images/体检-深色.png",
+        light: "../../images/体检-浅色.png",
+        desc: "深度只读体检：精准定位坏链、存储缺失、病态嵌套与重复拷贝，所有修复均需确认。"
+      }
+    };
+    let currentView = "home";
+    const root = document.documentElement;
+    const img = document.getElementById("shotImg");
+    const desc = document.getElementById("shotDesc");
+    const label = document.getElementById("shotThemeLabel");
+    const toggleBtn = document.getElementById("themeToggle");
+
+    function renderShot() {
+      const mode = root.getAttribute("data-color-mode");
+      img.src = SHOTS[currentView][mode];
+      desc.textContent = SHOTS[currentView].desc;
+      label.textContent = mode === "dark" ? "当前预览：林墨 · 深色" : "当前预览：林墨 · 浅色";
+      toggleBtn.textContent = mode === "dark" ? "切换浅色" : "切换深色";
+    }
+
+    document.getElementById("viewTabs").addEventListener("click", (e) => {
+      const btn = e.target.closest(".tab-btn");
+      if (!btn) return;
+      document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active"));
+      btn.classList.add("active");
+      currentView = btn.dataset.view;
+      renderShot();
+    });
+
+    toggleBtn.addEventListener("click", () => {
+      const next = root.getAttribute("data-color-mode") === "dark" ? "light" : "dark";
+      root.setAttribute("data-color-mode", next);
+      renderShot();
+    });
+  </script>
+</body>
+</html>

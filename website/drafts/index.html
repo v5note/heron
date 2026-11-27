@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Heron 官网 · 三方向初稿对比</title>
+  <style>
+    :root { --bg:#141816; --panel:#1d2320; --line:rgba(255,255,255,0.1); --text:#eef2ee; --dim:#9fb0a5; --acc:#7fb59a; }
+    * { box-sizing:border-box; margin:0; padding:0; }
+    body { background:var(--bg); color:var(--text); font-family:-apple-system,BlinkMacSystemFont,"PingFang SC",sans-serif; padding:40px 24px; }
+    .wrap { max-width:1120px; margin:0 auto; }
+    h1 { font-size:28px; margin-bottom:8px; }
+    p.lead { color:var(--dim); margin-bottom:32px; }
+    .grid { display:grid; grid-template-columns:repeat(3,1fr); gap:20px; }
+    .card {
+      background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:24px;
+      display:flex; flex-direction:column; gap:12px;
+    }
+    .tag { font-size:12px; color:var(--acc); font-weight:600; letter-spacing:0.06em; }
+    .card h2 { font-size:20px; }
+    .card p { font-size:14px; color:var(--dim); line-height:1.65; }
+    .card a {
+      margin-top:auto; display:inline-block; text-align:center; padding:11px 16px;
+      border-radius:9px; background:var(--text); color:var(--bg); font-weight:600; text-decoration:none;
+    }
+    .card a:hover { opacity:0.9; }
+    @media (max-width:860px) { .grid { grid-template-columns:1fr; } }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Heron 苍鹭官方网站 · 三方向初稿</h1>
+    <p class="lead">按 huashu-design 流程产出三个截然不同的视觉与骨架方向，均使用 Heron 真实系统截图与设计语义。请分别打开预览并告知您希望落地的方向。</p>
+    <div class="grid">
+      <div class="card">
+        <div class="tag">方向 A · 深色优先（可切浅色）</div>
+        <h2>静水观测台 · Quiet Instrument</h2>
+        <p>延续 Heron 桌面端「林墨」视觉语言与精密仪器读数感。首屏居中全幅展示真实桌面端，支持 5 个真实视图切换与深浅主题实时联动。</p>
+        <a href="./dir-a-instrument.html">打开方向 A 预览 →</a>
+      </div>
+      <div class="card">
+        <div class="tag">方向 B · 浅色暖纸优先</div>
+        <h2>节气编辑部 · Editorial Monograph</h2>
+        <p>基于 Heron「默认节气暖纸」+ EB Garamond 衬线排版。双栏非对称首屏配苍鹭剪影，整页如印刷精良的技术专刊与痛点账本。</p>
+        <a href="./dir-b-editorial.html">打开方向 B 预览 →</a>
+      </div>
+      <div class="card">
+        <div class="tag">方向 C · 深浅双段高对比</div>
+        <h2>单源拓扑台 · Spatial Topology</h2>
+        <p>首屏直接把「散落 → ~/.heron/skills/ → 12+ 客户端」做成可交互的动态数据流拓扑舞台，下方以 Bento 网格呈现真实截图与核心能力。</p>
+        <a href="./dir-c-topology.html">打开方向 C 预览 →</a>
+      </div>
+    </div>
+  </div>
+</body>
+</html>
