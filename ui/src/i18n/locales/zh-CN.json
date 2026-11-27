@@ -562,6 +562,26 @@
     "keepLocalHint": "升级时三方合并，保留你的本地修改",
     "autostart": "开机启动",
     "autostartHint": "登录系统后自动运行 Heron",
+    "shortcuts": "快捷键",
+    "shortcutReset": "重置",
+    "shortcutResetAll": "恢复默认",
+    "shortcutPress": "请按下快捷键…",
+    "shortcutUnbound": "未设置",
+    "shortcutRecordHint": "Esc 取消 · Backspace 清空",
+    "shortcutNeedMod": "请使用组合键（如 ⌘ / Ctrl / Alt + 按键）或功能键",
+    "shortcutConflict": "该快捷键已被「{action}」占用",
+    "shortcutItems": {
+      "search": "全局搜索",
+      "rescan": "扫描本机",
+      "theme": "切换深浅色",
+      "settings": "打开设置"
+    },
+    "shortcutHints": {
+      "search": "任意页面呼出全局搜索面板",
+      "rescan": "从任意页面触发全机扫描",
+      "theme": "在浅色与深色模式间切换",
+      "settings": "快速跳转到设置页面"
+    },
     "dataPaths": "数据与路径",
     "dataRoot": "数据根目录",
     "marketCache": "市场缓存",

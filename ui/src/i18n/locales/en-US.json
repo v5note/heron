@@ -562,6 +562,26 @@
     "keepLocalHint": "Three-way merge on upgrade, preserving your changes",
     "autostart": "Launch at login",
     "autostartHint": "Start Heron automatically when you sign in",
+    "shortcuts": "Keyboard shortcuts",
+    "shortcutReset": "Reset",
+    "shortcutResetAll": "Reset defaults",
+    "shortcutPress": "Press shortcut…",
+    "shortcutUnbound": "Not set",
+    "shortcutRecordHint": "Esc to cancel · Backspace to clear",
+    "shortcutNeedMod": "Use a modifier key (Cmd / Ctrl / Alt + key) or a function key",
+    "shortcutConflict": "Already assigned to “{action}”",
+    "shortcutItems": {
+      "search": "Global search",
+      "rescan": "Scan machine",
+      "theme": "Toggle light / dark",
+      "settings": "Open settings"
+    },
+    "shortcutHints": {
+      "search": "Open the global search palette from anywhere",
+      "rescan": "Start a machine-wide scan from anywhere",
+      "theme": "Switch between light and dark mode",
+      "settings": "Jump to the Settings page"
+    },
     "dataPaths": "Data & paths",
     "dataRoot": "Data root",
     "marketCache": "Market cache",

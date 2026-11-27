@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 import { useI18n } from "vue-i18n";
 import AppIcon from "../components/AppIcon.vue";
 import PageHeader from "../components/PageHeader.vue";
@@ -10,6 +10,9 @@ import { checkForUpdate, installUpdate, type UpdateInfo } from "../api/updater";
 import { setLocale, type Locale } from "../i18n";
 import { useAppStore, type ProjectionMode, type ThemeId } from "../stores/app";
 import { displayPath } from "../utils/paths";
+import {
+  formatShortcut, keyFromEvent, SHORTCUT_IDS, shortcutFromEvent, type ShortcutId,
+} from "../utils/shortcuts";
 import { openPath } from "@tauri-apps/plugin-opener";
 import pkg from "../../package.json";
 
@@ -214,6 +217,88 @@ function changeLocale(event: Event) {
 function changeProjection(event: Event) {
   store.setProjectionMode((event.target as HTMLSelectElement).value as ProjectionMode);
 }
+
+/* ---------- 快捷键设置 ---------- */
+const recordingId = ref<ShortcutId | null>(null);
+
+const shortcutPlatformLabel = computed(() => {
+  if (store.isMac) return "macOS";
+  if (store.platform === "linux") return "Linux";
+  return "Windows";
+});
+
+function shortcutLabel(id: ShortcutId): string {
+  return formatShortcut(store.shortcuts[id], store.isMac);
+}
+
+function isShortcutCustom(id: ShortcutId): boolean {
+  return id in store.shortcutOverrides;
+}
+
+function stopRecording() {
+  if (recordingId.value === null) return;
+  recordingId.value = null;
+  store.setShortcutRecording(false);
+  window.removeEventListener("keydown", onShortcutKeydown, true);
+}
+
+function startRecording(id: ShortcutId) {
+  if (recordingId.value === id) {
+    stopRecording();
+    return;
+  }
+  recordingId.value = id;
+  store.setShortcutRecording(true);
+  window.addEventListener("keydown", onShortcutKeydown, true);
+}
+
+function onShortcutKeydown(event: KeyboardEvent) {
+  const id = recordingId.value;
+  if (!id) return;
+
+  event.preventDefault();
+  event.stopPropagation();
+
+  if (event.key === "Escape") {
+    stopRecording();
+    return;
+  }
+
+  // Bare Backspace / Delete unbinds the shortcut.
+  if (
+    (event.key === "Backspace" || event.key === "Delete") &&
+    !event.ctrlKey && !event.altKey && !event.shiftKey && !event.metaKey
+  ) {
+    store.setShortcut(id, "");
+    stopRecording();
+    return;
+  }
+
+  // Ignore standalone modifier keys while the user is holding them down.
+  if (keyFromEvent(event) === null) return;
+
+  const combo = shortcutFromEvent(event);
+  if (!combo) {
+    store.toast("warn", t("settings.shortcutNeedMod"));
+    return;
+  }
+
+  const conflict = SHORTCUT_IDS.find((other) => other !== id && store.shortcuts[other] === combo);
+  if (conflict) {
+    store.toast("warn", t("settings.shortcutConflict", { action: t(`settings.shortcutItems.${conflict}`) }));
+    return;
+  }
+
+  store.setShortcut(id, combo);
+  stopRecording();
+}
+
+function resetAllShortcuts() {
+  stopRecording();
+  store.resetShortcuts();
+}
+
+onBeforeUnmount(stopRecording);
 </script>
 
 <template>
@@ -356,6 +441,52 @@ function changeProjection(event: Event) {
               :aria-label="t('settings.autostart')"
               @click="store.setAutostart(!store.autostart)"
             />
+          </span>
+        </div>
+      </div>
+    </div>
+
+    <div class="card grid-card">
+      <div class="card-head">
+        <h3>{{ t("settings.shortcuts") }}</h3>
+        <span class="right">
+          <span class="shortcut-os mono">{{ shortcutPlatformLabel }}</span>
+          <button
+            type="button"
+            class="btn sm ghost"
+            :disabled="!store.hasCustomShortcuts"
+            @click="resetAllShortcuts"
+          >
+            {{ t("settings.shortcutResetAll") }}
+          </button>
+        </span>
+      </div>
+      <div class="card-body">
+        <div v-for="id in SHORTCUT_IDS" :key="id" class="row">
+          <span class="label">{{ t(`settings.shortcutItems.${id}`) }}</span>
+          <span class="shortcut-cell">
+            <small class="row-hint">
+              {{ recordingId === id ? t("settings.shortcutRecordHint") : t(`settings.shortcutHints.${id}`) }}
+            </small>
+            <button
+              type="button"
+              class="shortcut-btn mono"
+              :class="{ recording: recordingId === id, unbound: !shortcutLabel(id) && recordingId !== id }"
+              :aria-pressed="recordingId === id"
+              @click="startRecording(id)"
+              @blur="recordingId === id && stopRecording()"
+            >
+              {{ recordingId === id ? t("settings.shortcutPress") : (shortcutLabel(id) || t("settings.shortcutUnbound")) }}
+            </button>
+            <button
+              v-if="isShortcutCustom(id)"
+              type="button"
+              class="btn sm ghost shortcut-reset"
+              :title="t('settings.shortcutReset')"
+              @click="store.resetShortcut(id)"
+            >
+              {{ t("settings.shortcutReset") }}
+            </button>
           </span>
         </div>
       </div>
@@ -594,6 +725,25 @@ function changeProjection(event: Event) {
 .switch.on { background: var(--accent); }
 .switch.on::after { left: 17.5px; }
 .switch:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* 快捷键：右对齐「说明 + 按键录屏胶囊 + 单项恢复按钮」，录入态用强调色框高亮。 */
+.shortcut-os { font-size: 11px; color: var(--faint); }
+.shortcut-cell { gap: 10px !important; }
+.shortcut-btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 84px; height: 28px; padding: 0 10px;
+  border-radius: var(--radius-sm); border: 1px solid var(--line-strong);
+  background: var(--raised); color: var(--text); font-size: 12px;
+  transition: border-color 120ms ease, background-color 120ms ease, color 120ms ease;
+}
+.shortcut-btn:hover { border-color: var(--text); }
+.shortcut-btn.unbound { color: var(--faint); font-family: var(--font-sans); }
+.shortcut-btn.recording {
+  border-color: var(--accent); background: var(--accent-weak); color: var(--accent);
+  font-family: var(--font-sans);
+}
+.shortcut-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.shortcut-reset { flex: none; }
 
 /* 数据与路径: the mono path takes the line, the open button hugs the card's right edge. */
 .path-cell { gap: 12px !important; }

@@ -12,6 +12,7 @@ import SearchPalette from "./components/SearchPalette.vue";
 import { useAppStore } from "./stores/app";
 import { setupMenu } from "./menu";
 import { setupTray } from "./tray";
+import { formatShortcut, matchesShortcut } from "./utils/shortcuts";
 import pkg from "../package.json";
 
 const store = useAppStore();
@@ -115,18 +116,51 @@ const doctorElsewhere = computed(
   () => store.doctorRun.running && route.name !== "doctor" && route.name !== "overview",
 );
 
-/* ---------- global search (⌘K) ---------- */
+/* ---------- global shortcuts ---------- */
 // The rail's 搜索 box used to be a button that just pushed /library — a fake input that duplicated
 // the page's own filter. It now opens one palette over every entity, so the box means "find anything".
 const paletteOpen = ref(false);
+const searchKbd = computed(() => formatShortcut(store.shortcuts.search, store.isMac));
+
+/**
+ * macOS and Linux install a native menu bar that already handles `rescan` / `theme` / `settings`
+ * accelerators; Windows intentionally installs no menu bar (see menu.ts), and browser preview has
+ * no Tauri host, so the webview handles those chords directly there to avoid double-firing.
+ */
+function hasNativeMenu(): boolean {
+  const inTauri = typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
+  return inTauri && !!store.platform && store.platform !== "windows";
+}
 
 function onKeydown(event: KeyboardEvent) {
-  // ⌘K / Ctrl+K opens the palette from anywhere; it's a command, so it wins even inside a field.
-  if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
+  if (store.shortcutRecording) return;
+
+  const { shortcuts } = store;
+  // Global search opens the palette from anywhere; it's a command, so it wins even inside a field.
+  if (matchesShortcut(event, shortcuts.search)) {
     event.preventDefault();
     paletteOpen.value = !paletteOpen.value;
     return;
   }
+
+  if (!hasNativeMenu()) {
+    if (matchesShortcut(event, shortcuts.rescan)) {
+      event.preventDefault();
+      void store.startScan();
+      return;
+    }
+    if (matchesShortcut(event, shortcuts.theme)) {
+      event.preventDefault();
+      store.toggleTheme();
+      return;
+    }
+    if (matchesShortcut(event, shortcuts.settings)) {
+      event.preventDefault();
+      void router.push("/settings");
+      return;
+    }
+  }
+
   if (event.key !== "Escape" || !store.scanning) return;
   // Whatever already owns Escape keeps it: an open dialog or drawer closes itself first, and a key
   // typed into a field is text, not a command.
@@ -188,7 +222,7 @@ function go(to: string) {
       <button class="rail-search" :title="t('palette.placeholder')" @click="paletteOpen = true">
         <AppIcon name="search" :size="14" class="rail-icon" />
         <span>{{ t("common.search") }}</span>
-        <span class="rail-search-kbd" aria-hidden="true">⌘K</span>
+        <span v-if="searchKbd" class="rail-search-kbd" aria-hidden="true">{{ searchKbd }}</span>
       </button>
 
       <nav class="rail-scroll">

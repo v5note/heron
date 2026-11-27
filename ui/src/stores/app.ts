@@ -8,6 +8,10 @@ import type {
   SkillRow, TargetRow, UpgradeCandidate, UpgradeOutcome, VerifyDone, VerifyProgress, VisibilityReport,
 } from "../api/types";
 import { messageFor } from "../i18n";
+import {
+  defaultShortcuts, isMacPlatform, parseShortcut, SHORTCUT_IDS,
+  type ShortcutId, type ShortcutMap,
+} from "../utils/shortcuts";
 
 /**
  * 「收进收藏」留给收藏页的预填表单。一次性的交接而非数据：来源页写好它再跳到 /favorites,
@@ -106,6 +110,7 @@ const PROJECTION_MODE_KEY = "heron.projectionMode";
 const AUTO_SCAN_KEY = "heron.autoScan";
 const AUTO_DOCTOR_KEY = "heron.autoDoctor";
 const KEEP_LOCAL_KEY = "heron.keepLocalOnUpdate";
+const SHORTCUTS_KEY = "heron.shortcuts";
 const THEME_IDS: readonly ThemeId[] = ["default", "dusk", "forest-ink", "wanqing"];
 const SCAN_PHASES: readonly string[] = ["prepare", "walk", "parse", "persist", "summary", "done", "canceled"];
 /** Mirrors `MAX_DIRS` in heron-discover: the event only carries the flag, so the copy names the ceiling. */
@@ -235,6 +240,26 @@ function initialGeneral(): {
   };
 }
 
+/** User-customized shortcut overrides; missing keys fall back to the current OS default. */
+function initialShortcuts(): Partial<Record<ShortcutId, string>> {
+  try {
+    const raw = localStorage.getItem(SHORTCUTS_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw) as Record<string, unknown>;
+    if (!parsed || typeof parsed !== "object") return {};
+    const out: Partial<Record<ShortcutId, string>> = {};
+    for (const id of SHORTCUT_IDS) {
+      const value = parsed[id];
+      if (value === "" || (typeof value === "string" && parseShortcut(value))) {
+        out[id] = value;
+      }
+    }
+    return out;
+  } catch {
+    return {};
+  }
+}
+
 /** Only counts rows the backend actually scanned; anything else stays "unknown". */
 function stateOf(row: VisibilityReport | undefined): VisibilityState {
   const state = row?.visibility?.state;
@@ -248,6 +273,9 @@ export const useAppStore = defineStore("app", {
   state: () => ({
     ...initialPrefs(),
     ...initialGeneral(),
+    shortcutOverrides: initialShortcuts(),
+    /** True while Settings is capturing a new key chord; suppresses global shortcut dispatch. */
+    shortcutRecording: false,
     /**
      * 开机启动 is not a localStorage mirror: the OS holds the registration (LaunchAgent / 注册表 /
      * autostart desktop 文件), so this only ever reflects what `syncAutostart()` read back —
@@ -291,6 +319,13 @@ export const useAppStore = defineStore("app", {
     mode(s): "light" | "dark" {
       return s.colorMode === "system" ? (s.systemIsDark ? "dark" : "light") : s.colorMode;
     },
+    /** True on macOS (uses backend `platform`, falling back to `navigator` before preflight). */
+    isMac: (s): boolean => isMacPlatform(s.platform),
+    /** Effective shortcuts for the current OS: platform defaults overlaid with user overrides. */
+    shortcuts(s): ShortcutMap {
+      return { ...defaultShortcuts(isMacPlatform(s.platform)), ...s.shortcutOverrides };
+    },
+    hasCustomShortcuts: (s): boolean => Object.keys(s.shortcutOverrides).length > 0,
     unmanaged: (s) => s.detected.filter((d) => d.adopt_state === "candidate" && d.kind !== "nested-suspect"),
     nested: (s) => s.detected.filter((d) => d.kind === "nested-suspect"),
     /** Client registry keyed by id; `target.kind` is that id. */
@@ -400,6 +435,33 @@ export const useAppStore = defineStore("app", {
     setKeepLocal(on: boolean) {
       this.keepLocal = on;
       localStorage.setItem(KEEP_LOCAL_KEY, on ? "1" : "0");
+    },
+    setShortcut(id: ShortcutId, combo: string) {
+      const defaults = defaultShortcuts(this.isMac);
+      const next = { ...this.shortcutOverrides };
+      if (combo === defaults[id]) {
+        delete next[id];
+      } else {
+        next[id] = combo;
+      }
+      this.shortcutOverrides = next;
+      if (Object.keys(next).length) localStorage.setItem(SHORTCUTS_KEY, JSON.stringify(next));
+      else localStorage.removeItem(SHORTCUTS_KEY);
+    },
+    resetShortcut(id: ShortcutId) {
+      if (!(id in this.shortcutOverrides)) return;
+      const next = { ...this.shortcutOverrides };
+      delete next[id];
+      this.shortcutOverrides = next;
+      if (Object.keys(next).length) localStorage.setItem(SHORTCUTS_KEY, JSON.stringify(next));
+      else localStorage.removeItem(SHORTCUTS_KEY);
+    },
+    resetShortcuts() {
+      this.shortcutOverrides = {};
+      localStorage.removeItem(SHORTCUTS_KEY);
+    },
+    setShortcutRecording(on: boolean) {
+      this.shortcutRecording = on;
     },
     /**
      * 开机启动: take the value from the OS rather than trusting the switch's last position — a user

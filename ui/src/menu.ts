@@ -29,6 +29,7 @@ import { checkForUpdate } from "./api/updater";
 import { i18n } from "./i18n";
 import { router } from "./router";
 import { useAppStore } from "./stores/app";
+import { toTauriAccelerator } from "./utils/shortcuts";
 
 const appName = "Heron";
 /** Same feed the updater is configured against in tauri.conf.json. */
@@ -93,6 +94,10 @@ const predefined = (kind: PredefinedMenuItemOptions["item"]): PredefinedMenuItem
 /** The bar, as the platform wants it. */
 function menuBar(os: string): NonNullable<MenuOptions["items"]> {
   const mac = os === "macos";
+  const shortcuts = useAppStore().shortcuts;
+  const settingsAcc = toTauriAccelerator(shortcuts.settings);
+  const rescanAcc = toTauriAccelerator(shortcuts.rescan);
+  const themeAcc = toTauriAccelerator(shortcuts.theme);
   return [
     ...(mac
       ? [
@@ -101,7 +106,7 @@ function menuBar(os: string): NonNullable<MenuOptions["items"]> {
             items: [
               predefined({ About: { name: appName, version: pkg.version } }),
               separator(),
-              item("settings", "CmdOrCtrl+,"),
+              item("settings", settingsAcc),
               separator(),
               predefined("Services"),
               separator(),
@@ -117,9 +122,9 @@ function menuBar(os: string): NonNullable<MenuOptions["items"]> {
     {
       text: label("menu.file"),
       items: [
-        item("rescan", "CmdOrCtrl+Shift+R"),
+        item("rescan", rescanAcc),
         // Off macOS there is no app menu to hold 设置 and 退出, so the File menu carries them.
-        ...(mac ? [] : [separator(), item("settings", "CmdOrCtrl+,")]),
+        ...(mac ? [] : [separator(), item("settings", settingsAcc)]),
         separator(),
         mac ? predefined("CloseWindow") : predefined("Quit"),
       ],
@@ -139,7 +144,7 @@ function menuBar(os: string): NonNullable<MenuOptions["items"]> {
     },
     {
       text: label("menu.view"),
-      items: [item("theme", "CmdOrCtrl+Alt+T"), separator(), predefined("Fullscreen")],
+      items: [item("theme", themeAcc), separator(), predefined("Fullscreen")],
     },
     {
       text: label("menu.window"),
@@ -159,6 +164,7 @@ async function refresh(os: string): Promise<void> {
 }
 
 let platform = "";
+let shortcutsWatched = false;
 
 /**
  * Install the bar once `preflight` says which OS we are on. Failure is only ever worth a log: the
@@ -166,6 +172,17 @@ let platform = "";
  */
 export function setupMenu(os: string): void {
   platform = os;
+  if (!shortcutsWatched) {
+    shortcutsWatched = true;
+    const store = useAppStore();
+    watch(
+      () => store.shortcuts,
+      () => {
+        if (platform) void refresh(platform).catch((e) => console.warn("menu:", e));
+      },
+      { deep: true },
+    );
+  }
   void refresh(os).catch((e) => console.warn("menu:", e));
 }
 
