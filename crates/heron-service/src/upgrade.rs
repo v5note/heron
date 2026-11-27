@@ -159,10 +159,7 @@ pub fn refresh_sources(ctx: &Ctx) -> Result<usize> {
                     })
                 })
                 .collect();
-            handles
-                .into_iter()
-                .map(|h| h.join().unwrap_or(0))
-                .sum()
+            handles.into_iter().map(|h| h.join().unwrap_or(0)).sum()
         });
         refreshed += count;
     }

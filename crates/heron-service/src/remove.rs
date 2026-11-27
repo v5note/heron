@@ -216,17 +216,11 @@ pub fn restore(ctx: &mut Ctx, trash_id: &str) -> Result<SkillRow> {
     }
     let slug = infer_trashed_slug(&trash_dir, trash_id);
     if skill::get_ci(ctx.db.conn(), &slug)?.is_some() {
-        return Err(ErrorCode::SlugConflict
-            .msg()
-            .with("slug", slug)
-            .into());
+        return Err(ErrorCode::SlugConflict.msg().with("slug", slug).into());
     }
     let dest = ctx.skill_path(&slug);
     if dest.exists() {
-        return Err(ErrorCode::SlugConflict
-            .msg()
-            .with("slug", slug)
-            .into());
+        return Err(ErrorCode::SlugConflict.msg().with("slug", slug).into());
     }
     if let Some(parent) = dest.parent() {
         std::fs::create_dir_all(parent).map_err(|e| {
