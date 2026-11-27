@@ -4,7 +4,8 @@
 #   scripts/dev.sh check    fmt + clippy (same as CI)
 #   scripts/dev.sh test     all workspace tests (same as CI)
 #   scripts/dev.sh ui       frontend typecheck + i18n parity + build (same as CI)
-#   scripts/dev.sh dev      run the desktop app against the Vite dev server (hot reload)
+#   scripts/dev.sh dev      run the desktop app against the Vite dev server (hot reload;
+#                           without tauri-cli it starts Vite + `cargo run -p heron-app` itself)
 #   scripts/dev.sh web      run only the frontend in a browser (no Rust backend)
 #   scripts/dev.sh cli      build and run the CLI against an isolated data dir
 #   scripts/dev.sh bundle   produce a signed-capable bundle (needs tauri-cli)
@@ -16,7 +17,13 @@ if [ -z "${RUSTUP_HOME:-}" ] && [ -d "${HOME:-/nonexistent}/.rustup" ]; then
   export RUSTUP_HOME="$HOME/.rustup"
 fi
 
-have_tauri() { cargo tauri --version >/dev/null 2>&1; }
+# cargo resolves `cargo <subcommand>` through PATH alone, and ADR-0001 lets CARGO_HOME
+# be the in-repo .cargo-home, whose bin/ is usually not on PATH. Without this, a
+# perfectly installed tauri-cli answers "error: no such command: `tauri`".
+case ":$PATH:" in
+  *":$CARGO_HOME/bin:"*) ;;
+  *) [ -d "$CARGO_HOME/bin" ] && export PATH="$CARGO_HOME/bin:$PATH" ;;
+esac
 
 # Vite runs with strictPort on a fixed port (ui/vite.config.ts) and Tauri's
 # devUrl points at it (src-tauri/tauri.conf.json), so a leftover dev server
@@ -26,6 +33,12 @@ DEV_PORT=5183
 # lsof exits non-zero when nothing is listening. Under `set -e` that status would
 # abort the script, so every use of this helper must be able to fail safely.
 port_pids() { lsof -nP -tiTCP:"$DEV_PORT" -sTCP:LISTEN 2>/dev/null || true; }
+
+have_tauri() {
+  # HERON_NO_TAURI=1 exercises the fallback on a machine that does have tauri-cli.
+  [ "${HERON_NO_TAURI:-0}" = "1" ] && return 1
+  cargo tauri --version >/dev/null 2>&1
+}
 
 check_dev_port() {
   local pids
@@ -55,6 +68,53 @@ check_dev_port() {
   exit 1
 }
 
+# `tauri dev` does two things for us: keep Vite on :5183 and rebuild/launch the shell.
+# The debug binary already reads devUrl from tauri.conf.json, so running both by hand
+# costs only the Rust-side hot reload (re-run `dev` after editing Rust).
+MANUAL_DEV_PID=''
+stop_manual_dev() {
+  # pnpm is a wrapper around node. Never trust a stored PID on this exit path: the
+  # shell may already be gone and the number reused, and the last thing a finished
+  # dev run should do is signal a stranger's process.
+  [ -n "$MANUAL_DEV_PID" ] || return 0
+  kill -0 "$MANUAL_DEV_PID" 2>/dev/null && kill "$MANUAL_DEV_PID" 2>/dev/null || true
+  wait "$MANUAL_DEV_PID" 2>/dev/null || true
+  MANUAL_DEV_PID=''
+  return 0
+}
+
+run_manual_dev() {
+  command -v cargo >/dev/null 2>&1 || { echo "error: 'cargo' not found on PATH." >&2; exit 127; }
+  command -v pnpm >/dev/null 2>&1 || { echo "error: 'pnpm' not found on PATH." >&2; exit 127; }
+  echo "tauri-cli not installed: starting Vite and 'cargo run -p heron-app' directly." >&2
+  echo "  the backend will not hot-reload; re-run this command after editing Rust." >&2
+  echo "  cargo install tauri-cli --version '^2' --locked   # to get the full tauri dev flow" >&2
+  echo >&2
+  pnpm --dir ui dev &
+  MANUAL_DEV_PID=$!
+  trap stop_manual_dev EXIT INT TERM
+  local rc=0
+  # A cold Vite start pre-bundles dependencies, which is slow on Windows: 2 minutes.
+  for _ in $(seq 1 240); do
+    [ -n "$(port_pids)" ] && break
+    kill -0 "$MANUAL_DEV_PID" 2>/dev/null || break
+    sleep 0.5
+  done
+  if [ -z "$(port_pids)" ]; then
+    echo "error: the Vite dev server never listened on :$DEV_PORT; see its output above." >&2
+    exit 1
+  fi
+  cargo run -p heron-app || rc=$?
+  stop_manual_dev
+  # node can outlive the pnpm wrapper; the port was free when we started, so any
+  # listener left behind is ours and must not block the next `dev` run.
+  local left
+  left="$(port_pids)"
+  # shellcheck disable=SC2086
+  [ -n "$left" ] && kill $left 2>/dev/null || true
+  return $rc
+}
+
 case "${1:-check}" in
   check)
     cargo fmt --all -- --check
@@ -75,12 +135,7 @@ case "${1:-check}" in
     if have_tauri; then
       exec cargo tauri dev
     fi
-    echo "tauri-cli not installed; falling back to the manual two-process flow:" >&2
-    echo "  terminal 1: pnpm --dir ui dev" >&2
-    echo "  terminal 2: cargo run -p heron-app" >&2
-    echo >&2
-    echo "cargo install tauri-cli --version '^2' --locked   # to enable hot-reloading backend" >&2
-    exit 1
+    run_manual_dev
     ;;
   web)
     exec pnpm --dir ui dev

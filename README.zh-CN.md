@@ -326,6 +326,12 @@ cargo build --workspace
 # 启动桌面端（Tauri 前后端热重载，占用 5183 端口）
 scripts/dev.sh dev
 
+# 没装 tauri-cli 也能跑：脚本会自行启动 Vite 并执行
+# `cargo run -p heron-app`，改完 Rust 需手动重跑
+
+# 5183 被上次残留的 dev server 占用？让脚本替你收割
+KILL_STALE_DEV=1 scripts/dev.sh dev
+
 # 仅调试前端 UI（浏览器打开 http://localhost:5183，无 Rust 后端调用）
 scripts/dev.sh web
 
@@ -339,6 +345,9 @@ Windows 下由 `scripts\dev.ps1` 提供完全等价的入口，并用 `scripts\d
 ```powershell
 # 启动桌面端（Tauri 前后端热重载，占用 5183 端口）
 scripts\dev.cmd dev
+
+# 没装 tauri-cli 也会自动降级：脚本自己拉起 Vite 并跑
+# `cargo run -p heron-app`，改完 Rust 需手动重跑
 
 # 仅调试前端 UI（浏览器打开 http://localhost:5183，无 Rust 后端调用）
 scripts\dev.cmd web

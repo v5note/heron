@@ -13,7 +13,7 @@ use std::path::{Path, PathBuf};
 use heron_core::{Hash, ProjectionMode, Slug, SlugPolicy};
 use heron_platform::link::LinkKind;
 use heron_scan::FingerprintOptions;
-use heron_store::models::{DetectedRow, ProjectionRow, SkillRow, SourceBindingRow, TargetRow};
+use heron_store::models::{DetectedRow, ProjectionRow, SkillRow, SourceBindingRow};
 use heron_store::repos::{binding, detected, event, projection, skill, target};
 
 mod helpers;

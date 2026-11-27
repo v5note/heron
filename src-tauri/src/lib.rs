@@ -4,6 +4,7 @@
 //! event streaming (`tasks`), system tray (`tray`), and thin IPC handlers (`commands`).
 
 mod commands;
+mod single_instance;
 mod state;
 mod tasks;
 mod tray;
@@ -37,6 +38,14 @@ pub fn run() {
         }
     };
     let _ = dirs.ensure();
+
+    // Enforce a single desktop instance on macOS and Windows: if Heron is already running, wake
+    // its existing window and exit before opening SQLite or creating a second webview.
+    let mut instance_guard = match single_instance::acquire_or_notify(&dirs.data) {
+        single_instance::AcquireResult::Primary(guard) => guard,
+        single_instance::AcquireResult::NotifiedExisting => return,
+    };
+
     let db = heron_store::db::Db::open(&dirs.db_path()).expect("index database");
     let mut ctx = Ctx::new(dirs, db, "gui");
 
@@ -119,13 +128,15 @@ pub fn run() {
         .build(tauri::generate_context!())
         .expect("error while running Heron");
 
-    app.run(|_handle, _event| {
+    let handle = app.handle().clone();
+    instance_guard.spawn_listener(move || show_main(&handle));
+
+    app.run(move |_handle, _event| {
+        // Keep the single-instance lock alive for the entire lifetime of the event loop.
+        let _keep_lock = &instance_guard;
+        // Clicking the Dock icon on macOS raises/restores the existing window.
         #[cfg(target_os = "macos")]
-        if let tauri::RunEvent::Reopen {
-            has_visible_windows: false,
-            ..
-        } = _event
-        {
+        if let tauri::RunEvent::Reopen { .. } = _event {
             show_main(_handle);
         }
     });

@@ -325,6 +325,12 @@ cargo build --workspace
 # Start full desktop app (Tauri hot reload, occupies port 5183)
 scripts/dev.sh dev
 
+# No tauri-cli? the command still works: it starts Vite and runs
+# `cargo run -p heron-app` itself, so Rust edits need a manual re-run.
+
+# Port 5183 held by a leftover dev server? let the script reap it
+KILL_STALE_DEV=1 scripts/dev.sh dev
+
 # Frontend-only dev server (Browser opens http://localhost:5183, no Rust IPC)
 scripts/dev.sh web
 
@@ -338,6 +344,9 @@ Windows exposes the same entry points through `scripts\dev.ps1`, wrapped by `scr
 ```powershell
 # Full desktop app (Tauri hot reload, occupies port 5183)
 scripts\dev.cmd dev
+
+# No tauri-cli? the command still works: it starts Vite and runs
+# `cargo run -p heron-app` itself, so Rust edits need a manual re-run.
 
 # Frontend-only dev server (no Rust IPC)
 scripts\dev.cmd web

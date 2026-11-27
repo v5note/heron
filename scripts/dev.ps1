@@ -3,7 +3,8 @@
 #   scripts\dev.ps1 check    fmt + clippy (same as CI)
 #   scripts\dev.ps1 test     all workspace tests (same as CI)
 #   scripts\dev.ps1 ui       frontend typecheck + i18n parity + build (same as CI)
-#   scripts\dev.ps1 dev      run the desktop app against the Vite dev server (hot reload)
+#   scripts\dev.ps1 dev      run the desktop app against the Vite dev server (hot reload;
+#                            without tauri-cli it starts Vite + `cargo run -p heron-app` itself)
 #   scripts\dev.ps1 web      run only the frontend in a browser (no Rust backend)
 #   scripts\dev.ps1 cli      build and run the CLI against an isolated data dir
 #   scripts\dev.ps1 bundle   produce a signed-capable bundle (needs tauri-cli)
@@ -55,7 +56,26 @@ function Invoke-Checked {
   }
 }
 
+# cargo resolves `cargo <subcommand>` through PATH alone, and ADR-0001 lets CARGO_HOME
+# be the in-repo .cargo-home, whose bin\ is usually not on PATH. Without this a
+# perfectly installed tauri-cli answers "error: no such command: `tauri`".
+$CargoBin = Join-Path $env:CARGO_HOME 'bin'
+$PathDirs = @($env:PATH -split ';' | Where-Object { $_ })
+if ((Test-Path -LiteralPath $CargoBin -PathType Container) -and ($PathDirs -notcontains $CargoBin)) {
+  $env:PATH = (@($CargoBin) + $PathDirs) -join ';'
+}
+
+function Test-OnPath {
+  param([Parameter(Mandatory = $true)][string]$Name)
+  $previous = $ErrorActionPreference
+  $ErrorActionPreference = 'SilentlyContinue'
+  try { return [bool](Get-Command $Name -CommandType Application -ErrorAction SilentlyContinue) }
+  finally { $ErrorActionPreference = $previous }
+}
+
 function Test-TauriCli {
+  # HERON_NO_TAURI=1 exercises the fallback on a machine that does have tauri-cli.
+  if ($env:HERON_NO_TAURI -eq '1') { return $false }
   $previous = $ErrorActionPreference
   $ErrorActionPreference = 'SilentlyContinue'
   try {
@@ -127,6 +147,71 @@ function Assert-DevPort {
   exit 1
 }
 
+# `tauri dev` does two things for us: keep Vite on :5183 and rebuild/launch the shell.
+# The debug binary already reads devUrl from tauri.conf.json, so running both by hand
+# costs only the Rust-side hot reload (re-run `dev` after editing Rust).
+function Stop-DevTree {
+  param($Proc)
+  if (-not $Proc) { return }
+  $previous = $ErrorActionPreference
+  $ErrorActionPreference = 'SilentlyContinue'
+  try {
+    # pnpm.cmd spawns node.exe as a child; Stop-Process would leave it holding :5183.
+    # Only ever signal the process we started, and only while it is still ours.
+    if (-not $Proc.HasExited) {
+      & taskkill /PID $Proc.Id /T /F /nologo | Out-Null
+    }
+  } finally {
+    $ErrorActionPreference = $previous
+  }
+}
+
+function Start-ManualDev {
+  if (-not (Test-OnPath 'cargo')) {
+    Write-Host "error: 'cargo' not found on PATH." -ForegroundColor Red
+    return 127
+  }
+  $pnpm = Get-Command pnpm -CommandType Application -ErrorAction SilentlyContinue
+  if (-not $pnpm) {
+    Write-Host "error: 'pnpm' not found on PATH (install it with: corepack enable)." -ForegroundColor Red
+    return 127
+  }
+  Write-Host 'tauri-cli not installed: starting Vite and cargo run -p heron-app directly.' -ForegroundColor Yellow
+  Write-Host '  the backend will not hot-reload; re-run this command after editing Rust.' -ForegroundColor Yellow
+  Write-Host "  cargo install tauri-cli --version '^2' --locked   # to get the full tauri dev flow" -ForegroundColor Yellow
+  Write-Host ''
+
+  $vite = $null
+  try {
+    # Splat instead of a backtick continuation: a stray space after the backtick
+    # would silently break the line.
+    $startVite = @{
+      FilePath         = $pnpm.Source
+      ArgumentList     = @('--dir', 'ui', 'dev')
+      WorkingDirectory = $RepoRoot
+      NoNewWindow      = $true
+      PassThru         = $true
+    }
+    $vite = Start-Process @startVite
+    # A cold Vite start pre-bundles dependencies, which is slow on Windows: 2 minutes.
+    $ready = $false
+    for ($i = 0; $i -lt 240; $i++) {
+      if ((Get-DevPortPids).Count -gt 0) { $ready = $true; break }
+      if ($vite.HasExited) { break }
+      Start-Sleep -Milliseconds 500
+    }
+    if (-not $ready) {
+      Write-Host ("error: the Vite dev server never listened on :{0}; see its output above." -f $DevPort) -ForegroundColor Red
+      return 1
+    }
+    Write-Host ("dev server ready on http://localhost:{0}; building heron-app..." -f $DevPort)
+    & cargo run -p heron-app
+    return $LASTEXITCODE
+  } finally {
+    Stop-DevTree $vite
+  }
+}
+
 switch ($Command.ToLowerInvariant()) {
   'check' {
     Invoke-Checked cargo @('fmt', '--all', '--', '--check')
@@ -148,12 +233,7 @@ switch ($Command.ToLowerInvariant()) {
       Invoke-Checked cargo @('tauri', 'dev')
       exit 0
     }
-    Write-Host 'tauri-cli not installed; falling back to the manual two-process flow:' -ForegroundColor Yellow
-    Write-Host '  terminal 1: pnpm --dir ui dev'
-    Write-Host '  terminal 2: cargo run -p heron-app'
-    Write-Host ''
-    Write-Host "cargo install tauri-cli --version '^2' --locked   # to enable hot-reloading backend"
-    exit 1
+    exit (Start-ManualDev)
   }
   'web' {
     Invoke-Checked pnpm @('--dir', 'ui', 'dev')
