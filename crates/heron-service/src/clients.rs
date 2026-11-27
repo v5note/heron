@@ -113,10 +113,16 @@ pub struct DetectToml {
     pub commands: Vec<CommandProbeToml>,
 }
 
+fn default_command_args() -> Vec<String> {
+    vec!["--version".to_owned()]
+}
+
 #[derive(Debug, Clone, Deserialize)]
 pub struct CommandProbeToml {
     pub bin: String,
-    #[serde(default)]
+    /// Defaults to `["--version"]` so omitting `args` in a matrix file never launches a bare
+    /// interactive TUI/IDE binary until the probe deadline kills it.
+    #[serde(default = "default_command_args")]
     pub args: Vec<String>,
     /// Defaults to [`crate::detect::DEFAULT_COMMAND_TIMEOUT_MS`].
     #[serde(default)]
@@ -397,6 +403,16 @@ pub fn target_live(t: &TargetRow, clients: &[ClientRow]) -> bool {
 /// target shows survives its switch. Turning it back on needs no re-projection.
 pub fn set_target_enabled(db: &mut Db, target_id: &str, enabled: bool) -> Result<()> {
     db.write(|tx| target::set_enabled(tx, target_id, enabled))
+}
+
+/// List all registered targets.
+pub fn list_targets(db: &Db) -> Result<Vec<TargetRow>> {
+    target::list(db.conn())
+}
+
+/// List all clients in the catalogue with their presence verdicts.
+pub fn list_clients(db: &Db) -> Result<Vec<ClientRow>> {
+    client::list(db.conn())
 }
 
 /// Client specs as stored in the index (so user edits survive).

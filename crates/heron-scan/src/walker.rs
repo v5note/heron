@@ -355,7 +355,10 @@ fn classify_skill(dir: &Path, classifier: &Classifier) -> Option<Hit> {
     // that owns the real directory, and to no client when nothing does — the GUI then groups it
     // under「其他」instead of the client whose directory merely held the link.
     let (client, project) = if !link {
-        (classification.client.clone(), classification.project.clone())
+        (
+            classification.client.clone(),
+            classification.project.clone(),
+        )
     } else if classifier.claims(&real_dir) {
         match classifier.classify(&path, false) {
             Some(owner) => (owner.client, owner.project),

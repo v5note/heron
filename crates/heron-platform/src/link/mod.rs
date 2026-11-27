@@ -159,6 +159,53 @@ pub fn remove_link(path: &Path) -> Result<(), Msg> {
     }
 }
 
+/// Remove a real directory at a projection landing (e.g. a verified managed copy or an adopted
+/// source directory that has already been backed up into the store).
+///
+/// Refuses with `E_SAFETY_REFUSED` if `path` is a link or a regular file: links must be detached
+/// with [`remove_link`] so we can never recurse into a link target (ADR-0003).
+pub fn remove_dir(path: &Path) -> Result<(), Msg> {
+    let info = probe(path)?;
+    match info.kind {
+        LinkKind::Missing => Ok(()),
+        LinkKind::Directory => std::fs::remove_dir_all(path).map_err(|e| {
+            ErrorCode::Permission
+                .msg()
+                .with("path", path.display().to_string())
+                .with("detail", e.to_string())
+        }),
+        k if k.is_link() => Err(ErrorCode::SafetyRefused
+            .msg()
+            .with("path", path.display().to_string())
+            .with("reason", "is_a_link")),
+        _ => Err(ErrorCode::SafetyRefused
+            .msg()
+            .with("path", path.display().to_string())
+            .with("reason", "not_a_dir")),
+    }
+}
+
+/// Replace an existing real directory (or missing/existing link) at `link` with a directory link
+/// pointing at `target`.
+///
+/// Validates `target.is_dir()` **before** touching `link`, so a missing store target can never
+/// wipe out an existing landing directory.
+pub fn replace_dir_with_link(
+    target: &Path,
+    link: &Path,
+    mode: ProjectionMode,
+) -> Result<LinkOutcome, Msg> {
+    if !target.is_dir() {
+        return Err(ErrorCode::LinkTargetMissing
+            .msg()
+            .with("target", target.display().to_string()));
+    }
+    if probe(link)?.kind.is_real_dir() {
+        remove_dir(link)?;
+    }
+    create_dir_link(target, link, mode)
+}
+
 /// Point an existing link at a new target.
 pub fn relink(path: &Path, new_target: &Path) -> Result<LinkOutcome, Msg> {
     let previous = probe(path)?;

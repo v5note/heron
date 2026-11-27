@@ -255,7 +255,11 @@ fn a_link_resolving_into_the_store_is_not_a_discovery() {
     fs::create_dir_all(home.join(".agents/skills")).unwrap();
     fs::create_dir_all(home.join(".claude/skills")).unwrap();
     // Heron's projection of the store copy, and the user's own link to that projection.
-    symlink(store.join("find-skills"), home.join(".agents/skills/find-skills")).unwrap();
+    symlink(
+        store.join("find-skills"),
+        home.join(".agents/skills/find-skills"),
+    )
+    .unwrap();
     symlink(
         "../../.agents/skills/find-skills",
         home.join(".claude/skills/find-skills"),
@@ -314,8 +318,16 @@ fn the_store_is_not_a_discovery_even_when_scanned_directly() {
     let tmp = tempfile::tempdir().unwrap();
     let home = tmp.path();
     let store = home.join(".heron/skills");
-    write(home, ".heron/skills/tdd/SKILL.md", &skill("tdd", "Test first"));
-    write(home, ".heron/skills/research/SKILL.md", &skill("research", "Investigate"));
+    write(
+        home,
+        ".heron/skills/tdd/SKILL.md",
+        &skill("tdd", "Test first"),
+    );
+    write(
+        home,
+        ".heron/skills/research/SKILL.md",
+        &skill("research", "Investigate"),
+    );
 
     let classifier = Classifier::new(
         vec![ClientSpec {

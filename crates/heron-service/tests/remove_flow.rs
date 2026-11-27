@@ -213,3 +213,36 @@ fn remove_of_an_unknown_slug_reports_not_managed() {
     let err = remove::plan(&ctx, "ghost").unwrap_err();
     assert_eq!(err.code(), "E_NOT_MANAGED");
 }
+
+#[test]
+fn trash_can_be_listed_restored_and_emptied() {
+    let env = Env::new();
+    write_skill(&env.home.join(".agents/skills/wechat-mp"), "wechat-mp");
+    write_skill(&env.home.join(".agents/skills/finesse-ui"), "finesse-ui");
+    let mut ctx = env.ctx();
+    scan::run(&mut ctx, &env.home, &ScanRequest::default()).unwrap();
+
+    for slug in ["wechat-mp", "finesse-ui"] {
+        let row = candidate(&ctx, slug);
+        let plan = adopt::plan(&ctx, &row).unwrap();
+        adopt::execute(&mut ctx, &plan, AdoptPlacement::KeepOriginal).unwrap();
+        let rm = remove::plan(&ctx, slug).unwrap();
+        remove::apply(&mut ctx, &rm).unwrap();
+    }
+
+    let entries = remove::list_trash(&ctx).unwrap();
+    assert_eq!(entries.len(), 2);
+
+    // Restore one back into the library.
+    let target = entries.iter().find(|e| e.slug == "wechat-mp").unwrap();
+    let restored = remove::restore(&mut ctx, &target.id).unwrap();
+    assert_eq!(restored.slug, "wechat-mp");
+    assert!(ctx.skill_path("wechat-mp").join("SKILL.md").is_file());
+    assert!(skill::get(ctx.db.conn(), "wechat-mp").unwrap().is_some());
+    assert_eq!(remove::list_trash(&ctx).unwrap().len(), 1);
+
+    // Empty the remainder.
+    let emptied = remove::empty_trash(&mut ctx).unwrap();
+    assert_eq!(emptied, 1);
+    assert!(remove::list_trash(&ctx).unwrap().is_empty());
+}

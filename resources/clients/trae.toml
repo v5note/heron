@@ -19,3 +19,4 @@ apps = ["Trae.app"]
 
 [[detect.commands]]
 bin = "trae"
+args = ["--version"]

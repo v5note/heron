@@ -166,9 +166,9 @@ pub fn without_projection_outputs(ctx: &Ctx, rows: Vec<DetectedRow>) -> Result<V
             if heron_platform::paths::is_same_or_inside(&store, &dir) {
                 return false;
             }
-            !projected.iter().any(|p| {
-                heron_platform::paths::same_path_ci(std::path::Path::new(&p.path), &dir)
-            })
+            !projected
+                .iter()
+                .any(|p| heron_platform::paths::same_path_ci(std::path::Path::new(&p.path), &dir))
         })
         .collect())
 }
@@ -288,4 +288,16 @@ fn read_frontmatter_head(path: &str) -> Option<Vec<u8>> {
         .read_to_end(&mut bytes)
         .ok()?;
     Some(bytes)
+}
+
+/// List detected entries filtered by state (`"all"` returns every row; any other state excludes
+/// paths that Heron itself projected into a client directory).
+pub fn list_detected(ctx: &Ctx, state_filter: Option<&str>) -> Result<Vec<DetectedRow>> {
+    let wanted = state_filter.unwrap_or("candidate");
+    if wanted == "all" {
+        detected::list_all(ctx.db.conn())
+    } else {
+        let rows = detected::list_by_state(ctx.db.conn(), wanted)?;
+        without_projection_outputs(ctx, rows)
+    }
 }

@@ -139,7 +139,11 @@ fn probe_one(c: &ClientToml, home: &Path, m: &dyn Machine, o: &DetectOptions) ->
         for cmd in &rules.commands {
             let timeout =
                 Duration::from_millis(cmd.timeout_ms.unwrap_or(DEFAULT_COMMAND_TIMEOUT_MS));
-            let args: Vec<&str> = cmd.args.iter().map(String::as_str).collect();
+            let args: Vec<&str> = if cmd.args.is_empty() {
+                vec!["--version"]
+            } else {
+                cmd.args.iter().map(String::as_str).collect()
+            };
             if m.cli_version(&cmd.bin, &args, timeout).is_some() {
                 return hit(c, format!("cli:{}", cmd.bin));
             }
@@ -459,5 +463,62 @@ mod tests {
             vec!["dir:/opt/heron-probe".to_owned()],
             "evidence quotes the rule, which is what a user can check"
         );
+    }
+
+    #[test]
+    fn empty_command_args_default_to_version_flag_and_builtin_commands_declare_args() {
+        struct CaptureArgs {
+            seen: RefCell<Vec<(String, Vec<String>)>>,
+        }
+        impl Machine for CaptureArgs {
+            fn is_dir(&self, _path: &Path) -> bool {
+                false
+            }
+            fn app_exists(&self, _name: &str) -> bool {
+                false
+            }
+            fn cli_version(&self, bin: &str, args: &[&str], _timeout: Duration) -> Option<String> {
+                self.seen.borrow_mut().push((
+                    bin.to_owned(),
+                    args.iter().map(|s| (*s).to_owned()).collect(),
+                ));
+                Some("1.0.0".to_owned())
+            }
+            fn now(&self) -> String {
+                "2026-11-27T00:00:00.000Z".to_owned()
+            }
+        }
+
+        let rules = DetectToml {
+            dirs: vec![],
+            apps: vec![],
+            commands: vec![CommandProbeToml {
+                bin: "claude".into(),
+                args: vec![],
+                timeout_ms: None,
+            }],
+        };
+        let cap = CaptureArgs {
+            seen: RefCell::new(vec![]),
+        };
+        let d = run(&[client("claude", Some(rules))], &home(), &cap, &macos());
+        assert_eq!(d.get("claude").unwrap().detected, Some(true));
+        assert_eq!(
+            cap.seen.borrow().as_slice(),
+            &[("claude".to_owned(), vec!["--version".to_owned()])]
+        );
+
+        for c in crate::clients::builtin().unwrap() {
+            if let Some(det) = c.detect {
+                for cmd in det.commands {
+                    assert!(
+                        !cmd.args.is_empty(),
+                        "builtin client {} command {} must declare probe args",
+                        c.id,
+                        cmd.bin
+                    );
+                }
+            }
+        }
     }
 }

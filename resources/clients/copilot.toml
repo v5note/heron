@@ -22,3 +22,4 @@ dirs = ["~/.copilot"]
 
 [[detect.commands]]
 bin = "copilot"
+args = ["--version"]

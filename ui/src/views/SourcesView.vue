@@ -6,18 +6,20 @@
 // 收藏已经拆成一级页面（/favorites），本页只留「收进收藏」入口：预填值交给 store 后跳过去。
 // 底部常驻粘贴 Git 地址安装条；外壳（左栏/顶栏/toast）由 App.vue 与 store 提供。
 import { computed, onMounted, reactive, ref } from "vue";
-import { useRouter } from "vue-router";
+import { useRoute, useRouter } from "vue-router";
 import { useI18n } from "vue-i18n";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { api } from "../api";
 import type { InstallPlan, InstallPreview, MarketInfo, MarketItem } from "../api/types";
 import { useAppStore, type FavoriteDraft } from "../stores/app";
 import { parseUrl } from "../utils/url";
+import { routeSearchSeed } from "../utils/routeQuery";
 import AppIcon from "../components/AppIcon.vue";
 import FloatBar from "../components/FloatBar.vue";
 
 const store = useAppStore();
 const router = useRouter();
+const route = useRoute();
 const { t } = useI18n();
 
 /** 来源 id → 视图元数据（mark 字母 / host / 说明句），后端只给 id/name/capability/base_url。 */
@@ -114,6 +116,13 @@ function hostOf(url: string): string {
 
 onMounted(async () => {
   await Promise.all([loadMarkets(), loadInstalled()]);
+  // Arriving from the global palette with ?q= should show remote hits, not an empty toolbar —
+  // seed the term and fire the same search the Enter key would.
+  const seeded = routeSearchSeed(route);
+  if (seeded) {
+    query.value = seeded;
+    void run();
+  }
 });
 
 async function loadMarkets() {

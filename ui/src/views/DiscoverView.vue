@@ -3,16 +3,19 @@
 // preview live together so the user sees exactly what will move before anything moves.
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
+import { useRoute } from "vue-router";
 import AppIcon from "../components/AppIcon.vue";
 import AppOverlay from "../components/AppOverlay.vue";
 import FloatBar from "../components/FloatBar.vue";
 import PageHeader from "../components/PageHeader.vue";
 import { clientColor, clientIcon } from "../utils/clients";
+import { routeSearchSeed } from "../utils/routeQuery";
 import type { AdoptPlan, DetectedMeta, DetectedRow } from "../api/types";
 import { useAppStore } from "../stores/app";
 
 const store = useAppStore();
 const { t, te } = useI18n();
+const route = useRoute();
 const selected = ref<string[]>([]);
 /**
  * Where the content will live. `auto` follows each entry's plan, which is what protects a link the
@@ -41,6 +44,9 @@ let metaRequest = 0;
 // leave the rescan to the explicit "扫描本机" action in the toolbar.
 onMounted(() => {
   document.addEventListener("mousedown", closeFilterOnOutside);
+  // A global-search jump lands here with ?q=<name>; narrow the table to it immediately.
+  const seeded = routeSearchSeed(route);
+  if (seeded) query.value = seeded;
   if (!store.ready) void store.init();
   else void store.loadDetected();
 });

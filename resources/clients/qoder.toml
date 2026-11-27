@@ -20,3 +20,4 @@ apps = ["Qoder.app"]
 
 [[detect.commands]]
 bin = "qoder"
+args = ["--version"]

@@ -72,17 +72,10 @@ pub fn apply_plan(plan: &ProjectPlan) -> Result<Vec<AppliedProjection>> {
         match step {
             PlanAction::AlreadyPresent => continue,
             PlanAction::CreateLink { target, path, mode } => {
-                // If a managed copy occupies the path, the link layer would (correctly) refuse;
-                // remove the copy we own first so the link can take its place.
-                if link::probe(path)?.kind.is_real_dir() {
-                    std::fs::remove_dir_all(path).map_err(|e| {
-                        ErrorCode::Permission
-                            .msg()
-                            .with("path", path.display().to_string())
-                            .with("detail", e.to_string())
-                    })?;
-                }
-                let outcome = link::create_dir_link(target, path, *mode)?;
+                // If a managed copy occupies the path, replace_dir_with_link verifies the target
+                // exists first, removes the verified real directory through the link layer, and
+                // creates the link (ADR-0003).
+                let outcome = link::replace_dir_with_link(target, path, *mode)?;
                 let warning = match &outcome {
                     LinkOutcome::Downgraded { warning, .. } => Some(warning.clone()),
                     _ => None,
@@ -171,12 +164,7 @@ pub fn remove_projection(
                             .into());
                     }
                 }
-                std::fs::remove_dir_all(path).map_err(|e| {
-                    ErrorCode::Permission
-                        .msg()
-                        .with("path", path.display().to_string())
-                        .with("detail", e.to_string())
-                })?;
+                link::remove_dir(path)?;
                 Ok(())
             }
             _ => Err(ErrorCode::SafetyRefused
@@ -230,12 +218,7 @@ pub fn copy_tree_atomic(from: &Path, to: &Path) -> Result<()> {
         if link::probe(to)?.kind.is_link() {
             link::remove_link(to)?;
         } else {
-            std::fs::remove_dir_all(to).map_err(|e| {
-                ErrorCode::Permission
-                    .msg()
-                    .with("path", to.display().to_string())
-                    .with("detail", e.to_string())
-            })?;
+            link::remove_dir(to)?;
         }
     }
     std::fs::rename(&temp, to).map_err(|e| {

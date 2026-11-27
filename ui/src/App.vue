@@ -8,6 +8,7 @@ import logoLight from "./assets/logo-light.png";
 import ScanPill from "./components/ScanPill.vue";
 import ActionPill from "./components/ActionPill.vue";
 import ToastHost from "./components/ToastHost.vue";
+import SearchPalette from "./components/SearchPalette.vue";
 import { useAppStore } from "./stores/app";
 import { setupMenu } from "./menu";
 import { setupTray } from "./tray";
@@ -109,12 +110,23 @@ const doctorElsewhere = computed(
   () => store.doctorRun.running && route.name !== "doctor" && route.name !== "overview",
 );
 
+/* ---------- global search (⌘K) ---------- */
+// The rail's 搜索 box used to be a button that just pushed /library — a fake input that duplicated
+// the page's own filter. It now opens one palette over every entity, so the box means "find anything".
+const paletteOpen = ref(false);
+
 function onKeydown(event: KeyboardEvent) {
+  // ⌘K / Ctrl+K opens the palette from anywhere; it's a command, so it wins even inside a field.
+  if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
+    event.preventDefault();
+    paletteOpen.value = !paletteOpen.value;
+    return;
+  }
   if (event.key !== "Escape" || !store.scanning) return;
   // Whatever already owns Escape keeps it: an open dialog or drawer closes itself first, and a key
   // typed into a field is text, not a command.
   const target = event.target as HTMLElement | null;
-  if (target?.closest?.("input, textarea, select, [contenteditable], .scrim, .dialog, .drawer")) return;
+  if (target?.closest?.("input, textarea, select, [contenteditable], .scrim, .dialog, .drawer, .palette")) return;
   event.preventDefault();
   void store.cancelScan();
 }
@@ -168,9 +180,10 @@ function go(to: string) {
         </span>
       </div>
 
-      <button class="rail-search" @click="go('/library')">
+      <button class="rail-search" :title="t('palette.placeholder')" @click="paletteOpen = true">
         <AppIcon name="search" :size="14" class="rail-icon" />
         <span>{{ t("common.search") }}</span>
+        <span class="rail-search-kbd" aria-hidden="true">⌘K</span>
       </button>
 
       <nav class="rail-scroll">
@@ -272,6 +285,7 @@ function go(to: string) {
     </div>
 
     <ToastHost />
+    <SearchPalette :open="paletteOpen" @close="paletteOpen = false" />
   </div>
 </template>
 
@@ -310,6 +324,7 @@ function go(to: string) {
 .wordmark small { font-size: 11.5px; color: var(--dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .rail-search { display: flex; align-items: center; gap: 8px; height: 32px; padding: 0 9px; margin: 2px 0 10px; border: 1px solid var(--line); border-radius: var(--radius-sm); color: var(--dim); font-size: 12px; background: var(--raised); }
 .rail-search:hover { color: var(--text); }
+.rail-search-kbd { margin-left: auto; font-family: var(--font-mono); font-size: 10px; color: var(--faint); border: 1px solid var(--line); border-radius: 4px; padding: 0 4px; line-height: 16px; }
 .rail-scroll { flex: 1; min-height: 0; overflow: auto; display: flex; flex-direction: column; gap: 1px; padding-right: 4px; margin-right: 2px; }
 .rail-group { font-size: 12px; font-weight: 600; color: var(--dim); padding: 14px 8px 6px; }
 .rail-icon { flex: none; stroke: currentColor; fill: none; stroke-width: 1.6; }

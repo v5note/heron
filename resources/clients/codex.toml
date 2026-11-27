@@ -21,3 +21,4 @@ dirs = ["~/.codex"]
 
 [[detect.commands]]
 bin = "codex"
+args = ["--version"]

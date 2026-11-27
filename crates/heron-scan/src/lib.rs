@@ -11,7 +11,7 @@ pub mod walker;
 
 pub use classify::{Classifier, ClientSpec, HitKind, Scope};
 pub use fingerprint::{fingerprint_dir, Fingerprint, FingerprintOptions};
-pub use parse::{parse_skill_md, Confidence, Frontmatter, ParseIssue};
+pub use parse::{parse_skill_dir, parse_skill_md, Confidence, Frontmatter, ParseIssue};
 pub use rules::IgnoreRules;
 pub use walker::{
     collect_roots, scan, scan_monitored, Hit, ScanMonitor, ScanOptions, ScanResult, ScanStats,

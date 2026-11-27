@@ -24,3 +24,4 @@ dirs = ["~/.claude"]
 
 [[detect.commands]]
 bin = "claude"
+args = ["--version"]

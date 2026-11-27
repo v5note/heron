@@ -400,17 +400,11 @@ pub fn execute(ctx: &mut Ctx, plan: &AdoptPlan, placement: AdoptPlacement) -> Re
                 Some(row) => row,
                 None => ensure_target_for_dir(ctx, &dest_link, &booking)?,
             };
-            if heron_platform::link::probe(&dest_link)?.kind.is_real_dir() {
-                std::fs::remove_dir_all(&dest_link).map_err(|e| {
-                    heron_core::HeronError::from(
-                        heron_core::ErrorCode::Permission
-                            .msg()
-                            .with("path", dest_link.display().to_string())
-                            .with("detail", e.to_string()),
-                    )
-                })?;
-            }
-            heron_platform::link::create_dir_link(&ctx.skill_path(&slug), &dest_link, mode)?;
+            heron_platform::link::replace_dir_with_link(
+                &ctx.skill_path(&slug),
+                &dest_link,
+                mode,
+            )?;
             // Several copies of one skill may live in the same client directory (e.g. both
             // `.agents/skills/wechat-mp` and `.claude/skills/wechat-mp`), so the recorded link name must be
             // derived from the original location, not from the slug.
@@ -772,10 +766,15 @@ fn booking_client(ctx: &Ctx, row: &DetectedRow, landing: &Path) -> Result<String
 /// The client that has a skills directory containing a link named after `landing` and resolving to
 /// it. Read-only: it probes what is already on disk and changes nothing.
 fn declared_link_owner(ctx: &Ctx, landing: &Path) -> Result<Option<String>> {
-    let Some(name) = landing.file_name().map(|n| n.to_string_lossy().into_owned()) else {
+    let Some(name) = landing
+        .file_name()
+        .map(|n| n.to_string_lossy().into_owned())
+    else {
         return Ok(None);
     };
-    let landing = landing.canonicalize().unwrap_or_else(|_| landing.to_path_buf());
+    let landing = landing
+        .canonicalize()
+        .unwrap_or_else(|_| landing.to_path_buf());
     for spec in crate::clients::loaded_specs(&ctx.db)? {
         for root in &spec.global_paths {
             let candidate = root.join(&name);
@@ -892,4 +891,61 @@ fn single_file_hash(path: &Path) -> Result<Hash> {
 /// Convenience for tests: content hash of a directory.
 pub fn content_hash(dir: &Path) -> Result<Hash> {
     Ok(heron_scan::fingerprint_dir(dir, &FingerprintOptions::default())?.hash)
+}
+
+/// Plan a batch of candidate paths using a single shared dedup hash of the store.
+pub fn plan_paths(ctx: &Ctx, paths: &[String]) -> Result<Vec<AdoptPlan>> {
+    let rows = detected::list_by_state(ctx.db.conn(), "candidate")?;
+    let index = DedupIndex::build(ctx)?;
+    let mut plans = Vec::new();
+    for path in paths {
+        if let Some(row) = rows.iter().find(|r| &r.path == path) {
+            plans.push(plan_with_index(ctx, row, &index)?);
+        }
+    }
+    Ok(plans)
+}
+
+/// Execute a batch of adoption plans without letting one failing entry abort the rest.
+pub fn execute_paths(
+    ctx: &mut Ctx,
+    plans: &[AdoptPlan],
+    keep_original: bool,
+    placement: Option<AdoptPlacement>,
+) -> AdoptReport {
+    let override_placement = placement.or(keep_original.then_some(AdoptPlacement::KeepOriginal));
+    let mut report = AdoptReport {
+        adopted: vec![],
+        skipped: vec![],
+        errors: vec![],
+    };
+    for plan in plans {
+        let how = override_placement.unwrap_or(plan.suggested);
+        match execute(ctx, plan, how) {
+            Ok(outcome) => {
+                report.adopted.extend(outcome.adopted);
+                report.skipped.extend(outcome.skipped);
+                report.errors.extend(outcome.errors);
+            }
+            Err(e) => {
+                let msg = e.as_msg();
+                report.errors.push(format!(
+                    "{}: {} {}",
+                    plan.detail.path,
+                    msg.code,
+                    msg.params
+                        .get("detail")
+                        .map(String::as_str)
+                        .unwrap_or_default()
+                ));
+            }
+        }
+    }
+    report
+}
+
+/// List all active skills, backfilling any legacy blank descriptions from `SKILL.md`.
+pub fn list_skills(ctx: &mut Ctx) -> Result<Vec<SkillRow>> {
+    repair_descriptions(ctx)?;
+    skill::list(ctx.db.conn(), false)
 }

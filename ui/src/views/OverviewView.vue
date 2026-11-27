@@ -11,6 +11,7 @@ import AppIcon from "../components/AppIcon.vue";
 import PageHeader from "../components/PageHeader.vue";
 import ScanPill from "../components/ScanPill.vue";
 import ScanStatusLine from "../components/ScanStatusLine.vue";
+import { api } from "../api";
 import { clientColor, clientIcon } from "../utils/clients";
 import { displayPath } from "../utils/paths";
 import { useAppStore } from "../stores/app";
@@ -227,6 +228,25 @@ const gaugeNote = computed(() => {
 
 /* ---------------- 落点卡片 ---------------- */
 
+/** 落点的开关是就地翻的，不去项目页：那些 id 正在写库，卡片在此期间不接受第二次点击。 */
+const pendingIds = ref<string[]>([]);
+
+async function toggleTarget(card: { id: string; enabled: boolean }) {
+  if (pendingIds.value.includes(card.id)) return;
+  pendingIds.value = [...pendingIds.value, card.id];
+  const next = !card.enabled;
+  try {
+    await api.setTargetEnabled(card.id, next);
+    store.toast("ok", next ? t("common.enabled") : t("common.disabled"));
+  } catch (e) {
+    store.fail(e);
+  } finally {
+    // 值绑的是库里的真值：写失败要退回原样，写成功也要重读才翻得过来。
+    await store.loadTargets();
+    pendingIds.value = pendingIds.value.filter((id) => id !== card.id);
+  }
+}
+
 const copiedId = ref("");
 let copiedTimer: number | undefined;
 onBeforeUnmount(() => {
@@ -438,7 +458,6 @@ async function copyPath(path: string, id: string) {
         class="tile"
         :class="{ absent: card.absent }"
         :title="card.absent ? t('overview.targets.absentHint') : undefined"
-        @click="go('/projects')"
       >
         <div class="t-head">
           <span class="glyph" :style="glyphStyle(card.kind)">
@@ -461,8 +480,19 @@ async function copyPath(path: string, id: string) {
           </button>
         </div>
         <div class="t-foot">
-          <span class="switch" :class="{ on: card.enabled }" />
-          <span>{{ card.enabled ? t("overview.targets.enabled") : t("overview.targets.disabled") }}</span>
+          <button
+            type="button"
+            class="t-toggle"
+            role="switch"
+            :aria-checked="card.enabled"
+            :aria-label="card.kind"
+            :title="card.enabled ? t('overview.targets.offTip') : t('overview.targets.onTip')"
+            :disabled="pendingIds.includes(card.id)"
+            @click="toggleTarget(card)"
+          >
+            <span class="switch" :class="{ on: card.enabled }" />
+            <span>{{ card.enabled ? t("overview.targets.enabled") : t("overview.targets.disabled") }}</span>
+          </button>
           <span class="cnt">{{ t("overview.targets.skillCount", { n: card.live }) }}</span>
         </div>
       </div>
@@ -544,11 +574,11 @@ async function copyPath(path: string, id: string) {
 /* ---------- 落点卡片 ---------- */
 .tiles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
 .tile {
-  display: flex; flex-direction: column; gap: 10px; padding: 12px 14px; cursor: pointer;
+  display: flex; flex-direction: column; gap: 10px; padding: 12px 14px;
   background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
-  transition: border-color 0.15s, box-shadow 0.15s, transform 0.15s;
+  transition: border-color 0.15s, box-shadow 0.15s;
 }
-.tile:hover { border-color: var(--line-strong); box-shadow: var(--lift); transform: translateY(-1px); }
+.tile:hover { border-color: var(--line-strong); box-shadow: var(--lift); }
 /* 未检测到：只灰卡片本身与图标，chip 与文字必须保持可读；灰度只作用在 glyph 的图标上。 */
 .tile.absent { opacity: 0.55; }
 .tile.absent .glyph { filter: grayscale(1); }
@@ -582,6 +612,14 @@ async function copyPath(path: string, id: string) {
 .switch::after { content: ""; position: absolute; top: 2px; left: 2px; width: 9px; height: 9px; border-radius: 50%; background: var(--panel); }
 .switch.on { background: var(--accent); }
 .switch.on::after { transform: translateX(9px); background: var(--bg); }
+/* 开关就地生效，不再跳去项目页：整行（开关 + 文案）都是按钮。 */
+.t-toggle {
+  display: inline-flex; align-items: center; gap: 8px; padding: 0; border: 0;
+  background: none; font: inherit; color: inherit; cursor: pointer;
+}
+.t-toggle:hover .switch { box-shadow: 0 0 0 3px color-mix(in srgb, var(--text) 7%, transparent); }
+.t-toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 6px; }
+.t-toggle:disabled { cursor: default; opacity: 0.55; }
 .tile-empty { grid-column: 1 / -1; }
 
 @media (max-width: 1180px) { .tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); } }

@@ -325,6 +325,17 @@ pub fn parse_file(
     Ok(parse_skill_md(&bytes))
 }
 
+/// Convenience: parse the `SKILL.md` that makes `dir` a skill directory.
+///
+/// Callers that already hold a file path use [`parse_file`]; this is for the service layer,
+/// which walks skill *directories* (adopt, trash, restore) and must not re-hardcode the
+/// file name at every call site.
+pub fn parse_skill_dir(
+    dir: &std::path::Path,
+) -> std::result::Result<(Frontmatter, Vec<ParseIssue>), heron_core::HeronError> {
+    parse_file(&dir.join("SKILL.md"))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -419,5 +430,22 @@ mod tests {
         let raw = "---\nname: a\ndescription: b\nmetadata:\n  Version: 42\n---\n";
         let (fm, _) = parse_skill_md(raw.as_bytes());
         assert_eq!(fm.metadata_version(), Some("42"));
+    }
+
+    #[test]
+    fn parse_skill_dir_reads_the_dir_skill_md() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(
+            dir.path().join("SKILL.md"),
+            "---\nname: wechat-mp\ndescription: Publish articles\n---\n",
+        )
+        .unwrap();
+        let (fm, _) = parse_skill_dir(dir.path()).unwrap();
+        assert_eq!(fm.name.as_deref(), Some("wechat-mp"));
+
+        // A directory without SKILL.md must be an error, not an empty frontmatter,
+        // so callers can fall back to deriving the slug from the directory name.
+        let empty = tempfile::tempdir().unwrap();
+        assert!(parse_skill_dir(empty.path()).is_err());
     }
 }

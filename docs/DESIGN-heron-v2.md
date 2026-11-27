@@ -1449,3 +1449,16 @@ heron cache clean
 6. 内置五市场的能力分级（§9.5，A 档一键安装 / B 档引导式）是否认可？
 7. 客户端原生扫描口径（§10.11，只读识别 + 能力表驱动的注入）是否符合预期？
 8. Store 放在 `~/.heron/skills`（不是投影目标、没有默认目标）与 `~/.agents/skills` 仅作映射点（§10.15）是否符合预期？
+
+---
+
+## 20. 演进与实现对齐记录（2026-11-27）
+
+以下实现演进已正式纳入当前产品基线：
+
+- **独立收藏页与全局 `⌘K` 面板**：新增 `/favorites` 一级视图（`FavoritesView.vue`）承接市场收藏与安装；新增 `SearchPalette.vue` 提供跨本地库、未纳管项与远端市场的全局检索跳转。
+- **桌面外壳增强**：在系统托盘之外补齐开机自启（`autostart`）与原生应用菜单栏（`menu.ts`）。
+- **项目页只读展示**：`ProjectsView.vue` 按“项目自带 Skill 随仓库流转、Heron 不越权接管”原则调整为只读展示；项目登记能力保留于 CLI（`heron projects --register`）。
+- **回收站恢复机制**：删除托管 Skill 时撤回全部投影、将 Store 副本移入 `~/.heron/trash/<slug>-<timestamp>` 并释放数据库 `slug` 主键以便重装；`heron-service::remove` 提供 `list_trash` / `restore` / `empty_trash` 完整恢复与清空能力。
+- **客户端探测与代理控制**：内置客户端目录扩展含 `trae-cn` 与落点启停开关（`target_set_enabled`）；网络代理除留空自动探测外支持显式禁用开关（`network.proxy.enabled`）。
+- **后续里程碑（M5 / v2.1）**：Daemon `ipc.json`（CLI→GUI 委托）与 `notify` 增量文件监听延后至下一里程碑实现。

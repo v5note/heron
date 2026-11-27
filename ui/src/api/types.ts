@@ -147,6 +147,8 @@ export interface SkillRow {
   description: string;
   origin: string;
   status: string;
+  /** Sent by `skills_list` but previously unused by the UI; the global search matches on it. */
+  tags?: string[];
 }
 
 export interface TargetRow {
@@ -171,6 +173,20 @@ export interface DiscoveredProject {
   /** Client ids whose `.<client>/skills` directory was found inside the root. */
   clients: string[];
   already_registered: boolean;
+}
+
+/**
+ * A skill a project carries in its own `.<client>/skills` directory (`projects_skills`). Read off the
+ * disk on demand: Heron never takes these over, so they exist in no index and have no adoption state.
+ */
+export interface ProjectSkill {
+  path: string;
+  /** Client id whose directory holds it. */
+  client: string;
+  /** Directory name — what the client reads. */
+  slug: string;
+  name: string | null;
+  description: string | null;
 }
 
 /**

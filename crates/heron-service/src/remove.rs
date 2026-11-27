@@ -152,3 +152,179 @@ fn move_to_trash(ctx: &Ctx, plan: &RemovePlan) -> Result<Option<PathBuf>> {
     })?;
     Ok(Some(dest))
 }
+
+/// One parked directory sitting in `~/.heron/trash`.
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TrashEntry {
+    /// Directory name inside `dirs.trash()`, e.g. `wechat-mp-2026-11-27T07-00-00-000Z`.
+    pub id: String,
+    /// Slug recovered from `SKILL.md` frontmatter or the `<slug>-<timestamp>` prefix.
+    pub slug: String,
+    /// Full path on disk.
+    pub path: String,
+}
+
+/// List every skill directory parked in `dirs.trash()`.
+pub fn list_trash(ctx: &Ctx) -> Result<Vec<TrashEntry>> {
+    let dir = ctx.dirs.trash();
+    if !dir.is_dir() {
+        return Ok(Vec::new());
+    }
+    let mut entries = Vec::new();
+    let rd = std::fs::read_dir(&dir).map_err(|e| {
+        HeronError::from(
+            ErrorCode::Permission
+                .msg()
+                .with("path", dir.display().to_string())
+                .with("detail", e.to_string()),
+        )
+    })?;
+    for entry in rd {
+        let entry = entry.map_err(|e| {
+            HeronError::from(
+                ErrorCode::Permission
+                    .msg()
+                    .with("path", dir.display().to_string())
+                    .with("detail", e.to_string()),
+            )
+        })?;
+        let path = entry.path();
+        if !path.is_dir() {
+            continue;
+        }
+        let id = entry.file_name().to_string_lossy().to_string();
+        let slug = infer_trashed_slug(&path, &id);
+        entries.push(TrashEntry {
+            id,
+            slug,
+            path: path.to_string_lossy().to_string(),
+        });
+    }
+    entries.sort_by(|a, b| a.id.cmp(&b.id));
+    Ok(entries)
+}
+
+/// Restore a trashed skill directory back into the store and re-register its index row.
+pub fn restore(ctx: &mut Ctx, trash_id: &str) -> Result<SkillRow> {
+    let trash_dir = ctx.dirs.trash().join(trash_id);
+    if !trash_dir.is_dir() {
+        return Err(ErrorCode::NotManaged
+            .msg()
+            .with("slug", trash_id.to_owned())
+            .into());
+    }
+    let slug = infer_trashed_slug(&trash_dir, trash_id);
+    if skill::get_ci(ctx.db.conn(), &slug)?.is_some() {
+        return Err(ErrorCode::SlugConflict
+            .msg()
+            .with("slug", slug)
+            .into());
+    }
+    let dest = ctx.skill_path(&slug);
+    if dest.exists() {
+        return Err(ErrorCode::SlugConflict
+            .msg()
+            .with("slug", slug)
+            .into());
+    }
+    if let Some(parent) = dest.parent() {
+        std::fs::create_dir_all(parent).map_err(|e| {
+            HeronError::from(
+                ErrorCode::Permission
+                    .msg()
+                    .with("path", parent.display().to_string())
+                    .with("detail", e.to_string()),
+            )
+        })?;
+    }
+    std::fs::rename(&trash_dir, &dest).map_err(|e| {
+        HeronError::from(
+            ErrorCode::Permission
+                .msg()
+                .with("path", trash_dir.display().to_string())
+                .with("detail", e.to_string()),
+        )
+    })?;
+
+    let (display_name, description) = read_meta(&dest, &slug);
+    let row = SkillRow {
+        slug: slug.clone(),
+        display_name,
+        description,
+        tags: Vec::new(),
+        status: "active".to_owned(),
+        origin: "store".to_owned(),
+        storage_path: None,
+        subpath: None,
+        created_at: String::new(),
+        updated_at: String::new(),
+    };
+    ctx.db.write(|tx| {
+        let ev = event::record(
+            tx,
+            ctx.actor,
+            "restore",
+            Some(&slug),
+            Some(&trash_dir.to_string_lossy()),
+            false,
+        )?;
+        skill::insert(tx, &row)?;
+        event::finish(tx, ev, false)?;
+        Ok(())
+    })?;
+    Ok(row)
+}
+
+/// Permanently remove every directory parked in `dirs.trash()`. Returns the count removed.
+pub fn empty_trash(ctx: &mut Ctx) -> Result<usize> {
+    let entries = list_trash(ctx)?;
+    let mut removed = 0;
+    for entry in &entries {
+        heron_platform::link::remove_dir(std::path::Path::new(&entry.path))?;
+        removed += 1;
+    }
+    if removed > 0 {
+        ctx.db.write(|tx| {
+            let ev = event::record(tx, ctx.actor, "trash_empty", None, None, false)?;
+            event::finish(tx, ev, false)?;
+            Ok(())
+        })?;
+    }
+    Ok(removed)
+}
+
+fn infer_trashed_slug(dir: &std::path::Path, id: &str) -> String {
+    if let Ok((parsed, _)) = heron_scan::parse_skill_dir(dir) {
+        if let Some(name) = parsed.name {
+            let trimmed = name.trim();
+            if !trimmed.is_empty() {
+                return trimmed.to_owned();
+            }
+        }
+    }
+    // Strip the `-YYYY-MM-DDT...` suffix added by `trash_path`.
+    if let Some(idx) = id.rfind("-20") {
+        let candidate = &id[..idx];
+        if !candidate.is_empty() {
+            return candidate.to_owned();
+        }
+    }
+    id.to_owned()
+}
+
+fn read_meta(dir: &std::path::Path, fallback_slug: &str) -> (String, String) {
+    if let Ok((parsed, _)) = heron_scan::parse_skill_dir(dir) {
+        let name = parsed
+            .name
+            .map(|s| s.trim().to_owned())
+            .filter(|s| !s.is_empty())
+            .unwrap_or_else(|| fallback_slug.to_owned());
+        let desc = parsed
+            .description
+            .map(|s| s.trim().to_owned())
+            .unwrap_or_default();
+        return (name, desc);
+    }
+    (fallback_slug.to_owned(), String::new())
+}

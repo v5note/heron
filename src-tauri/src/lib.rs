@@ -424,16 +424,7 @@ fn detected_list(
     state_filter: Option<String>,
 ) -> Result<Vec<heron_store::models::DetectedRow>, Msg> {
     let ctx = state.ctx.lock().unwrap();
-    let wanted = state_filter.unwrap_or_else(|| "candidate".to_owned());
-    let rows = if wanted == "all" {
-        heron_store::repos::detected::list_all(ctx.db.conn())
-    } else {
-        // Skills the library projected into a client directory are already taken over: they stay
-        // out of the discovery list even when an earlier scan indexed them.
-        heron_store::repos::detected::list_by_state(ctx.db.conn(), &wanted)
-            .and_then(|rows| heron_service::scan::without_projection_outputs(&ctx, rows))
-    };
-    rows.map_err(err)
+    heron_service::scan::list_detected(&ctx, state_filter.as_deref()).map_err(err)
 }
 
 #[tauri::command]
@@ -455,95 +446,35 @@ async fn adopt_paths(
     let work = tauri::async_runtime::spawn_blocking(move || {
         let state = app.state::<AppState>();
         let mut ctx = state.ctx.lock().unwrap();
-        adopt_paths_inner(
-            &mut ctx,
-            &paths,
-            dry_run,
-            keep_original,
-            placement.as_deref(),
-        )
+        let plans = adopt::plan_paths(&ctx, &paths).map_err(err)?;
+        if dry_run {
+            return serde_json::to_value(&plans)
+                .map_err(|e| Msg::new("E_INTERNAL").with("detail", e.to_string()));
+        }
+        let parsed_placement = match placement.as_deref() {
+            Some(value) => Some(adopt::AdoptPlacement::parse(value).ok_or_else(|| {
+                Msg::new("E_INTERNAL").with("detail", format!("unknown placement {value}"))
+            })?),
+            None => None,
+        };
+        let report = adopt::execute_paths(&mut ctx, &plans, keep_original, parsed_placement);
+        serde_json::to_value(&report)
+            .map_err(|e| Msg::new("E_INTERNAL").with("detail", e.to_string()))
     });
     work.await
         .map_err(|e| Msg::new("E_INTERNAL").with("detail", e.to_string()))?
 }
 
-fn adopt_paths_inner(
-    ctx: &mut Ctx,
-    paths: &[String],
-    dry_run: bool,
-    keep_original: bool,
-    placement: Option<&str>,
-) -> Result<serde_json::Value, Msg> {
-    let rows =
-        heron_store::repos::detected::list_by_state(ctx.db.conn(), "candidate").map_err(err)?;
-    // Hash the store once for the whole batch, so dedup is a lookup per row instead of re-walking
-    // every skill directory for every selection.
-    let index = adopt::DedupIndex::build(ctx).map_err(err)?;
-    let mut plans = Vec::new();
-    for path in paths {
-        if let Some(row) = rows.iter().find(|r| &r.path == path) {
-            plans.push(adopt::plan_with_index(ctx, row, &index).map_err(err)?);
-        }
-    }
-    if dry_run {
-        return serde_json::to_value(&plans)
-            .map_err(|e| Msg::new("E_INTERNAL").with("detail", e.to_string()));
-    }
-    let placement = match placement {
-        Some(value) => Some(adopt::AdoptPlacement::parse(value).ok_or_else(|| {
-            Msg::new("E_INTERNAL").with("detail", format!("unknown placement {value}"))
-        })?),
-        None if keep_original => Some(adopt::AdoptPlacement::KeepOriginal),
-        None => None,
-    };
-    let mut report = adopt::AdoptReport {
-        adopted: vec![],
-        skipped: vec![],
-        errors: vec![],
-    };
-    for plan in &plans {
-        // Without an explicit choice each entry goes the way its plan suggested: adopting a link the
-        // user made elsewhere must not silently re-point it.
-        let how = placement.unwrap_or(plan.suggested);
-        // One failing path must not swallow the rest of the selection. Swallowing the error only
-        // ever showed up as "nothing happened": an empty toast and an unchanged list.
-        match adopt::execute(ctx, plan, how) {
-            Ok(outcome) => {
-                report.adopted.extend(outcome.adopted);
-                report.skipped.extend(outcome.skipped);
-                report.errors.extend(outcome.errors);
-            }
-            Err(e) => {
-                let msg = err(e);
-                report.errors.push(format!(
-                    "{}: {} {}",
-                    plan.detail.path,
-                    msg.code,
-                    msg.params
-                        .get("detail")
-                        .map(String::as_str)
-                        .unwrap_or_default()
-                ));
-            }
-        }
-    }
-    serde_json::to_value(&report).map_err(|e| Msg::new("E_INTERNAL").with("detail", e.to_string()))
-}
-
 #[tauri::command]
 fn skills_list(state: State<'_, AppState>) -> Result<Vec<heron_store::models::SkillRow>, Msg> {
     let mut ctx = state.ctx.lock().unwrap();
-    // Rows adopted before adopt learned to read the file have an empty description. Filling them
-    // from the content on disk is a no-op once the index is complete, so it can ride along here
-    // instead of waiting for a repair the user has to think of.
-    heron_service::adopt::repair_descriptions(&mut ctx).map_err(err)?;
-    heron_store::repos::skill::list(ctx.db.conn(), false).map_err(err)
+    heron_service::adopt::list_skills(&mut ctx).map_err(err)
 }
 
 #[tauri::command]
 fn targets_list(state: State<'_, AppState>) -> Result<Vec<heron_store::models::TargetRow>, Msg> {
     let ctx = state.ctx.lock().unwrap();
-    heron_store::repos::target::list(ctx.db.conn()).map_err(err)
+    heron_service::clients::list_targets(&ctx.db).map_err(err)
 }
 
 /// The client matrix with the presence verdicts of the last scan, so the overview can grey out a
@@ -551,7 +482,7 @@ fn targets_list(state: State<'_, AppState>) -> Result<Vec<heron_store::models::T
 #[tauri::command]
 fn clients_list(state: State<'_, AppState>) -> Result<Vec<heron_store::models::ClientRow>, Msg> {
     let ctx = state.ctx.lock().unwrap();
-    heron_store::repos::client::list(ctx.db.conn()).map_err(err)
+    heron_service::clients::list_clients(&ctx.db).map_err(err)
 }
 
 #[tauri::command]
@@ -596,10 +527,7 @@ fn unproject_skill(state: State<'_, AppState>, slug: String, target_id: String) 
 /// Retract every projection sitting on one target. Answers with the paths taken back so the UI can
 /// say how many it removed instead of a bare "done".
 #[tauri::command]
-fn target_unproject_all(
-    state: State<'_, AppState>,
-    target_id: String,
-) -> Result<Vec<String>, Msg> {
+fn target_unproject_all(state: State<'_, AppState>, target_id: String) -> Result<Vec<String>, Msg> {
     let mut ctx = state.ctx.lock().unwrap();
     heron_service::project::unproject_target(&mut ctx, &target_id).map_err(err)
 }
@@ -634,46 +562,42 @@ fn skill_remove(
     serde_json::to_value(&outcome).map_err(|e| Msg::new("E_INTERNAL").with("detail", e.to_string()))
 }
 
-/// `verify://progress`. The field names are the contract with the UI: camelCase, verbatim.
+/// Shared progress envelope for background check tasks (`verify://progress`, `doctor://progress`).
 #[derive(Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
-struct VerifyProgressDto {
+struct TaskProgressDto {
     phase: &'static str,
     done: usize,
     total: usize,
-    /// `None` wherever there is no honest denominator: the `prepare` tick, whose row count is not
-    /// known yet, and a store with no projections at all. The UI animates instead.
+    /// `None` wherever there is no honest denominator.
     percent: Option<f64>,
-    /// Projections whose verdict is not `visible`, so far.
     findings: usize,
 }
 
-/// The terminal `verify://done` event: the progress envelope plus the reports, so the UI has no
-/// second call to make. `rows` is exactly what `verify::verify` answers with, which keeps the
-/// overview's `visibility` list working. A cancelled pass arrives too, with `phase: "canceled"`
-/// and only the rows it managed to check.
-#[derive(Serialize, Clone)]
-#[serde(rename_all = "camelCase")]
-struct VerifyDoneDto {
-    #[serde(flatten)]
-    progress: VerifyProgressDto,
-    duration_ms: u64,
-    rows: Vec<verify::VerifyReport>,
-}
-
-/// What `verify_start` answers straight away: the check is running, or one already was.
+/// Shared acknowledgement for `*_start` commands.
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
-struct VerifyStartDto {
+struct TaskStartDto {
     started: bool,
     running: bool,
 }
 
+/// Shared acknowledgement for `*_cancel` commands.
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
-struct VerifyCancelDto {
-    /// `false` when there was no check in flight to stop.
+struct TaskCancelDto {
     canceling: bool,
+}
+
+/// The terminal `verify://done` event: the progress envelope plus the reports, so the UI has no
+/// second call to make.
+#[derive(Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+struct VerifyDoneDto {
+    #[serde(flatten)]
+    progress: TaskProgressDto,
+    duration_ms: u64,
+    rows: Vec<verify::VerifyReport>,
 }
 
 /// Share of a check that is provably finished, one decimal — and only when a denominator exists to
@@ -708,8 +632,8 @@ impl TickForward {
     }
 }
 
-fn verify_progress(tick: verify::VerifyTick) -> VerifyProgressDto {
-    VerifyProgressDto {
+fn verify_progress(tick: verify::VerifyTick) -> TaskProgressDto {
+    TaskProgressDto {
         phase: tick.phase,
         done: tick.done,
         total: tick.total,
@@ -721,17 +645,17 @@ fn verify_progress(tick: verify::VerifyTick) -> VerifyProgressDto {
 /// Verify visibility in the background and answer immediately. This used to be a synchronous
 /// command, i.e. every projection path probed on the thread that owns the window.
 #[tauri::command]
-async fn verify_start(app: tauri::AppHandle) -> Result<VerifyStartDto, Msg> {
+async fn verify_start(app: tauri::AppHandle) -> Result<TaskStartDto, Msg> {
     let flags = app.state::<AppState>().verify.share();
     if !claim_task(&flags) {
-        return Ok(VerifyStartDto {
+        return Ok(TaskStartDto {
             started: false,
             running: true,
         });
     }
     // Deliberately not awaited: the events are the answer.
     let _task = tauri::async_runtime::spawn_blocking(move || verify_task(app, flags));
-    Ok(VerifyStartDto {
+    Ok(TaskStartDto {
         started: true,
         running: true,
     })
@@ -750,7 +674,7 @@ fn run_verify(app: &tauri::AppHandle, cancel: &AtomicBool) -> Result<(), HeronEr
     let started = Instant::now();
     let _ = app.emit(
         "verify://progress",
-        VerifyProgressDto {
+        TaskProgressDto {
             phase: "prepare",
             done: 0,
             total: 0,
@@ -788,7 +712,7 @@ fn run_verify(app: &tauri::AppHandle, cancel: &AtomicBool) -> Result<(), HeronEr
     let _ = app.emit(
         "verify://done",
         VerifyDoneDto {
-            progress: VerifyProgressDto {
+            progress: TaskProgressDto {
                 phase: if outcome.canceled { "canceled" } else { "done" },
                 ..verify_progress(last)
             },
@@ -801,8 +725,8 @@ fn run_verify(app: &tauri::AppHandle, cancel: &AtomicBool) -> Result<(), HeronEr
 
 /// Ask the verify in flight to stop. What it already checked stays in the cache.
 #[tauri::command]
-fn verify_cancel(state: State<'_, AppState>) -> VerifyCancelDto {
-    VerifyCancelDto {
+fn verify_cancel(state: State<'_, AppState>) -> TaskCancelDto {
+    TaskCancelDto {
         canceling: request_cancel(&state.verify),
     }
 }
@@ -867,19 +791,6 @@ fn rollback_skill(state: State<'_, AppState>, slug: String, to: String) -> Resul
     Ok(())
 }
 
-/// `doctor://progress`, same envelope as `verify://progress` and the same camelCase contract.
-#[derive(Serialize, Clone)]
-#[serde(rename_all = "camelCase")]
-struct DoctorProgressDto {
-    phase: &'static str,
-    done: usize,
-    total: usize,
-    /// `None` wherever there is no honest denominator — an empty store has nothing to count down.
-    percent: Option<f64>,
-    /// Issues found so far.
-    findings: usize,
-}
-
 /// The terminal `doctor://done` event: the progress envelope plus the report, so the UI has no
 /// second call to make. A cancelled run arrives here too, with `phase: "canceled"` and whatever it
 /// had found by then.
@@ -887,28 +798,13 @@ struct DoctorProgressDto {
 #[serde(rename_all = "camelCase")]
 struct DoctorDoneDto {
     #[serde(flatten)]
-    progress: DoctorProgressDto,
+    progress: TaskProgressDto,
     duration_ms: u64,
     report: doctor::DoctorReport,
 }
 
-/// What `doctor_start` answers straight away: the check is running, or one already was.
-#[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
-struct DoctorStartDto {
-    started: bool,
-    running: bool,
-}
-
-#[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
-struct DoctorCancelDto {
-    /// `false` when there was no check in flight to stop.
-    canceling: bool,
-}
-
-fn doctor_progress(tick: doctor::DoctorTick) -> DoctorProgressDto {
-    DoctorProgressDto {
+fn doctor_progress(tick: doctor::DoctorTick) -> TaskProgressDto {
+    TaskProgressDto {
         phase: tick.phase,
         done: tick.done,
         total: tick.total,
@@ -920,17 +816,17 @@ fn doctor_progress(tick: doctor::DoctorTick) -> DoctorProgressDto {
 /// Run the doctor in the background and answer immediately. It used to hash every managed skill
 /// directory on the caller's thread, which is exactly the freeze `scan` already fixed.
 #[tauri::command]
-async fn doctor_start(app: tauri::AppHandle) -> Result<DoctorStartDto, Msg> {
+async fn doctor_start(app: tauri::AppHandle) -> Result<TaskStartDto, Msg> {
     let flags = app.state::<AppState>().doctor.share();
     if !claim_task(&flags) {
-        return Ok(DoctorStartDto {
+        return Ok(TaskStartDto {
             started: false,
             running: true,
         });
     }
     // Deliberately not awaited: the events are the answer.
     let _task = tauri::async_runtime::spawn_blocking(move || doctor_task(app, flags));
-    Ok(DoctorStartDto {
+    Ok(TaskStartDto {
         started: true,
         running: true,
     })
@@ -981,83 +877,16 @@ fn run_doctor(app: &tauri::AppHandle, cancel: &AtomicBool) -> Result<(), HeronEr
 
 /// Ask the doctor in flight to stop. It keeps the issues it had already found.
 #[tauri::command]
-fn doctor_cancel(state: State<'_, AppState>) -> DoctorCancelDto {
-    DoctorCancelDto {
+fn doctor_cancel(state: State<'_, AppState>) -> TaskCancelDto {
+    TaskCancelDto {
         canceling: request_cancel(&state.doctor),
     }
 }
 
-/// A `source` row for a built-in market, used both to seed the table and to persist a toggle.
-/// The market catalogue in `heron-source` stays the source of truth; the row only carries the
-/// user's on/off choice (and the capability for display parity).
-fn market_row(id: &str, enabled: bool) -> Option<heron_store::models::SourceRow> {
-    let market = heron_source::MARKETS.iter().find(|m| m.id == id)?;
-    Some(heron_store::models::SourceRow {
-        id: market.id.to_owned(),
-        name: market.name.to_owned(),
-        kind: "market".to_owned(),
-        adapter: Some(market.id.to_owned()),
-        url: Some(market.base_url.to_owned()),
-        ref_name: None,
-        subpath: None,
-        path: None,
-        priority: 0,
-        trusted: true,
-        enabled,
-        capability: Some(
-            match market.capability {
-                heron_source::Capability::Indexed => "indexed",
-                heron_source::Capability::Guided => "guided",
-            }
-            .to_owned(),
-        ),
-        last_synced_at: None,
-        last_commit: None,
-        last_probe_ok: None,
-    })
-}
-
-/// Seed the `source` table from the built-in markets on first run, so a toggle has a row to update.
-/// Existing rows keep the user's persisted choice (upsert runs only when the id is absent).
-fn bootstrap_markets(ctx: &mut heron_service::Ctx) {
-    for market in heron_source::MARKETS {
-        let exists = heron_store::repos::source::get(ctx.db.conn(), market.id)
-            .ok()
-            .flatten()
-            .is_some();
-        if exists {
-            continue;
-        }
-        if let Some(row) = market_row(market.id, market.enabled_by_default) {
-            let _ = ctx
-                .db
-                .write(|tx| heron_store::repos::source::upsert(tx, &row));
-        }
-    }
-}
-
 #[tauri::command]
-fn markets_list(state: State<'_, AppState>) -> Vec<serde_json::Value> {
+fn markets_list(state: State<'_, AppState>) -> Vec<heron_service::markets::MarketInfo> {
     let ctx = state.ctx.lock().unwrap();
-    heron_source::MARKETS
-        .iter()
-        .map(|m| {
-            // The persisted toggle wins; fall back to the built-in default before first seed.
-            let enabled = heron_store::repos::source::get(ctx.db.conn(), m.id)
-                .ok()
-                .flatten()
-                .map(|row| row.enabled)
-                .unwrap_or(m.enabled_by_default);
-            serde_json::json!({
-                "id": m.id,
-                "name": m.name,
-                "capability": m.capability,
-                "enabled_by_default": m.enabled_by_default,
-                "enabled": enabled,
-                "base_url": m.base_url,
-            })
-        })
-        .collect()
+    heron_service::markets::list(&ctx)
 }
 
 #[tauri::command]
@@ -1066,21 +895,14 @@ fn market_set_enabled(
     market: String,
     enabled: bool,
 ) -> Result<(), Msg> {
-    if heron_source::MARKETS.iter().all(|m| m.id != market) {
-        return Err(Msg::new("E_MARKET_UNAVAILABLE").with("market", market));
-    }
-    let row = market_row(&market, enabled).expect("market checked above");
     let mut ctx = state.ctx.lock().unwrap();
-    ctx.db
-        .write(|tx| heron_store::repos::source::upsert(tx, &row))
-        .map_err(err)?;
-    Ok(())
+    heron_service::markets::set_enabled(&mut ctx, &market, enabled).map_err(err)
 }
 
 #[tauri::command]
 fn favorite_list(state: State<'_, AppState>) -> Result<Vec<heron_store::models::FavoriteRow>, Msg> {
     let ctx = state.ctx.lock().unwrap();
-    heron_store::repos::favorite::list(ctx.db.conn()).map_err(err)
+    heron_service::favorites::list(&ctx).map_err(err)
 }
 
 #[tauri::command]
@@ -1091,37 +913,15 @@ fn favorite_add(
     description: String,
     market: Option<String>,
 ) -> Result<heron_store::models::FavoriteRow, Msg> {
-    let url = url.trim().to_owned();
-    let name = name.trim().to_owned();
-    if name.is_empty() {
-        return Err(Msg::new("E_INTERNAL").with("detail", "favorite_name_required"));
-    }
-    if !(url.starts_with("https://") || url.starts_with("http://")) {
-        return Err(Msg::new("E_INTERNAL").with("detail", "favorite_url_required"));
-    }
-    let row = heron_store::models::FavoriteRow {
-        id: 0,
-        name,
-        url,
-        description: description.trim().to_owned(),
-        market: market
-            .map(|m| m.trim().to_owned())
-            .filter(|m| !m.is_empty()),
-        created_at: String::new(),
-    };
     let mut ctx = state.ctx.lock().unwrap();
-    ctx.db
-        .write(|tx| heron_store::repos::favorite::save(tx, &row))
+    heron_service::favorites::add(&mut ctx, &name, &url, &description, market.as_deref())
         .map_err(err)
 }
 
 #[tauri::command]
 fn favorite_remove(state: State<'_, AppState>, id: i64) -> Result<(), Msg> {
     let mut ctx = state.ctx.lock().unwrap();
-    ctx.db
-        .write(|tx| heron_store::repos::favorite::remove(tx, id))
-        .map_err(err)?;
-    Ok(())
+    heron_service::favorites::remove(&mut ctx, id).map_err(err)
 }
 
 #[tauri::command]
@@ -1129,11 +929,8 @@ async fn market_search(
     market: String,
     query: String,
 ) -> Result<Vec<heron_source::market::MarketItem>, Msg> {
-    // ureq 是同步阻塞的 HTTP 客户端，一次搜索可能跑满超时（含重试）。放在 blocking 线程池里执行，
-    // 否则命令会在主线程上阻塞，点击搜索时整个窗口都会卡住；同时各来源才能真正并发。
     tauri::async_runtime::spawn_blocking(move || {
-        let adapter = heron_source::adapter(&market).map_err(err)?;
-        adapter.search(&query, 20).map_err(err)
+        heron_service::markets::search(&market, &query, 20).map_err(err)
     })
     .await
     .map_err(|e| Msg::new("E_INTERNAL").with("detail", e.to_string()))?
@@ -1144,10 +941,8 @@ async fn market_plan(
     market: String,
     key: String,
 ) -> Result<heron_source::market::InstallPlan, Msg> {
-    // 同上：解析安装计划也可能发网络请求，移到 blocking 线程，避免卡住主线程。
     tauri::async_runtime::spawn_blocking(move || {
-        let adapter = heron_source::adapter(&market).map_err(err)?;
-        adapter.install_plan(&key).map_err(err)
+        heron_service::markets::install_plan(&market, &key).map_err(err)
     })
     .await
     .map_err(|e| Msg::new("E_INTERNAL").with("detail", e.to_string()))?
@@ -1278,6 +1073,11 @@ fn lock_diff(
     heron_service::lockfile::diff(&ctx, &lock).map_err(err)
 }
 
+/// Find the candidate project roots under `roots`.
+///
+/// The 项目 page always passes `register: false` — it displays what exists and writes nothing. The
+/// registering path stays for `heron projects --register`, which is where a project root becomes a set
+/// of project landing points.
 #[tauri::command]
 fn projects_discover(
     state: State<'_, AppState>,
@@ -1285,23 +1085,27 @@ fn projects_discover(
     register: bool,
 ) -> Result<Vec<heron_service::projects::DiscoveredProject>, Msg> {
     let mut ctx = state.ctx.lock().unwrap();
-    let scan_roots: Vec<PathBuf> = if roots.is_empty() {
-        vec![state.home.clone()]
-    } else {
-        roots.into_iter().map(PathBuf::from).collect()
-    };
-    let mut found = heron_service::projects::discover(&state.home, &scan_roots, 3);
-    if register {
-        for project in &found {
-            heron_service::projects::register(&mut ctx, &project.root, &project.clients)
-                .map_err(err)?;
-        }
-    }
-    // Stamped after the register loop on purpose: the UI reads this list right after pressing
-    // 「登记所选」, so the flag has to describe the index as it is *now* — otherwise registering a
-    // project leaves its row looking exactly as it did before, and the button appears to do nothing.
-    heron_service::projects::stamp_registered(&ctx, &mut found).map_err(err)?;
-    Ok(found)
+    let scan_roots: Vec<PathBuf> = roots.into_iter().map(PathBuf::from).collect();
+    heron_service::projects::discover_and_stamp(&mut ctx, &state.home, &scan_roots, register)
+        .map_err(err)
+}
+
+/// The skills a project carries in its own client directories, read straight off the disk.
+///
+/// Nothing here is written back: a project's skills travel with the repository, so the 项目 page only
+/// reports them — no landing point, no projection. The `detected` index cannot answer this instead,
+/// because the scanner only walks a root once that root has been registered.
+#[tauri::command]
+fn projects_skills(
+    state: State<'_, AppState>,
+    root: String,
+) -> Result<Vec<heron_service::projects::ProjectSkill>, Msg> {
+    let ctx = state.ctx.lock().unwrap();
+    let specs = heron_service::clients::loaded_specs(&ctx.db).map_err(err)?;
+    Ok(heron_service::projects::list_skills(
+        &PathBuf::from(root),
+        &specs,
+    ))
 }
 
 /// One row of the tray menu. The UI sends the whole list because the labels are UI copy: only the
@@ -1424,7 +1228,7 @@ pub fn run() {
     // A release that added clients must show them before the first scan, otherwise the new rows
     // only appear after the user happens to press 扫描 — and the grid silently keeps the old shape.
     let _ = heron_service::clients::sync_catalog(&mut ctx.db, &home, false);
-    bootstrap_markets(&mut ctx);
+    heron_service::markets::bootstrap(&mut ctx);
 
     let app = tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
@@ -1481,6 +1285,7 @@ pub fn run() {
             lock_export,
             lock_diff,
             projects_discover,
+            projects_skills,
             conflict_payload_cmd,
             diff_skill_cmd,
             resolve_conflict,
@@ -1726,7 +1531,7 @@ mod tests {
         assert_eq!(
             keys(
                 &serde_json::to_value(VerifyDoneDto {
-                    progress: VerifyProgressDto {
+                    progress: TaskProgressDto {
                         phase: "canceled",
                         ..verify_progress(tick)
                     },
@@ -1787,7 +1592,7 @@ mod tests {
 
         assert_eq!(
             keys(
-                &serde_json::to_value(VerifyStartDto {
+                &serde_json::to_value(TaskStartDto {
                     started: false,
                     running: true
                 })
@@ -1796,7 +1601,7 @@ mod tests {
             ["running", "started"]
         );
         assert_eq!(
-            keys(&serde_json::to_value(DoctorCancelDto { canceling: true }).unwrap()),
+            keys(&serde_json::to_value(TaskCancelDto { canceling: true }).unwrap()),
             ["canceling"]
         );
 

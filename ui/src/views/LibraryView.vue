@@ -5,6 +5,7 @@
 // browsing cards — and a target-health strip keeps the per-client totals visible either way.
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from "vue";
 import { useI18n } from "vue-i18n";
+import { useRoute } from "vue-router";
 import AppIcon from "../components/AppIcon.vue";
 import AppOverlay from "../components/AppOverlay.vue";
 import FloatBar from "../components/FloatBar.vue";
@@ -14,10 +15,12 @@ import { api } from "../api";
 import type { RemoveOutcome, RemovePlan, SkillRow, TargetRow } from "../api/types";
 import { clientColor, clientIcon } from "../utils/clients";
 import { displayPath } from "../utils/paths";
+import { routeSearchSeed } from "../utils/routeQuery";
 import { useAppStore } from "../stores/app";
 
 const store = useAppStore();
 const { t } = useI18n();
+const route = useRoute();
 
 const query = ref("");
 const filter = ref<"all" | "issues">("all");
@@ -41,6 +44,10 @@ const LEGEND = ["visible", "shadowed", "restart_required", "broken", "not_scanne
 
 onMounted(async () => {
   document.addEventListener("mousedown", closePopOnOutside);
+  // A global-search jump lands here with ?q=<slug>; seed the page's own filter so the row is
+  // already narrowed to what the user picked.
+  const seeded = routeSearchSeed(route);
+  if (seeded) query.value = seeded;
   if (!store.ready) await store.init();
 });
 onBeforeUnmount(() => document.removeEventListener("mousedown", closePopOnOutside));

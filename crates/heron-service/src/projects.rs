@@ -132,6 +132,85 @@ pub fn registered(ctx: &Ctx) -> Result<Vec<PathBuf>> {
         .collect())
 }
 
+/// Discover project roots, optionally register them, and stamp `already_registered` from the index.
+pub fn discover_and_stamp(
+    ctx: &mut Ctx,
+    home: &Path,
+    roots: &[PathBuf],
+    register_found: bool,
+) -> Result<Vec<DiscoveredProject>> {
+    let scan_roots: Vec<PathBuf> = if roots.is_empty() {
+        vec![home.to_path_buf()]
+    } else {
+        roots.to_vec()
+    };
+    let mut found = discover(home, &scan_roots, 3);
+    if register_found {
+        for project in &found {
+            register(ctx, &project.root, &project.clients)?;
+        }
+    }
+    stamp_registered(ctx, &mut found)?;
+    Ok(found)
+}
+
+/// A skill the project carries in its own client directory (`<root>/.<client>/skills/<slug>`).
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+pub struct ProjectSkill {
+    pub path: String,
+    /// Client id whose directory holds it.
+    pub client: String,
+    /// Directory name — what the client itself reads.
+    pub slug: String,
+    pub name: Option<String>,
+    pub description: Option<String>,
+}
+
+/// List the project-level skills under `root` by reading the disk.
+///
+/// Deliberately read-only: no index row, no landing point, no projection. A project's skills travel
+/// with the repository, so Heron has nothing to take over — it only reports what is there. The
+/// scanner cannot answer this instead, because it only indexes a project once that project has been
+/// registered; an unregistered root would come back empty.
+pub fn list_skills(root: &Path, specs: &[heron_scan::classify::ClientSpec]) -> Vec<ProjectSkill> {
+    let mut out: Vec<ProjectSkill> = Vec::new();
+    let mut seen = HashSet::new();
+    for spec in specs {
+        for rel in &spec.project_paths {
+            let dir = root.join(rel);
+            let Ok(entries) = std::fs::read_dir(&dir) else {
+                continue;
+            };
+            let mut dirs: Vec<PathBuf> = entries
+                .flatten()
+                .map(|entry| entry.path())
+                .filter(|path| path.join("SKILL.md").is_file())
+                .collect();
+            dirs.sort();
+            for path in dirs {
+                if !seen.insert(path.clone()) {
+                    continue;
+                }
+                // Frontmatter is best-effort: a sloppy file still belongs in the list, it just
+                // shows its directory name instead.
+                let skill_md = path.join("SKILL.md").to_string_lossy().to_string();
+                let meta = crate::scan::describe(&[skill_md]).into_iter().next();
+                out.push(ProjectSkill {
+                    path: path.to_string_lossy().to_string(),
+                    client: spec.id.clone(),
+                    slug: path
+                        .file_name()
+                        .map(|n| n.to_string_lossy().to_string())
+                        .unwrap_or_default(),
+                    name: meta.as_ref().and_then(|m| m.name.clone()),
+                    description: meta.as_ref().and_then(|m| m.description.clone()),
+                });
+            }
+        }
+    }
+    out
+}
+
 /// Fill in `already_registered` from the index.
 ///
 /// [`discover`] is filesystem-pure, so it cannot know what was recorded and leaves the flag false;
@@ -209,6 +288,55 @@ mod tests {
         let found = discover(&home, &[home.join("work")], 3);
         assert_eq!(found.len(), 1);
         assert_eq!(found[0].clients, vec!["codex".to_owned()]);
+    }
+
+    #[test]
+    fn list_skills_reads_the_project_itself_and_skips_directories_without_a_skill() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path().join("proj");
+        std::fs::create_dir_all(root.join(".claude/skills/alpha")).unwrap();
+        std::fs::write(
+            root.join(".claude/skills/alpha/SKILL.md"),
+            "---\nname: Alpha\ndescription: Greets the user\n---\nBody.\n",
+        )
+        .unwrap();
+        std::fs::create_dir_all(root.join(".codex/skills/beta")).unwrap();
+        std::fs::write(
+            root.join(".codex/skills/beta/SKILL.md"),
+            "# no frontmatter\n",
+        )
+        .unwrap();
+        // A plain directory is not a skill, however plausible its name looks.
+        std::fs::create_dir_all(root.join(".claude/skills/notes")).unwrap();
+
+        let specs = vec![
+            spec("claude", ".claude/skills"),
+            spec("codex", ".codex/skills"),
+        ];
+        let found = list_skills(&root, &specs);
+        let slugs: Vec<&str> = found.iter().map(|s| s.slug.as_str()).collect();
+        assert_eq!(slugs, vec!["alpha", "beta"]);
+        assert_eq!(found[0].client, "claude");
+        assert_eq!(found[0].name.as_deref(), Some("Alpha"));
+        assert_eq!(found[0].description.as_deref(), Some("Greets the user"));
+        // A file without frontmatter still belongs to the list; only its fields are empty.
+        assert_eq!(found[1].client, "codex");
+        assert_eq!(found[1].name, None);
+
+        // A root that holds no client directory at all yields an empty list instead of an error.
+        assert!(list_skills(&tmp.path().join("elsewhere"), &specs).is_empty());
+    }
+
+    fn spec(id: &str, project_skills: &str) -> heron_scan::classify::ClientSpec {
+        heron_scan::classify::ClientSpec {
+            id: id.to_owned(),
+            display_name: id.to_owned(),
+            global_paths: vec![],
+            project_paths: vec![std::path::PathBuf::from(project_skills)],
+            command_paths: vec![],
+            project_command_paths: vec![],
+            priority: 0,
+        }
     }
 
     #[test]
