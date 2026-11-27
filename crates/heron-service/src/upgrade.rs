@@ -110,17 +110,21 @@ pub fn outdated(ctx: &Ctx, pin: PinPolicy) -> Result<Vec<UpgradeCandidate>> {
 }
 
 /// Refresh every cached remote referenced by a managed skill.
+///
+/// Remotes are deduplicated by canonical URL before fetching (so multiple skills from the same
+/// monorepo trigger one `git fetch`, not N) and fetched concurrently in small batches.
 pub fn refresh_sources(ctx: &Ctx) -> Result<usize> {
-    let mut refreshed = 0;
+    let mut seen = std::collections::HashSet::new();
+    let mut remotes = Vec::new();
+
     for row in source::list(ctx.db.conn())? {
         if row.kind != "git" || !row.enabled {
             continue;
         }
         let Some(url) = row.url else { continue };
         let remote = heron_git::RemoteUrl::parse(&url)?;
-        let mut cached = heron_git::CachedRepo::new(&ctx.dirs.sources_cache(), remote);
-        if cached.ensure().is_ok() {
-            refreshed += 1;
+        if seen.insert(remote.url.clone()) {
+            remotes.push(remote);
         }
     }
     // Remotes referenced only by a skill's metadata also need refreshing.
@@ -134,10 +138,33 @@ pub fn refresh_sources(ctx: &Ctx) -> Result<usize> {
             continue;
         };
         let remote = heron_git::RemoteUrl::parse(&src.url)?;
-        let mut cached = heron_git::CachedRepo::new(&ctx.dirs.sources_cache(), remote);
-        if cached.ensure().is_ok() {
-            refreshed += 1;
+        if seen.insert(remote.url.clone()) {
+            remotes.push(remote);
         }
+    }
+
+    let cache_root = ctx.dirs.sources_cache();
+    let mut refreshed = 0usize;
+    const WORKERS: usize = 4;
+    for chunk in remotes.chunks(WORKERS) {
+        let count: usize = std::thread::scope(|s| {
+            let handles: Vec<_> = chunk
+                .iter()
+                .map(|remote| {
+                    let cache_root = cache_root.clone();
+                    let remote = remote.clone();
+                    s.spawn(move || {
+                        let mut cached = heron_git::CachedRepo::new(&cache_root, remote);
+                        usize::from(cached.ensure().is_ok())
+                    })
+                })
+                .collect();
+            handles
+                .into_iter()
+                .map(|h| h.join().unwrap_or(0))
+                .sum()
+        });
+        refreshed += count;
     }
     Ok(refreshed)
 }

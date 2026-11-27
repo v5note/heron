@@ -307,13 +307,28 @@ export const useAppStore = defineStore("app", {
       return (t) => t.enabled && (this.clientById[t.kind]?.detected ?? null) !== 0;
     },
     upgradable: (s) => s.upgrades.filter((u) => u.state === "has_update" || u.state === "diverged"),
+    /** Cached list of enabled targets so row-level lookups never re-filter `targets`. */
+    enabledTargets: (s): TargetRow[] => s.targets.filter((t) => t.enabled),
+    /** Cached `slug -> (target_id -> VisibilityReport)` index for O(1) per-cell lookup. */
+    visibilityIndex(s): Map<string, Map<string, VisibilityReport>> {
+      const index = new Map<string, Map<string, VisibilityReport>>();
+      for (const row of s.visibility) {
+        let byTarget = index.get(row.slug);
+        if (!byTarget) {
+          byTarget = new Map<string, VisibilityReport>();
+          index.set(row.slug, byTarget);
+        }
+        byTarget.set(row.target_id, row);
+      }
+      return index;
+    },
     /** Projection state per skill slug, in target order: what the row-level matrix renders. */
-    visibilityBySlug(s): (slug: string) => { target: TargetRow; state: VisibilityState }[] {
+    visibilityBySlug(): (slug: string) => { target: TargetRow; state: VisibilityState }[] {
+      const enabled = this.enabledTargets;
+      const index = this.visibilityIndex;
       return (slug: string) => {
-        const rows = s.visibility.filter((v) => v.slug === slug);
-        return s.targets
-          .filter((t) => t.enabled)
-          .map((t) => ({ target: t, state: stateOf(rows.find((r) => r.target_id === t.id)) }));
+        const byTarget = index.get(slug);
+        return enabled.map((t) => ({ target: t, state: stateOf(byTarget?.get(t.id)) }));
       };
     },
     issueCount: (s) => (s.doctor ? s.doctor.issues.length : null),

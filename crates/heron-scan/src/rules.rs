@@ -38,6 +38,14 @@ impl IgnoreRules {
                     .with("detail", format!("bad glob {pattern}: {e}"))
             })?;
             builder.add(glob);
+            // `**/node_modules/**` only matches entries *inside* `node_modules`, not the directory
+            // itself. Also matching the stripped directory prefix lets the walker prune the whole
+            // subtree before descending into it.
+            if let Some(dir_pattern) = pattern.strip_suffix("/**") {
+                if let Ok(dir_glob) = Glob::new(dir_pattern) {
+                    builder.add(dir_glob);
+                }
+            }
         }
         let set = builder.build().map_err(|e| {
             heron_core::ErrorCode::Internal

@@ -11,11 +11,19 @@ pub struct Ctx {
     pub db: Db,
     /// Identity recorded on audit events (`cli` / `gui`).
     pub actor: &'static str,
+    /// Set once legacy blank descriptions have been backfilled for this context so repeated
+    /// `skills_list` calls do not re-scan the table on every refresh.
+    pub descriptions_repaired: bool,
 }
 
 impl Ctx {
     pub fn new(dirs: Dirs, db: Db, actor: &'static str) -> Self {
-        Self { dirs, db, actor }
+        Self {
+            dirs,
+            db,
+            actor,
+            descriptions_repaired: false,
+        }
     }
 
     pub fn store_root(&self) -> PathBuf {

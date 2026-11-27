@@ -334,6 +334,27 @@ scripts/dev.sh cli scan
 scripts/dev.sh cli list
 ```
 
+Windows 下由 `scripts\dev.ps1` 提供完全等价的入口，并用 `scripts\dev.cmd` 做包装（自动绕过默认执行策略，装有 PowerShell 7 时优先使用）。下列命令按 cmd.exe 写法给出，在 PowerShell 中需加 `.\` 前缀，如 `.\scripts\dev.cmd dev`：
+
+```powershell
+# 启动桌面端（Tauri 前后端热重载，占用 5183 端口）
+scripts\dev.cmd dev
+
+# 仅调试前端 UI（浏览器打开 http://localhost:5183，无 Rust 后端调用）
+scripts\dev.cmd web
+
+# 隔离运行 CLI（数据目录默认为 %TEMP%\heron-dev）
+scripts\dev.cmd cli scan
+scripts\dev.cmd cli list
+
+# 自行指定隔离数据目录：运行 CLI 前先设置 HERON_DEV_DATA
+$env:HERON_DEV_DATA = 'D:\heron-dev'; .\scripts\dev.cmd cli scan
+
+# 5183 端口被上次残留的 dev server 占用？让脚本代为清理
+#   cmd：        set KILL_STALE_DEV=1 && scripts\dev.cmd dev
+#   PowerShell： $env:KILL_STALE_DEV = '1'; .\scripts\dev.cmd dev
+```
+
 #### 开发时避免触碰个人真实资产
 
 ```bash
@@ -364,6 +385,8 @@ scripts/dev.sh test     # 运行全部单元测试与集成测试
 scripts/dev.sh ui       # 前端 TypeScript 类型检查、i18n 完整性校验与前端构建
 ```
 
+> Windows：`scripts\dev.cmd check` / `test` / `ui` 与上述检查完全等价。
+
 ### 从源码构建打包
 
 ```bash
@@ -372,6 +395,8 @@ cargo build -p heron-cli --release   # 产出 CLI 二进制 → target/release/h
 cargo build -p heron-app --release   # 产出桌面二进制
 scripts/dev.sh bundle                # 生成平台原生安装包（.dmg / NSIS 安装器）
 ```
+
+> Windows：`scripts\dev.cmd bundle` 产出 NSIS 安装器（`.exe`），需先安装 `tauri-cli`（`cargo install tauri-cli --version "^2" --locked`）。
 
 ---
 

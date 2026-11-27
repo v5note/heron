@@ -557,3 +557,30 @@ fn progress_ticks_are_throttled_and_say_which_root_is_being_walked() {
     assert!(!last.truncated);
     assert!(result.stats.current_root.is_none());
 }
+
+#[test]
+fn walker_prunes_ignored_and_skill_subtrees() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path().join("proj");
+    write(
+        &root,
+        ".claude/skills/my-skill/SKILL.md",
+        &skill("my-skill", "ok"),
+    );
+    for i in 0..50 {
+        write(
+            &root,
+            &format!(".claude/skills/my-skill/references/sub{i}/doc.md"),
+            "ref",
+        );
+        write(&root, &format!("node_modules/pkg{i}/index.js"), "js");
+    }
+    let classifier = roots_classifier(&[root]);
+    let result = scan(&classifier, &ScanOptions::default()).unwrap();
+    assert_eq!(result.hits.len(), 1);
+    assert!(
+        result.stats.dirs_visited < 15,
+        "expected pruning of ignored and skill subtrees, visited {} dirs",
+        result.stats.dirs_visited
+    );
+}

@@ -101,6 +101,29 @@ pub fn run(matrix: &[ClientToml], home: &Path, m: &dyn Machine, o: &DetectOption
     Detection { at, verdicts }
 }
 
+/// Concurrent counterpart to [`run`] for thread-safe machines (e.g. [`RealMachine`]): probing
+/// absent clients that fall through to CLI `--version` spawns runs in parallel so worst-case
+/// latency is bounded by a single command timeout instead of `N * timeout`.
+pub fn run_parallel(
+    matrix: &[ClientToml],
+    home: &Path,
+    m: &(dyn Machine + Sync),
+    o: &DetectOptions,
+) -> Detection {
+    let at = m.now();
+    let verdicts = std::thread::scope(|s| {
+        let handles: Vec<_> = matrix
+            .iter()
+            .map(|c| s.spawn(move || probe_one(c, home, m, o)))
+            .collect();
+        handles
+            .into_iter()
+            .map(|h| h.join().expect("presence probe thread panicked"))
+            .collect()
+    });
+    Detection { at, verdicts }
+}
+
 fn probe_one(c: &ClientToml, home: &Path, m: &dyn Machine, o: &DetectOptions) -> Presence {
     let unknown = || Presence {
         id: c.id.clone(),

@@ -333,6 +333,27 @@ scripts/dev.sh cli scan
 scripts/dev.sh cli list
 ```
 
+Windows exposes the same entry points through `scripts\dev.ps1`, wrapped by `scripts\dev.cmd` (it bypasses the default execution policy and prefers PowerShell 7 when installed). The commands below are written for `cmd.exe`; in PowerShell prefix them with `.\`, e.g. `.\scripts\dev.cmd dev`:
+
+```powershell
+# Full desktop app (Tauri hot reload, occupies port 5183)
+scripts\dev.cmd dev
+
+# Frontend-only dev server (no Rust IPC)
+scripts\dev.cmd web
+
+# Run CLI against an isolated data dir (defaults to %TEMP%\heron-dev)
+scripts\dev.cmd cli scan
+scripts\dev.cmd cli list
+
+# Isolate the data dir yourself: set HERON_DEV_DATA before running the CLI
+$env:HERON_DEV_DATA = 'D:\heron-dev'; .\scripts\dev.cmd cli scan
+
+# Port 5183 held by a leftover dev server? let the script reap it
+#   cmd:        set KILL_STALE_DEV=1 && scripts\dev.cmd dev
+#   PowerShell: $env:KILL_STALE_DEV = '1'; .\scripts\dev.cmd dev
+```
+
 #### Protecting Your Personal Skills During Dev
 
 ```bash
@@ -363,6 +384,8 @@ scripts/dev.sh test     # run all unit and integration tests
 scripts/dev.sh ui       # TypeScript typecheck, i18n key synchronization & build
 ```
 
+> Windows: `scripts\dev.cmd check` / `test` / `ui` run the identical checks.
+
 ### Building from Source
 
 ```bash
@@ -371,6 +394,8 @@ cargo build -p heron-cli --release   # CLI binary → target/release/heron
 cargo build -p heron-app --release   # Desktop binary
 scripts/dev.sh bundle                # Native installer packages (.dmg / NSIS installer)
 ```
+
+> Windows: `scripts\dev.cmd bundle` produces the NSIS installer (`.exe`); it needs `tauri-cli` (`cargo install tauri-cli --version "^2" --locked`).
 
 ---
 

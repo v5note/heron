@@ -69,7 +69,14 @@ impl ScanPlan {
 
 /// Stage 1: read the configuration. This is the only stage that touches the database up front.
 pub fn prepare(ctx: &mut Ctx, home: &std::path::Path, req: &ScanRequest) -> Result<ScanPlan> {
-    prepare_with(ctx, home, req, &crate::detect::RealMachine)
+    let matrix = clients::builtin()?;
+    let detection = crate::detect::run_parallel(
+        &matrix,
+        home,
+        &crate::detect::RealMachine,
+        &crate::detect::DetectOptions::default(),
+    );
+    prepare_with_detection(ctx, home, req, &detection)
 }
 
 /// The same stage with the probing environment injected, so presence detection can be tested
@@ -80,6 +87,24 @@ pub fn prepare_with(
     req: &ScanRequest,
     machine: &dyn crate::detect::Machine,
 ) -> Result<ScanPlan> {
+    let matrix = clients::builtin()?;
+    let detection = crate::detect::run(
+        &matrix,
+        home,
+        machine,
+        &crate::detect::DetectOptions::default(),
+    );
+    prepare_with_detection(ctx, home, req, &detection)
+}
+
+/// Stage 1 with a precomputed [`crate::detect::Detection`], letting callers run presence probing
+/// outside any database lock before committing the verdicts and building the scan plan.
+pub fn prepare_with_detection(
+    ctx: &mut Ctx,
+    home: &std::path::Path,
+    req: &ScanRequest,
+    detection: &crate::detect::Detection,
+) -> Result<ScanPlan> {
     clients::bootstrap(&mut ctx.db, home)?;
     // Fill in clients a newer binary added, so this very scan has rows to put verdicts on and the
     // grid does not lose a card it has not measured yet.
@@ -88,19 +113,10 @@ pub fn prepare_with(
     // code that ever made one is retired, so the rows it left behind are dropped here.
     clients::prune_phantom_targets(&mut ctx.db)?;
 
-    // Detection runs *before* the roots are collected: a client discovered for the first time today
-    // is scanned today, in the same pass that decided it exists.
-    let matrix = clients::builtin()?;
-    let detection = crate::detect::run(
-        &matrix,
-        home,
-        machine,
-        &crate::detect::DetectOptions::default(),
-    );
     // A write failure here is deliberately not fatal, and there is no logger to tell us about it:
     // the previous verdicts simply survive, and the next scan re-measures. Failing a scan the user
     // asked for because an index was busy would be the worse bug.
-    let _ = clients::apply_presence(&mut ctx.db, &detection);
+    let _ = clients::apply_presence(&mut ctx.db, detection);
 
     let specs = clients::loaded_specs(&ctx.db)?;
     let mut projects = project_roots(ctx)?;

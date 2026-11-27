@@ -203,12 +203,13 @@ pub fn scan_monitored(
             report(monitor, &mut tick, &mut dirs_at_tick, &stats, &hits, true);
             continue;
         }
-        let walker = WalkDir::new(root)
+        let mut it = WalkDir::new(root)
             .max_depth(options.max_depth)
             .follow_links(options.follow_links)
-            .sort_by_file_name();
+            .sort_by_file_name()
+            .into_iter();
 
-        for entry in walker.into_iter() {
+        while let Some(entry) = it.next() {
             if monitor.cancelled() {
                 stats.canceled = true;
                 break;
@@ -239,6 +240,12 @@ pub fn scan_monitored(
                     || IgnoreRules::is_noise_file(entry.file_name().to_string_lossy().as_ref())
                 {
                     stats.skipped_ignored += 1;
+                    // Only skip when WalkDir actually intends to descend into this entry; calling
+                    // `skip_current_dir()` on a symlink (with `follow_links = false`) skips the
+                    // *parent* directory instead.
+                    if entry.file_type().is_dir() {
+                        it.skip_current_dir();
+                    }
                     continue;
                 }
                 // Stop descending as soon as this directory is a skill.
@@ -256,6 +263,9 @@ pub fn scan_monitored(
                         } else {
                             hits.push(hit);
                         }
+                    }
+                    if entry.file_type().is_dir() {
+                        it.skip_current_dir();
                     }
                 }
                 continue;

@@ -287,9 +287,18 @@ fn run_scan(
         ..ScanRequest::default()
     };
 
+    // Presence detection runs in parallel and outside `state.ctx.lock()` so CLI probes never block
+    // concurrent UI requests during scan preparation.
+    let matrix = heron_service::clients::builtin()?;
+    let detection = heron_service::detect::run_parallel(
+        &matrix,
+        &state.home,
+        &heron_service::detect::RealMachine,
+        &heron_service::detect::DetectOptions::default(),
+    );
     let plan = {
         let mut ctx = state.ctx.lock().unwrap();
-        heron_service::scan::prepare(&mut ctx, &state.home, &request)?
+        heron_service::scan::prepare_with_detection(&mut ctx, &state.home, &request, &detection)?
     };
     let root_total = plan.roots().len();
     let _ = app.emit(
@@ -692,20 +701,23 @@ fn run_verify(app: &tauri::AppHandle, cancel: &AtomicBool) -> Result<(), HeronEr
         total: 0,
         findings: 0,
     };
-    // The `Ctx` is locked on this thread rather than through `with_ctx`, which hands out a `&Ctx`
-    // where refreshing the cache needs `&mut`.
-    let outcome = {
-        let mut ctx = state.ctx.lock().unwrap();
-        verify::verify_with_hook(&mut ctx, None, &mut |tick| {
-            last = tick;
-            if forwarded.due(tick.phase) {
-                let _ = app.emit("verify://progress", verify_progress(tick));
-            }
-            // Cancel is answered here as well as in the service loop, so a stretch of ticks that
-            // were too close together to emit cannot swallow the user's click.
-            !cancel.load(Ordering::SeqCst)
-        })?
+    // Snapshot under a short lock, probe the filesystem lock-free so the UI stays responsive, then
+    // commit the visibility cache under a second short lock.
+    let plan = {
+        let ctx = state.ctx.lock().unwrap();
+        verify::prepare(&ctx, None)?
     };
+    let (outcome, cache) = verify::execute_plan(plan, &mut |tick| {
+        last = tick;
+        if forwarded.due(tick.phase) {
+            let _ = app.emit("verify://progress", verify_progress(tick));
+        }
+        !cancel.load(Ordering::SeqCst)
+    })?;
+    {
+        let mut ctx = state.ctx.lock().unwrap();
+        verify::commit(&mut ctx, &cache)?;
+    }
 
     // A stopped pass still gets its `done` event, carrying what it checked: the UI's run has to
     // settle on something, and the rows it never looked at keep their cached verdict.
@@ -851,16 +863,17 @@ fn run_doctor(app: &tauri::AppHandle, cancel: &AtomicBool) -> Result<(), HeronEr
         total: 0,
         findings: 0,
     };
-    let report = {
+    let plan = {
         let ctx = state.ctx.lock().unwrap();
-        doctor::run_with_hook(&ctx, &mut |tick| {
-            last = tick;
-            if forwarded.due(tick.phase) {
-                let _ = app.emit("doctor://progress", doctor_progress(tick));
-            }
-            !cancel.load(Ordering::SeqCst)
-        })?
+        doctor::prepare(&ctx)?
     };
+    let report = doctor::execute_plan(plan, &mut |tick| {
+        last = tick;
+        if forwarded.due(tick.phase) {
+            let _ = app.emit("doctor://progress", doctor_progress(tick));
+        }
+        !cancel.load(Ordering::SeqCst)
+    })?;
     // Like verify, a stopped run still settles on a `done` event: the partial report is an answer,
     // and the `canceled` flag inside it is what tells the UI not to read it as a clean bill.
     let _ = app.emit(

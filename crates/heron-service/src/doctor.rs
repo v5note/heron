@@ -55,24 +55,45 @@ pub struct DoctorTick {
     pub findings: usize,
 }
 
-/// Run every check, reporting each unit of work to `hook`. Answering `false` stops the run at the
-/// next unit and the report says so; what it already found is kept.
-///
-/// All three lists are read up front — the same queries, hoisted — because a progress bar needs its
-/// denominator before the first tick, and the content loop (one directory hash per skill) is what
-/// actually takes the time.
-pub fn run_with_hook(ctx: &Ctx, hook: &mut dyn FnMut(DoctorTick) -> bool) -> Result<DoctorReport> {
+/// Snapshot read under a short DB lock so disk checks and blake3 hashing run lock-free.
+#[derive(Debug, Clone)]
+pub struct DoctorPlan {
+    candidates: Vec<heron_store::models::DetectedRow>,
+    projections: Vec<heron_store::models::ProjectionRow>,
+    skills: Vec<(String, PathBuf)>,
+}
+
+/// Stage 1: snapshot every row `doctor` inspects under a short lock.
+pub fn prepare(ctx: &Ctx) -> Result<DoctorPlan> {
     let candidates = heron_store::repos::detected::list_by_state(ctx.db.conn(), "candidate")?;
     let projections = heron_store::repos::projection::list_all(ctx.db.conn())?;
-    let skills = heron_store::repos::skill::list(ctx.db.conn(), false)?;
-    let total = candidates.len() + projections.len() + skills.len();
+    let skills = heron_store::repos::skill::list(ctx.db.conn(), false)?
+        .into_iter()
+        .map(|s| {
+            let dir = ctx.content_path(&s);
+            (s.slug, dir)
+        })
+        .collect();
+    Ok(DoctorPlan {
+        candidates,
+        projections,
+        skills,
+    })
+}
+
+/// Stage 2: run all filesystem checks and directory fingerprints without holding `Ctx`.
+pub fn execute_plan(
+    plan: DoctorPlan,
+    hook: &mut dyn FnMut(DoctorTick) -> bool,
+) -> Result<DoctorReport> {
+    let total = plan.candidates.len() + plan.projections.len() + plan.skills.len();
 
     let mut issues = Vec::new();
     let mut done = 0usize;
     let mut canceled = false;
 
     // 1) Items on disk that Heron does not manage.
-    for row in &candidates {
+    for row in &plan.candidates {
         if row.kind == "nested-suspect" {
             issues.push(Issue {
                 id: "nested-suspect".to_owned(),
@@ -101,7 +122,7 @@ pub fn run_with_hook(ctx: &Ctx, hook: &mut dyn FnMut(DoctorTick) -> bool) -> Res
 
     // 2) Broken projections.
     if !canceled {
-        for row in &projections {
+        for row in &plan.projections {
             let path = PathBuf::from(&row.path);
             if !path.exists() {
                 issues.push(Issue {
@@ -118,36 +139,57 @@ pub fn run_with_hook(ctx: &Ctx, hook: &mut dyn FnMut(DoctorTick) -> bool) -> Res
         }
     }
 
-    // 3) Duplicate content across managed skills (cheap check: same store dir name count).
+    // 3) Duplicate content across managed skills, hashed in small parallel chunks so multi-core
+    //    machines finish faster while keeping cancellation responsive between chunks.
     if !canceled {
+        const CHUNK: usize = 4;
         let mut seen: std::collections::HashMap<String, String> = Default::default();
-        for skill in &skills {
-            let dir = ctx.content_path(skill);
-            if !dir.is_dir() {
-                issues.push(Issue {
-                    id: "store-missing".to_owned(),
-                    severity: Severity::Error,
-                    subject: skill.slug.clone(),
-                    actions: vec!["restore-from-backup".to_owned(), "remove".to_owned()],
-                });
+        for chunk in plan.skills.chunks(CHUNK) {
+            let results: Vec<(&str, bool, Option<String>)> = std::thread::scope(|s| {
+                let handles: Vec<_> = chunk
+                    .iter()
+                    .map(|(slug, dir)| {
+                        s.spawn(move || {
+                            if !dir.is_dir() {
+                                return (slug.as_str(), false, None);
+                            }
+                            let hash = heron_scan::fingerprint_dir(dir, &Default::default())
+                                .ok()
+                                .map(|fp| fp.hash.to_string());
+                            (slug.as_str(), true, hash)
+                        })
+                    })
+                    .collect();
+                handles
+                    .into_iter()
+                    .map(|h| h.join().unwrap_or(("", false, None)))
+                    .collect()
+            });
+
+            for (slug, exists, hash) in results {
+                if !exists {
+                    issues.push(Issue {
+                        id: "store-missing".to_owned(),
+                        severity: Severity::Error,
+                        subject: slug.to_owned(),
+                        actions: vec!["restore-from-backup".to_owned(), "remove".to_owned()],
+                    });
+                } else if let Some(hash) = hash {
+                    if let Some(other) = seen.insert(hash, slug.to_owned()) {
+                        issues.push(Issue {
+                            id: "duplicate-content".to_owned(),
+                            severity: Severity::Info,
+                            subject: format!("{other} == {slug}"),
+                            actions: vec!["merge".to_owned()],
+                        });
+                    }
+                }
                 if !step(hook, "content", &mut done, total, &issues) {
                     canceled = true;
                     break;
                 }
-                continue;
             }
-            if let Ok(fp) = heron_scan::fingerprint_dir(&dir, &Default::default()) {
-                if let Some(other) = seen.insert(fp.hash.to_string(), skill.slug.clone()) {
-                    issues.push(Issue {
-                        id: "duplicate-content".to_owned(),
-                        severity: Severity::Info,
-                        subject: format!("{} == {}", other, skill.slug),
-                        actions: vec!["merge".to_owned()],
-                    });
-                }
-            }
-            if !step(hook, "content", &mut done, total, &issues) {
-                canceled = true;
+            if canceled {
                 break;
             }
         }
@@ -160,6 +202,13 @@ pub fn run_with_hook(ctx: &Ctx, hook: &mut dyn FnMut(DoctorTick) -> bool) -> Res
         findings: issues.len(),
     });
     Ok(DoctorReport { issues, canceled })
+}
+
+/// Run every check, reporting each unit of work to `hook`. Answering `false` stops the run at the
+/// next unit and the report says so; what it already found is kept.
+pub fn run_with_hook(ctx: &Ctx, hook: &mut dyn FnMut(DoctorTick) -> bool) -> Result<DoctorReport> {
+    let plan = prepare(ctx)?;
+    execute_plan(plan, hook)
 }
 
 /// One unit of work reported. `findings` is what has been found so far: every check here adds an

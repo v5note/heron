@@ -5,6 +5,7 @@
 
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
+use std::sync::OnceLock;
 
 use heron_store::db::Db;
 use heron_store::models::{ClientRow, TargetRow};
@@ -137,8 +138,12 @@ pub struct NativeScanToml {
     pub evidence: String,
 }
 
-/// The built-in matrix, parsed once.
+/// The built-in matrix, parsed once and cached for the lifetime of the process.
 pub fn builtin() -> Result<Vec<ClientToml>> {
+    static CACHE: OnceLock<Vec<ClientToml>> = OnceLock::new();
+    if let Some(cached) = CACHE.get() {
+        return Ok(cached.clone());
+    }
     let mut matrix = Vec::with_capacity(BUILTIN_FILES.len());
     let mut seen: HashSet<String> = HashSet::new();
     for (name, text) in BUILTIN_FILES {
@@ -162,6 +167,7 @@ pub fn builtin() -> Result<Vec<ClientToml>> {
         }
         matrix.push(parsed);
     }
+    let _ = CACHE.set(matrix.clone());
     Ok(matrix)
 }
 

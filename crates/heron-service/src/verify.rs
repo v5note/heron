@@ -1,11 +1,12 @@
 //! Verify: would each projection actually be loaded by its client? (design §10.11.1)
 
+use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::time::UNIX_EPOCH;
 
 use heron_projection::verify::{classify, VerifyInput, Visibility};
 use heron_store::db::{iso_from_unix_millis, now_iso};
-use heron_store::models::VisibilityRow;
+use heron_store::models::{ClientRow, ProjectionRow, TargetRow, VisibilityRow};
 use heron_store::repos::{client, projection, target, visibility};
 
 use crate::{Ctx, Result};
@@ -44,18 +45,19 @@ pub fn verify(ctx: &mut Ctx, slug: Option<&str>) -> Result<Vec<VerifyReport>> {
     verify_with_hook(ctx, slug, &mut |_| true).map(|outcome| outcome.rows)
 }
 
-/// `verify` with a progress hook: one tick per projection row plus the terminal one. Answering
-/// `false` stops the pass as soon as possible.
-///
-/// A stopped pass still writes what it did check. The cache is upserted per projection and never
-/// replaced wholesale, so the projections this pass never reached simply keep their previous rows
-/// — while skipping the write entirely would throw away verdicts that were really gathered, and a
-/// `DELETE` first would turn "not looked at yet" into "no cache at all".
-pub fn verify_with_hook(
-    ctx: &mut Ctx,
-    slug: Option<&str>,
-    hook: &mut dyn FnMut(VerifyTick) -> bool,
-) -> Result<VerifyOutcome> {
+/// Database snapshot built under a short read lock so disk probing runs without holding `Ctx`.
+#[derive(Debug, Clone)]
+pub struct VerifyPlan {
+    rows: Vec<ProjectionRow>,
+    targets: Vec<TargetRow>,
+    clients: Vec<ClientRow>,
+    prev: Vec<VisibilityRow>,
+    session_rescan: HashSet<String>,
+    checked_at: String,
+}
+
+/// Stage 1: snapshot every row `verify` needs under a short lock.
+pub fn prepare(ctx: &Ctx, slug: Option<&str>) -> Result<VerifyPlan> {
     let rows = match slug {
         Some(slug) => projection::list_for_skill(ctx.db.conn(), slug)?,
         None => projection::list_all(ctx.db.conn())?,
@@ -63,25 +65,42 @@ pub fn verify_with_hook(
     let targets = target::list(ctx.db.conn())?;
     let clients = client::list(ctx.db.conn())?;
     let prev = visibility::list(ctx.db.conn())?;
-    let session_rescan: Vec<String> = crate::clients::builtin()?
+    let session_rescan: HashSet<String> = crate::clients::builtin()?
         .into_iter()
         .filter(|c| c.rescan.as_deref() == Some("session"))
         .map(|c| c.id)
         .collect();
-    let checked_at = now_iso();
+    Ok(VerifyPlan {
+        rows,
+        targets,
+        clients,
+        prev,
+        session_rescan,
+        checked_at: now_iso(),
+    })
+}
 
-    let total = rows.len();
-    let mut reports = Vec::new();
-    let mut cache = Vec::new();
+/// Stage 2: probe every projection on disk without touching the database or holding any lock.
+pub fn execute_plan(
+    plan: VerifyPlan,
+    hook: &mut dyn FnMut(VerifyTick) -> bool,
+) -> Result<(VerifyOutcome, Vec<VisibilityRow>)> {
+    let target_by_id: HashMap<&str, &TargetRow> =
+        plan.targets.iter().map(|t| (t.id.as_str(), t)).collect();
+    let client_by_id: HashMap<&str, &ClientRow> =
+        plan.clients.iter().map(|c| (c.id.as_str(), c)).collect();
+    let prev_by_proj: HashMap<i64, &VisibilityRow> =
+        plan.prev.iter().map(|v| (v.projection_id, v)).collect();
+
+    let total = plan.rows.len();
+    let mut reports = Vec::with_capacity(total);
+    let mut cache = Vec::with_capacity(total);
     let mut done = 0usize;
-    // A finding is a verdict the user has to act on: every state but `visible` (not_scanned,
-    // shadowed, restart_required, broken) counts; `unknown` never reaches a report.
     let mut findings = 0usize;
     let mut canceled = false;
-    for row in rows {
-        let Some(target_row) = targets.iter().find(|t| t.id == row.target_id) else {
-            // The row was still looked at, so the bar has to move, or a store full of projections
-            // whose target is gone would appear to hang.
+
+    for row in plan.rows {
+        let Some(target_row) = target_by_id.get(row.target_id.as_str()).copied() else {
             done += 1;
             if !hook(VerifyTick {
                 phase: "checking",
@@ -94,17 +113,13 @@ pub fn verify_with_hook(
             }
             continue;
         };
-        // The row is booked against the directory its link actually sits in, so that target's
-        // client owns the scan paths the landing is judged against. `link_name` carries a
-        // `<client>@` prefix for adopted originals, and trusting that prefix let a landing reached
-        // through another client's symlink (discovered in `.claude/skills`, living in
-        // `.agents/skills`) be measured against the wrong paths and read as `not_scanned` forever.
-        let kind = target_row.kind.clone();
-        let project = target_row.project_path.clone();
-        let scan_paths = scan_paths_for(&kind, project.as_deref(), &clients, &targets);
-        let occupied = occupied_names(&kind, project.as_deref());
+        let kind = target_row.kind.as_str();
+        let scan_paths = scan_paths_for_client(
+            client_by_id.get(kind).copied(),
+            target_row.project_path.as_deref(),
+        );
+        let occupied = occupied_names(kind, target_row.project_path.as_deref());
         let path = PathBuf::from(&row.path);
-        // A link resolves when its target exists; a plain copy resolves when the dir exists.
         let resolves = match heron_platform::link::probe(&path) {
             Ok(info) => {
                 if info.kind.is_link() {
@@ -118,13 +133,9 @@ pub fn verify_with_hook(
             Err(_) => path.exists(),
         };
 
-        let rescans_on_session = session_rescan.iter().any(|id| id == &kind);
-        // Restart accounting for session-rescan clients (design §12.3): a landing stays
-        // "restart required" until some earlier verify has already confirmed it — the user has
-        // then had a chance to reopen the client. A newer on-disk mtime (re-projection or an
-        // in-place refresh under the same row) starts the clock over.
+        let rescans_on_session = plan.session_rescan.contains(kind);
         let landing_unconfirmed = rescans_on_session
-            && match prev.iter().find(|v| v.projection_id == row.id) {
+            && match prev_by_proj.get(&row.id).copied() {
                 None => true,
                 Some(v) => match landed_at(&path) {
                     Some(ms) => v.checked_at.as_str() < iso_from_unix_millis(ms).as_str(),
@@ -141,28 +152,26 @@ pub fn verify_with_hook(
             landing_unconfirmed,
         })?;
 
-        // The table's CHECK has no `unknown`; classify never yields it, but the cache says so
-        // explicitly instead of tripping the constraint.
         if !matches!(visibility, Visibility::Unknown) {
             cache.push(VisibilityRow {
                 projection_id: row.id,
-                client_id: kind,
+                client_id: kind.to_owned(),
                 state: visibility.as_str().to_owned(),
                 shadowed_by: match &visibility {
                     Visibility::Shadowed { by } => Some(by.clone()),
                     _ => None,
                 },
-                checked_at: checked_at.clone(),
+                checked_at: plan.checked_at.clone(),
             });
         }
         if !matches!(visibility, Visibility::Visible) {
             findings += 1;
         }
         reports.push(VerifyReport {
-            slug: row.slug.clone(),
-            target_id: row.target_id.clone(),
-            path: row.path.clone(),
-            mode: row.mode.clone(),
+            slug: row.slug,
+            target_id: row.target_id,
+            path: row.path,
+            mode: row.mode,
             visibility,
         });
         done += 1;
@@ -176,24 +185,52 @@ pub fn verify_with_hook(
             break;
         }
     }
-    ctx.db.write(|tx| {
-        for row in &cache {
-            visibility::upsert(tx, row)?;
-        }
-        Ok(())
-    })?;
     let _ = hook(VerifyTick {
         phase: if canceled { "canceled" } else { "done" },
         done,
         total,
         findings,
     });
-    Ok(VerifyOutcome {
-        rows: reports,
-        total,
-        findings,
-        canceled,
+    Ok((
+        VerifyOutcome {
+            rows: reports,
+            total,
+            findings,
+            canceled,
+        },
+        cache,
+    ))
+}
+
+/// Stage 3: persist the gathered visibility cache under a short write lock.
+pub fn commit(ctx: &mut Ctx, cache: &[VisibilityRow]) -> Result<()> {
+    if cache.is_empty() {
+        return Ok(());
+    }
+    ctx.db.write(|tx| {
+        for row in cache {
+            visibility::upsert(tx, row)?;
+        }
+        Ok(())
     })
+}
+
+/// `verify` with a progress hook: one tick per projection row plus the terminal one. Answering
+/// `false` stops the pass as soon as possible.
+///
+/// A stopped pass still writes what it did check. The cache is upserted per projection and never
+/// replaced wholesale, so the projections this pass never reached simply keep their previous rows
+/// — while skipping the write entirely would throw away verdicts that were really gathered, and a
+/// `DELETE` first would turn "not looked at yet" into "no cache at all".
+pub fn verify_with_hook(
+    ctx: &mut Ctx,
+    slug: Option<&str>,
+    hook: &mut dyn FnMut(VerifyTick) -> bool,
+) -> Result<VerifyOutcome> {
+    let plan = prepare(ctx, slug)?;
+    let (outcome, cache) = execute_plan(plan, hook)?;
+    commit(ctx, &cache)?;
+    Ok(outcome)
 }
 
 /// When the projection itself landed on disk (the link's own mtime, target untouched).
@@ -208,15 +245,9 @@ fn landed_at(path: &Path) -> Option<i64> {
 }
 
 /// Which directories a client scans, resolved for this projection's scope.
-fn scan_paths_for(
-    kind: &str,
-    project: Option<&str>,
-    clients: &[heron_store::models::ClientRow],
-    targets: &[heron_store::models::TargetRow],
-) -> Vec<PathBuf> {
-    let _ = targets;
+fn scan_paths_for_client(client: Option<&ClientRow>, project: Option<&str>) -> Vec<PathBuf> {
     let mut paths: Vec<PathBuf> = Vec::new();
-    if let Some(row) = clients.iter().find(|c| c.id == kind) {
+    if let Some(row) = client {
         for p in &row.global_paths {
             paths.push(PathBuf::from(p));
         }

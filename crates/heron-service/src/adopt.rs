@@ -944,8 +944,12 @@ pub fn execute_paths(
     report
 }
 
-/// List all active skills, backfilling any legacy blank descriptions from `SKILL.md`.
+/// List all active skills, backfilling any legacy blank descriptions from `SKILL.md` once per
+/// context lifetime so repeated refreshes stay cheap.
 pub fn list_skills(ctx: &mut Ctx) -> Result<Vec<SkillRow>> {
-    repair_descriptions(ctx)?;
+    if !ctx.descriptions_repaired {
+        repair_descriptions(ctx)?;
+        ctx.descriptions_repaired = true;
+    }
     skill::list(ctx.db.conn(), false)
 }
