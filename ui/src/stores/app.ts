@@ -4,7 +4,7 @@ import { defineStore } from "pinia";
 import { api, onEvent, type AdoptResult, type AppError, type CancelAck, type StartAck } from "../api";
 import { readAutostart, writeAutostart } from "../api/autostart";
 import type {
-  ClientRow, DetectedRow, DoctorDone, DoctorProgress, DoctorReport, FavoriteRow, Msg, ScanPhase, ScanProgress,
+  ClientRow, DetectedRow, DoctorDone, DoctorProgress, DoctorReport, FavoriteRow, MarketInfo, Msg, ScanPhase, ScanProgress,
   SkillRow, TargetRow, UpgradeCandidate, UpgradeOutcome, VerifyDone, VerifyProgress, VisibilityReport,
 } from "../api/types";
 import { messageFor } from "../i18n";
@@ -266,6 +266,8 @@ export const useAppStore = defineStore("app", {
     /** 「我的收藏」(favorite 表)。侧栏「我的收藏」的计数徽标与收藏页共用这一份，
      * 不再由某个视图私有持有——一级页面要在任何时刻都显示正确的条数。 */
     favorites: [] as FavoriteRow[],
+    /** 「来源与市场」的内置市场列表：常驻 store，切页即刻渲染，避免每次进页都重新 IPC + 布局跳动。 */
+    markets: [] as MarketInfo[],
     /** 见 `FavoriteDraft`：来源页 → 收藏页抽屉的一次性交接。 */
     favDraft: null as FavoriteDraft | null,
     detected: [] as DetectedRow[],
@@ -479,7 +481,14 @@ export const useAppStore = defineStore("app", {
       }
     },
     async refreshAll() {
-      await Promise.all([this.loadSkills(), this.loadDetected(), this.loadTargets(), this.loadClients(), this.loadFavorites(), this.verify()]);
+      await Promise.all([this.loadSkills(), this.loadDetected(), this.loadTargets(), this.loadClients(), this.loadFavorites(), this.loadMarkets(), this.verify()]);
+    },
+    async loadMarkets() {
+      try {
+        this.markets = await api.markets();
+      } catch (e) {
+        this.fail(e);
+      }
     },
     async loadFavorites() {
       try {

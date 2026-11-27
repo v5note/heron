@@ -73,11 +73,16 @@ pub(crate) async fn adopt_paths(
 }
 
 #[tauri::command]
-pub(crate) fn skills_list(
-    state: State<'_, AppState>,
+pub(crate) async fn skills_list(
+    app: tauri::AppHandle,
 ) -> Result<Vec<heron_store::models::SkillRow>, Msg> {
-    let mut ctx = state.ctx.lock().unwrap();
-    heron_service::adopt::list_skills(&mut ctx).map_err(err)
+    tauri::async_runtime::spawn_blocking(move || {
+        let state = app.state::<AppState>();
+        let mut ctx = state.ctx.lock().unwrap();
+        heron_service::adopt::list_skills(&mut ctx).map_err(err)
+    })
+    .await
+    .map_err(|e| Msg::new("E_INTERNAL").with("detail", e.to_string()))?
 }
 
 #[tauri::command]
@@ -172,15 +177,23 @@ pub(crate) fn skill_remove(
     serde_json::to_value(&outcome).map_err(|e| Msg::new("E_INTERNAL").with("detail", e.to_string()))
 }
 
+/// Check for upstream updates, running git network fetches outside `state.ctx.lock()`.
 #[tauri::command]
 pub(crate) async fn outdated_list(
     app: tauri::AppHandle,
 ) -> Result<Vec<upgrade::UpgradeCandidate>, Msg> {
-    with_ctx(app, |ctx| {
-        upgrade::refresh_sources(ctx)?;
-        upgrade::outdated(ctx, heron_core::PinPolicy::Semver)
+    tauri::async_runtime::spawn_blocking(move || {
+        let state = app.state::<AppState>();
+        let (cache_root, remotes) = {
+            let ctx = state.ctx.lock().unwrap();
+            upgrade::collect_remotes(&ctx).map_err(err)?
+        };
+        upgrade::fetch_remotes(&cache_root, &remotes);
+        let ctx = state.ctx.lock().unwrap();
+        upgrade::outdated(&ctx, heron_core::PinPolicy::Semver).map_err(err)
     })
     .await
+    .map_err(|e| Msg::new("E_INTERNAL").with("detail", e.to_string()))?
 }
 
 #[tauri::command]
@@ -213,9 +226,10 @@ pub(crate) fn rollback_skill(
 }
 
 #[tauri::command]
-pub(crate) fn markets_list(state: State<'_, AppState>) -> Vec<heron_service::markets::MarketInfo> {
-    let ctx = state.ctx.lock().unwrap();
-    heron_service::markets::list(&ctx)
+pub(crate) async fn markets_list(
+    app: tauri::AppHandle,
+) -> Result<Vec<heron_service::markets::MarketInfo>, Msg> {
+    with_ctx(app, |ctx| Ok(heron_service::markets::list(ctx))).await
 }
 
 #[tauri::command]

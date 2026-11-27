@@ -4,6 +4,8 @@
 //! user's current content and the new upstream commit. A conflict never touches the working
 //! tree: the caller gets the conflicting files and decides.
 
+use std::path::{Path, PathBuf};
+
 use serde::Serialize;
 
 use heron_core::{ErrorCode, PinPolicy};
@@ -113,7 +115,10 @@ pub fn outdated(ctx: &Ctx, pin: PinPolicy) -> Result<Vec<UpgradeCandidate>> {
 ///
 /// Remotes are deduplicated by canonical URL before fetching (so multiple skills from the same
 /// monorepo trigger one `git fetch`, not N) and fetched concurrently in small batches.
-pub fn refresh_sources(ctx: &Ctx) -> Result<usize> {
+/// Collect every distinct git remote referenced by enabled sources or installed skill metadata,
+/// along with the cache directory root. Pure local DB/filesystem read — safe to run under a lock
+/// before calling [`fetch_remotes`] off-lock.
+pub fn collect_remotes(ctx: &Ctx) -> Result<(PathBuf, Vec<heron_git::RemoteUrl>)> {
     let mut seen = std::collections::HashSet::new();
     let mut remotes = Vec::new();
 
@@ -143,7 +148,12 @@ pub fn refresh_sources(ctx: &Ctx) -> Result<usize> {
         }
     }
 
-    let cache_root = ctx.dirs.sources_cache();
+    Ok((ctx.dirs.sources_cache(), remotes))
+}
+
+/// Fetch each remote into the local source cache in bounded parallel batches.
+/// Network-only — requires no database handle and should run outside any UI/context mutex.
+pub fn fetch_remotes(cache_root: &Path, remotes: &[heron_git::RemoteUrl]) -> usize {
     let mut refreshed = 0usize;
     const WORKERS: usize = 4;
     for chunk in remotes.chunks(WORKERS) {
@@ -151,7 +161,7 @@ pub fn refresh_sources(ctx: &Ctx) -> Result<usize> {
             let handles: Vec<_> = chunk
                 .iter()
                 .map(|remote| {
-                    let cache_root = cache_root.clone();
+                    let cache_root = cache_root.to_path_buf();
                     let remote = remote.clone();
                     s.spawn(move || {
                         let mut cached = heron_git::CachedRepo::new(&cache_root, remote);
@@ -163,7 +173,12 @@ pub fn refresh_sources(ctx: &Ctx) -> Result<usize> {
         });
         refreshed += count;
     }
-    Ok(refreshed)
+    refreshed
+}
+
+pub fn refresh_sources(ctx: &Ctx) -> Result<usize> {
+    let (cache_root, remotes) = collect_remotes(ctx)?;
+    Ok(fetch_remotes(&cache_root, &remotes))
 }
 
 #[derive(Debug, Clone, Serialize)]

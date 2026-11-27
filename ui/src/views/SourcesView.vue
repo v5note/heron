@@ -32,8 +32,8 @@ const META: Record<string, { mark: string; note: string; brief: string }> = {
   skillsmp: { mark: "M", note: t("sources.noteSkillsmp"), brief: t("sources.briefSkillsmp") },
 };
 
-const markets = ref<MarketInfo[]>([]);
-const installed = ref<Set<string>>(new Set());
+const markets = computed(() => store.markets);
+const installed = computed(() => new Set(store.skills.map((r) => r.slug.toLowerCase())));
 
 const query = ref("");
 const phase = ref<"idle" | "loading" | "done">("idle");
@@ -115,7 +115,7 @@ function hostOf(url: string): string {
 }
 
 onMounted(async () => {
-  await Promise.all([loadMarkets(), loadInstalled()]);
+  if (!store.markets.length) await store.loadMarkets();
   // Arriving from the global palette with ?q= should show remote hits, not an empty toolbar —
   // seed the term and fire the same search the Enter key would.
   const seeded = routeSearchSeed(route);
@@ -124,23 +124,6 @@ onMounted(async () => {
     void run();
   }
 });
-
-async function loadMarkets() {
-  try {
-    markets.value = await api.markets();
-  } catch (e) {
-    store.fail(e);
-  }
-}
-
-async function loadInstalled() {
-  try {
-    const rows = await api.skills();
-    installed.value = new Set(rows.map((r) => r.slug.toLowerCase()));
-  } catch (e) {
-    store.fail(e);
-  }
-}
 
 /** 启停一个来源并持久化；停用的来源不再进入下一次统一搜索。 */
 async function toggleSource(market: MarketInfo) {
@@ -246,7 +229,7 @@ function mk(id: string) {
 async function doInstall(url: string, subpath?: string, label?: string) {
   const res = await api.install(url, { subpath: subpath || undefined, dryRun: false });
   store.toast("ok", t("sources.installed", { name: label || url }));
-  await Promise.all([store.refreshAll(), loadInstalled()]);
+  await store.refreshAll();
   return res;
 }
 

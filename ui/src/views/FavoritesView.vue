@@ -5,12 +5,14 @@
 // 打后端 dry-run 拿真实落点（slug / commit），仓库里有多个候选时让用户点一下而不是手写子路径。
 // 添加收藏的抽屉也从来源页搬了过来：来源页的「收进收藏」把预填值交给 `store.favDraft`，
 // 跳到这一页由本页读出并打开。列表本身放在 store 里，侧栏的计数徽标与本页共用同一份。
-import { computed, onMounted, reactive, ref } from "vue";
+import { computed, onMounted, reactive, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
+import { useRoute } from "vue-router";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { api } from "../api";
 import type { FavoriteRow, InstallPreview } from "../api/types";
 import { useAppStore } from "../stores/app";
+import { routeSearchSeed } from "../utils/routeQuery";
 import { normUrl, parseUrl, type Parsed } from "../utils/url";
 import AppIcon from "../components/AppIcon.vue";
 import AppOverlay from "../components/AppOverlay.vue";
@@ -19,6 +21,7 @@ import PageHeader from "../components/PageHeader.vue";
 
 const store = useAppStore();
 const { t } = useI18n();
+const route = useRoute();
 
 /** 一条收藏连同它的地址解析结果：地址在渲染里被反复读，解析一次就够。 */
 interface FavRow {
@@ -26,10 +29,50 @@ interface FavRow {
   parsed: Parsed;
 }
 
+type FavFilter = "all" | "repo" | "link" | "installed";
+
+const query = ref("");
+const filter = ref<FavFilter>("all");
+
 const favorites = computed(() => store.favorites);
 const rows = computed<FavRow[]>(() => favorites.value.map((fav) => ({ fav, parsed: parseUrl(fav.url) })));
 const reposFavs = computed(() => rows.value.filter((r) => r.parsed.kind === "repo"));
 const linkFavs = computed(() => rows.value.filter((r) => r.parsed.kind !== "repo"));
+const installedFavs = computed(() => rows.value.filter((r) => favInstalled(r.fav)));
+const isFiltered = computed(() => query.value.trim().length > 0 || filter.value !== "all");
+
+const filteredRows = computed<FavRow[]>(() => {
+  const terms = query.value
+    .trim()
+    .toLowerCase()
+    .split(/\s+/)
+    .filter(Boolean);
+  return rows.value.filter((r) => {
+    if (filter.value === "repo" && r.parsed.kind !== "repo") return false;
+    if (filter.value === "link" && r.parsed.kind === "repo") return false;
+    if (filter.value === "installed" && !favInstalled(r.fav)) return false;
+    if (!terms.length) return true;
+    const hay = [
+      r.fav.name,
+      r.fav.description,
+      r.fav.url,
+      r.fav.market ?? "",
+      r.parsed.host ?? "",
+      r.parsed.owner ?? "",
+      r.parsed.repo ?? "",
+      r.parsed.sub ?? "",
+      favSlug(r.fav),
+    ]
+      .join(" ")
+      .toLowerCase();
+    return terms.every((term) => hay.includes(term));
+  });
+});
+
+function clearFilters() {
+  query.value = "";
+  filter.value = "all";
+}
 
 /**
  * 已装落点集合直接读共享库：安装完走 `store.refreshAll()`，本页与「我的 Skill」不会各算一份。
@@ -56,11 +99,26 @@ const fv = reactive({ name: "", url: "", desc: "" });
 const formMarket = ref<string | null>(null);
 
 onMounted(async () => {
+  // 全局搜索跳转带 ?q=<名称> 进来：直接填入搜索框，把目标收藏筛出来。
+  const seeded = routeSearchSeed(route);
+  if (seeded) query.value = seeded;
   await Promise.all([store.loadFavorites(), loadUpstream()]);
   // 来源页点「收进收藏」跳过来：带着预填值把抽屉打开，读完即作废。
   const draft = store.consumeFavDraft();
   if (draft) openDrawer(draft.name, draft.url, draft.description, draft.market);
 });
+
+// 已经停留在收藏页时再次从全局搜索跳过来，同样同步 ?q=。
+watch(
+  () => route.query.q,
+  () => {
+    const seeded = routeSearchSeed(route);
+    if (seeded) {
+      query.value = seeded;
+      filter.value = "all";
+    }
+  },
+);
 
 async function loadUpstream() {
   // 上游表只是让「已装」判断更准，读不到不该影响收藏列表本身。
@@ -325,12 +383,53 @@ function stagger(i: number): string {
       </template>
     </PageHeader>
 
-    <div class="h-sum">
-      {{ t("sources.favCount", { n: favorites.length, repos: reposFavs.length, links: linkFavs.length }) }}
+    <div v-if="rows.length || isFiltered" class="toolbar">
+      <label class="search">
+        <AppIcon name="search" :size="14" />
+        <input
+          v-model="query"
+          type="search"
+          :placeholder="t('favorites.searchHint')"
+          :aria-label="t('favorites.searchHint')"
+          @keydown.esc="query = ''"
+        />
+        <button
+          v-if="query"
+          type="button"
+          class="search-clear"
+          :title="t('favorites.clearSearch')"
+          :aria-label="t('favorites.clearSearch')"
+          @click="query = ''"
+        >
+          <AppIcon name="close" :size="12" />
+        </button>
+      </label>
+      <div class="seg" role="group" :aria-label="t('favorites.title')">
+        <button type="button" :class="{ on: filter === 'all' }" @click="filter = 'all'">
+          {{ t("favorites.filterAll", { n: rows.length }) }}
+        </button>
+        <button type="button" :class="{ on: filter === 'repo' }" @click="filter = 'repo'">
+          {{ t("favorites.filterRepo", { n: reposFavs.length }) }}
+        </button>
+        <button type="button" :class="{ on: filter === 'link' }" @click="filter = 'link'">
+          {{ t("favorites.filterLink", { n: linkFavs.length }) }}
+        </button>
+        <button type="button" :class="{ on: filter === 'installed' }" @click="filter = 'installed'">
+          {{ t("favorites.filterInstalled", { n: installedFavs.length }) }}
+        </button>
+      </div>
+      <span class="spacer" />
+      <div class="h-sum">
+        {{
+          isFiltered
+            ? t("favorites.filteredCount", { shown: filteredRows.length, total: rows.length })
+            : t("sources.favCount", { n: favorites.length, repos: reposFavs.length, links: linkFavs.length })
+        }}
+      </div>
     </div>
 
     <div class="card">
-      <div v-for="(r, i) in rows" :key="r.fav.id" class="h-fav" :class="stagger(i)">
+      <div v-for="(r, i) in filteredRows" :key="r.fav.id" class="h-fav" :class="stagger(i)">
         <div class="fk">
           <b>{{ r.fav.name }}</b>
           <span v-if="r.parsed.host" class="chips"><span class="chip neutral plain mono">{{ r.parsed.host }}</span></span>
@@ -410,6 +509,19 @@ function stagger(i: number): string {
           <AppIcon name="plus" :size="14" /> {{ t("sources.addFavorite") }}
         </button>
       </div>
+      <div v-else-if="!filteredRows.length" class="h-empty">
+        <div>
+          {{ query.trim() ? t("favorites.noMatch", { q: query.trim() }) : t("favorites.noMatchFilter") }}
+        </div>
+        <div class="h-empty-acts">
+          <button v-if="query.trim()" type="button" class="btn sm" @click="query = ''">
+            {{ t("favorites.clearSearch") }}
+          </button>
+          <button v-if="filter !== 'all'" type="button" class="btn sm" @click="clearFilters">
+            {{ t("favorites.resetFilter") }}
+          </button>
+        </div>
+      </div>
     </div>
 
     <!-- 抽屉：添加收藏（地址实时解析） -->
@@ -485,12 +597,77 @@ function stagger(i: number): string {
 <style scoped>
 .h-view { max-width: 1180px; }
 
+/* —— 搜索与筛选工具栏 —— */
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+.search {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 30px;
+  padding: 0 6px 0 10px;
+  flex: 0 1 320px;
+  min-width: 200px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  background: var(--panel);
+  color: var(--dim);
+}
+.search:focus-within { border-color: var(--text); }
+.search input {
+  flex: 1;
+  min-width: 0;
+  height: 26px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font-size: 12.5px;
+}
+.search input:focus { border: 0; }
+.search input::-webkit-search-cancel-button { display: none; }
+.search-clear {
+  width: 20px;
+  height: 20px;
+  border-radius: 5px;
+  display: grid;
+  place-items: center;
+  color: var(--faint);
+  flex: none;
+}
+.search-clear:hover { background: var(--raised); color: var(--text); }
+.seg {
+  display: inline-flex;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  background: var(--panel);
+}
+.seg button {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 28px;
+  padding: 0 10px;
+  font-size: 12px;
+  color: var(--dim);
+  white-space: nowrap;
+}
+.seg button:hover { background: var(--raised); color: var(--text); }
+.seg button.on { background: var(--text); color: var(--bg); font-weight: 600; }
+.spacer { flex: 1; }
+
 /* —— 汇总行 —— */
 .h-sum {
-  margin: -6px 0 14px;
   font-family: var(--font-mono);
-  font-size: 12.5px;
+  font-size: 12px;
   color: var(--dim);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 .h-num { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
 
@@ -526,6 +703,7 @@ function stagger(i: number): string {
 .h-pick .btn { font-family: var(--font-mono); font-size: 12px; }
 
 .h-empty { padding: 30px 16px; text-align: center; color: var(--dim); font-size: 14px; }
+.h-empty-acts { display: inline-flex; align-items: center; gap: 8px; margin-top: 12px; }
 
 /* —— 抽屉 —— */
 .h-ex { display: inline-flex; align-items: center; gap: 6px; margin-top: 8px; }

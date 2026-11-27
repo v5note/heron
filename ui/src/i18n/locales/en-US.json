@@ -260,7 +260,17 @@
   },
   "favorites": {
     "title": "My favourites",
-    "lead": "Saved addresses: repositories install right here, links only open. “Add to favourites” on the sources page lands on this page too."
+    "lead": "Saved addresses: repositories install right here, links only open. “Add to favourites” on the sources page lands on this page too.",
+    "searchHint": "Search by name, repository URL, or description…",
+    "filterAll": "All ({n})",
+    "filterRepo": "Installable ({n})",
+    "filterLink": "Links ({n})",
+    "filterInstalled": "Installed ({n})",
+    "filteredCount": "Showing {shown} of {total}",
+    "noMatch": "No favourites match “{q}”",
+    "noMatchFilter": "No favourites in this filter",
+    "clearSearch": "Clear search",
+    "resetFilter": "Show all"
   },
   "sources": {
     "title": "Sources & markets",
