@@ -102,6 +102,7 @@ pub fn run() {
             net_set_proxy,
             favorite_list,
             favorite_add,
+            favorite_update,
             favorite_remove,
             install_skill,
             lock_export,

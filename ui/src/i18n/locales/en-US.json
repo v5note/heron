@@ -270,7 +270,13 @@
     "noMatch": "No favourites match “{q}”",
     "noMatchFilter": "No favourites in this filter",
     "clearSearch": "Clear search",
-    "resetFilter": "Show all"
+    "resetFilter": "Show all",
+    "editFavorite": "Edit favourite",
+    "editFormTitle": "Edit favourite",
+    "editDrawerSub": "Update the name, repository URL, or description. Changing the URL re-parses it live and clears any cached install preview. Esc to close.",
+    "favoriteUpdated": "Favourite updated",
+    "duplicateUrl": "That URL is already in your favourites",
+    "notFound": "That favourite no longer exists; the list has been refreshed"
   },
   "sources": {
     "title": "Sources & markets",

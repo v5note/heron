@@ -3,7 +3,7 @@
 //! A favourite is just a saved (name, url, description) triple: the url is what feeds the
 //! installer, so the row itself holds no content. `url` is unique — re-saving updates in place.
 
-use heron_core::Result;
+use heron_core::{ErrorCode, HeronError, Result};
 use rusqlite::params;
 
 use crate::db::{now_iso, WriteTx};
@@ -50,6 +50,48 @@ pub fn get(conn: &rusqlite::Connection, url: &str) -> Result<Option<FavoriteRow>
     )
     .optional()
     .map_err(sql_err)
+}
+
+pub fn get_by_id(conn: &rusqlite::Connection, id: i64) -> Result<Option<FavoriteRow>> {
+    use rusqlite::OptionalExtension;
+    conn.query_row(
+        &format!("SELECT {COLUMNS} FROM favorite WHERE id = ?1"),
+        params![id],
+        row_from,
+    )
+    .optional()
+    .map_err(sql_err)
+}
+
+/// Update an existing favourite in place by `id`, preserving `created_at`.
+pub fn update(tx: &WriteTx<'_>, fav: &FavoriteRow) -> Result<FavoriteRow> {
+    if let Some(existing) = get(tx.conn(), &fav.url)? {
+        if existing.id != fav.id {
+            return Err(HeronError::from(
+                ErrorCode::Internal
+                    .msg()
+                    .with("detail", "favorite_url_exists"),
+            ));
+        }
+    }
+    let changed = tx
+        .conn()
+        .execute(
+            "UPDATE favorite
+             SET name = ?2, url = ?3, description = ?4, market = ?5
+             WHERE id = ?1",
+            params![fav.id, fav.name, fav.url, fav.description, fav.market],
+        )
+        .map_err(sql_err)?;
+    if changed == 0 {
+        return Err(HeronError::from(
+            ErrorCode::Internal
+                .msg()
+                .with("detail", "favorite_not_found"),
+        ));
+    }
+    get_by_id(tx.conn(), fav.id)?
+        .ok_or_else(|| crate::db::db_msg("favorite.update", rusqlite::Error::ExecuteReturnedResults))
 }
 
 /// Newest first.
@@ -111,5 +153,63 @@ mod tests {
         let id = rows[0].id;
         db.write(|tx| remove(tx, id)).unwrap();
         assert!(list(db.conn()).unwrap().is_empty());
+    }
+
+    #[test]
+    fn update_modifies_in_place_and_validates_conflicts() {
+        let mut db = Db::open_in_memory().unwrap();
+        let first = db
+            .write(|tx| save(tx, &fav("Alpha", "https://github.com/o/alpha")))
+            .unwrap();
+        let second = db
+            .write(|tx| save(tx, &fav("Beta", "https://github.com/o/beta")))
+            .unwrap();
+
+        let edited = FavoriteRow {
+            id: first.id,
+            name: "Alpha edited".to_owned(),
+            url: "https://gitee.com/o/alpha-v2".to_owned(),
+            description: "new desc".to_owned(),
+            market: Some("gitee".to_owned()),
+            created_at: "ignored".to_owned(),
+        };
+        let updated = db.write(|tx| update(tx, &edited)).unwrap();
+        assert_eq!(updated.id, first.id);
+        assert_eq!(updated.created_at, first.created_at);
+        assert_eq!(updated.name, "Alpha edited");
+        assert_eq!(updated.url, "https://gitee.com/o/alpha-v2");
+        assert_eq!(updated.description, "new desc");
+        assert_eq!(updated.market.as_deref(), Some("gitee"));
+        assert_eq!(list(db.conn()).unwrap().len(), 2);
+
+        // Updating to another row's URL returns favorite_url_exists without modifying either row.
+        let conflict = FavoriteRow {
+            id: first.id,
+            name: "Conflict".to_owned(),
+            url: second.url.clone(),
+            description: "x".to_owned(),
+            market: None,
+            created_at: String::new(),
+        };
+        let err = db.write(|tx| update(tx, &conflict)).unwrap_err();
+        assert_eq!(err.code(), "E_INTERNAL");
+        assert_eq!(
+            err.as_msg().params.get("detail").map(String::as_str),
+            Some("favorite_url_exists")
+        );
+        assert_eq!(get_by_id(db.conn(), first.id).unwrap(), Some(updated));
+        assert_eq!(get_by_id(db.conn(), second.id).unwrap(), Some(second));
+
+        // Updating a nonexistent id returns favorite_not_found.
+        let missing = FavoriteRow {
+            id: 999_999,
+            ..fav("Missing", "https://github.com/o/missing")
+        };
+        let err = db.write(|tx| update(tx, &missing)).unwrap_err();
+        assert_eq!(err.code(), "E_INTERNAL");
+        assert_eq!(
+            err.as_msg().params.get("detail").map(String::as_str),
+            Some("favorite_not_found")
+        );
     }
 }

@@ -270,7 +270,13 @@
     "noMatch": "没有匹配「{q}」的收藏",
     "noMatchFilter": "当前筛选下没有收藏",
     "clearSearch": "清除搜索",
-    "resetFilter": "查看全部"
+    "resetFilter": "查看全部",
+    "editFavorite": "编辑收藏",
+    "editFormTitle": "编辑收藏",
+    "editDrawerSub": "修改名称、仓库地址或描述；改动地址后会实时重新解析并清除旧的安装预览，Esc 关闭。",
+    "favoriteUpdated": "已更新收藏",
+    "duplicateUrl": "该地址已在收藏列表中",
+    "notFound": "该收藏已不存在，列表已刷新"
   },
   "sources": {
     "title": "来源与市场",

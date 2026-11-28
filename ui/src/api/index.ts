@@ -151,6 +151,20 @@ export const api = {
       name: input.name, url: input.url, description: input.description,
       market: input.market ?? null,
     }),
+  favoriteUpdate: (input: {
+    id: number;
+    name: string;
+    url: string;
+    description: string;
+    market?: string | null;
+  }) =>
+    call<FavoriteRow>("favorite_update", {
+      id: input.id,
+      name: input.name,
+      url: input.url,
+      description: input.description,
+      market: input.market ?? null,
+    }),
   favoriteRemove: (id: number) => call<void>("favorite_remove", { id }),
   install: (input: string, opts: { ref?: string; subpath?: string; asSlug?: string; dryRun: boolean }) =>
     call<InstallPreview | { slug: string; path: string; version: string }>("install_skill", {

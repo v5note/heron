@@ -93,8 +93,11 @@ const favPreviews = reactive<Record<number, InstallPreview>>({});
 /** 哪一行正在真装（区分「解析中」与「安装中」两种按钮态）。 */
 const installingFav = ref<number | null>(null);
 
-// 添加收藏抽屉。
+// 添加 / 编辑收藏抽屉。
 const drawer = ref(false);
+const editingId = ref<number | null>(null);
+const isEditing = computed(() => editingId.value !== null);
+const savingFav = ref(false);
 const fv = reactive({ name: "", url: "", desc: "" });
 const formMarket = ref<string | null>(null);
 
@@ -240,6 +243,7 @@ function fillExample(kind: "github" | "gitee") {
 }
 
 function openDrawer(name = "", url = "", description = "", market: string | null = null) {
+  editingId.value = null;
   fv.name = name;
   fv.url = url;
   fv.desc = description;
@@ -247,8 +251,25 @@ function openDrawer(name = "", url = "", description = "", market: string | null
   drawer.value = true;
 }
 
+function openEditDrawer(fav: FavoriteRow) {
+  editingId.value = fav.id;
+  fv.name = fav.name;
+  fv.url = fav.url;
+  fv.desc = fav.description;
+  formMarket.value = fav.market;
+  drawer.value = true;
+}
+
+function closeDrawer() {
+  drawer.value = false;
+  editingId.value = null;
+  formMarket.value = null;
+}
+
 async function saveFav(andInstall: boolean) {
-  if (!fv.name.trim()) {
+  if (savingFav.value) return;
+  const name = fv.name.trim();
+  if (!name) {
     store.toast("warn", t("sources.fieldNameRequired"));
     return;
   }
@@ -257,22 +278,68 @@ async function saveFav(andInstall: boolean) {
     store.toast("warn", t("sources.urlInvalid"));
     return;
   }
+  const url = fv.url.trim();
+  const description = fv.desc.trim();
+  if (editingId.value !== null && store.favorites.some((f) => f.id !== editingId.value && f.url === url)) {
+    store.toast("warn", t("favorites.duplicateUrl"));
+    return;
+  }
+  savingFav.value = true;
   try {
-    const saved = await api.favoriteAdd({
-      name: fv.name.trim(),
-      url: fv.url.trim(),
-      description: fv.desc.trim(),
-      market: formMarket.value,
-    });
-    store.favorites = [saved, ...store.favorites.filter((f) => f.id !== saved.id)];
-    drawer.value = false;
-    fv.name = "";
-    fv.url = "";
-    fv.desc = "";
-    if (andInstall) await installFavorite(saved);
-    else store.toast("ok", t("sources.favoriteSaved"));
+    if (editingId.value !== null) {
+      const targetId = editingId.value;
+      const prevUrl = store.favorites.find((f) => f.id === targetId)?.url;
+      const saved = await api.favoriteUpdate({
+        id: targetId,
+        name,
+        url,
+        description,
+        market: formMarket.value,
+      });
+      store.favorites = store.favorites.map((f) => (f.id === saved.id ? saved : f));
+      if (prevUrl !== saved.url) {
+        delete favPreviews[saved.id];
+        const planKey = `fav:${saved.id}`;
+        if (openPlan.value.has(planKey)) {
+          const next = new Set(openPlan.value);
+          next.delete(planKey);
+          openPlan.value = next;
+        }
+      }
+      closeDrawer();
+      fv.name = "";
+      fv.url = "";
+      fv.desc = "";
+      if (andInstall) await installFavorite(saved);
+      else store.toast("ok", t("favorites.favoriteUpdated"));
+    } else {
+      const saved = await api.favoriteAdd({
+        name,
+        url,
+        description,
+        market: formMarket.value,
+      });
+      store.favorites = [saved, ...store.favorites.filter((f) => f.id !== saved.id)];
+      closeDrawer();
+      fv.name = "";
+      fv.url = "";
+      fv.desc = "";
+      if (andInstall) await installFavorite(saved);
+      else store.toast("ok", t("sources.favoriteSaved"));
+    }
   } catch (e) {
-    store.fail(e);
+    const detail = (e as { params?: { detail?: string } })?.params?.detail;
+    if (detail === "favorite_url_exists") {
+      store.toast("warn", t("favorites.duplicateUrl"));
+    } else if (detail === "favorite_not_found") {
+      await store.loadFavorites();
+      closeDrawer();
+      store.toast("warn", t("favorites.notFound"));
+    } else {
+      store.fail(e);
+    }
+  } finally {
+    savingFav.value = false;
   }
 }
 
@@ -450,6 +517,15 @@ function stagger(i: number): string {
           <button class="btn sm ghost" :title="t('sources.openInBrowser')" @click="openExternal(r.fav.url)">
             <svg viewBox="0 0 24 24"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" /><path d="M15 3h6v6" /><path d="M10 14 21 3" /></svg>
           </button>
+          <button
+            class="btn sm ghost"
+            :title="t('favorites.editFavorite')"
+            :aria-label="t('favorites.editFavorite')"
+            :disabled="busyKey === `fav:${r.fav.id}`"
+            @click="openEditDrawer(r.fav)"
+          >
+            <svg viewBox="0 0 24 24"><path d="M12 20h9" /><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" /></svg>
+          </button>
           <button class="btn sm ghost" :title="t('sources.removeFavorite')" @click="removeFavorite(r.fav)">
             <svg viewBox="0 0 24 24"><path d="M4 7h16" /><path d="M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" /><path d="M6 7l1 13h10l1-13" /></svg>
           </button>
@@ -524,15 +600,15 @@ function stagger(i: number): string {
       </div>
     </div>
 
-    <!-- 抽屉：添加收藏（地址实时解析） -->
-    <AppOverlay :open="drawer" variant="drawer" @close="drawer = false">
+    <!-- 抽屉：添加 / 编辑收藏（地址实时解析） -->
+    <AppOverlay :open="drawer" variant="drawer" @close="closeDrawer">
       <div class="drawer-wrap">
         <div class="h-drawer-h">
           <div>
-            <h3>{{ t("sources.favFormTitle") }}</h3>
-            <p>{{ t("sources.drawerSub") }}</p>
+            <h3>{{ isEditing ? t("favorites.editFormTitle") : t("sources.favFormTitle") }}</h3>
+            <p>{{ isEditing ? t("favorites.editDrawerSub") : t("sources.drawerSub") }}</p>
           </div>
-          <button class="icon-btn" :title="t('common.close')" @click="drawer = false">
+          <button class="icon-btn" :title="t('common.close')" @click="closeDrawer">
             <svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18" /></svg>
           </button>
         </div>
@@ -547,7 +623,7 @@ function stagger(i: number): string {
             <label>{{ t("sources.fieldUrl") }}</label>
             <input v-model="fv.url" :placeholder="t('sources.fieldUrlPh')" />
             <span class="hint">{{ t("sources.fieldUrlHint") }}</span>
-            <span class="h-ex">
+            <span v-if="!isEditing" class="h-ex">
               <button @click="fillExample('github')">{{ t("sources.exGithub") }}</button>
               <button @click="fillExample('gitee')">{{ t("sources.exGitee") }}</button>
             </span>
@@ -569,17 +645,17 @@ function stagger(i: number): string {
         </div>
         <div class="h-drawer-f">
           <span class="h-mono">{{ t("sources.localOnly") }}</span>
-          <button class="btn ghost" @click="drawer = false">{{ t("common.cancel") }}</button>
+          <button class="btn ghost" @click="closeDrawer">{{ t("common.cancel") }}</button>
           <button
             class="btn"
-            :disabled="!fv.name.trim() || fvState === 'idle' || fvState === 'bad'"
+            :disabled="savingFav || !fv.name.trim() || fvState === 'idle' || fvState === 'bad'"
             @click="saveFav(false)"
           >
             {{ t("sources.save") }}
           </button>
           <button
             class="btn primary"
-            :disabled="fvState !== 'repo' || !fv.name.trim()"
+            :disabled="savingFav || fvState !== 'repo' || !fv.name.trim()"
             :title="fvState === 'link' ? t('sources.needGitAddress') : ''"
             @click="saveFav(true)"
           >

@@ -264,6 +264,20 @@ pub(crate) fn favorite_add(
 }
 
 #[tauri::command]
+pub(crate) fn favorite_update(
+    state: State<'_, AppState>,
+    id: i64,
+    name: String,
+    url: String,
+    description: String,
+    market: Option<String>,
+) -> Result<heron_store::models::FavoriteRow, Msg> {
+    let mut ctx = state.ctx.lock().unwrap();
+    heron_service::favorites::update(&mut ctx, id, &name, &url, &description, market.as_deref())
+        .map_err(err)
+}
+
+#[tauri::command]
 pub(crate) fn favorite_remove(state: State<'_, AppState>, id: i64) -> Result<(), Msg> {
     let mut ctx = state.ctx.lock().unwrap();
     heron_service::favorites::remove(&mut ctx, id).map_err(err)
