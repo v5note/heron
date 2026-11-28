@@ -1,0 +1,536 @@
+{
+  "slug": "v1-forest",
+  "name": "Heron 苍鹭 · 深色开源技术版",
+  "theme": "forest",
+  "accent": "#34D399",
+  "accent2": "#60A5FA",
+  "brand": {
+    "name": "Heron 苍鹭",
+    "logo": "H",
+    "column": "开源精选",
+    "site": "heron.v5ai.xin"
+  },
+  "titles": {
+    "article": [
+      "开源｜别再手动复制 SKILL.md 了，这款 Rust 工具把 13 款 AI 客户端管明白了",
+      "同时用 Claude Code、Cursor 和 Codex？我用 Heron 把 Agent Skill 收拢成一份 Git 真实源",
+      "升级 Skill 总覆盖本地微调？Heron 用 git merge-tree 做了三方合并",
+      "5MB 原生桌面端 + CLI：开源本地 Agent Skill 管理器 Heron 苍鹭上手实测"
+    ],
+    "image": [
+      "13款AI的Skill，一份Git管住",
+      "别再手工复制SKILL.md了"
+    ],
+    "recommend": 0
+  },
+  "summary": "Rust开源Heron苍鹭：单一Git真实源管13款AI的Skill，三方合并升级不丢本地改动。",
+  "cards": [
+    {
+      "variant": "cover",
+      "layout": "dev-dark",
+      "title": [
+        "13 款 AI 工具",
+        "一份 Git 全管住"
+      ],
+      "accent": "一份 Git",
+      "sub": "单一 Git 真实源，按需投影、三方合并升级",
+      "hero": {
+        "type": "shot",
+        "url": "heron.v5ai.xin · 概览行动中心",
+        "src": "/Users/jingyuan-mb01/javaspace/REA/heron/images/首页-深色.png"
+      },
+      "points": [
+        {
+          "t": "单一真实源",
+          "d": "先备份再去重，每个 Skill 独立 Git 仓"
+        },
+        {
+          "t": "13 款客户端",
+          "d": "Claude / Cursor / Codex 等逐落点开关"
+        },
+        {
+          "t": "三方合并升级",
+          "d": "git merge-tree 保留本地提示词微调"
+        },
+        {
+          "t": "团队锁文件",
+          "d": "heron.lock 无绝对路径，一行复现环境"
+        }
+      ],
+      "strip": "需本机 Git 2.38+；Rust + Tauri 2 原生 5-15MB，MIT 协议开源"
+    },
+    {
+      "variant": "point",
+      "label": "真实痛点",
+      "title": "同一份 Skill，在电脑里躺了五份拷贝",
+      "body": "同时用 Claude Code、Cursor、Codex、Trae，改了一处提示词，其余目录全过期；更糟的是客户端到底读没读到全靠猜。",
+      "hero": {
+        "type": "code",
+        "file": "散落在磁盘上的重复拷贝",
+        "lines": [
+          {
+            "text": "# 改完一处，另外四个目录全部脱节",
+            "cls": "cm"
+          },
+          {
+            "text": "~/.claude/skills/code-review/SKILL.md",
+            "cls": ""
+          },
+          {
+            "text": "~/.cursor/skills/code-review/SKILL.md",
+            "cls": ""
+          },
+          {
+            "text": "~/.codex/skills/code-review/SKILL.md",
+            "cls": ""
+          },
+          {
+            "text": "~/.agents/skills/code-review/SKILL.md",
+            "cls": ""
+          },
+          {
+            "text": "# 升级上游仓库时，本地微调直接被覆盖",
+            "cls": "ck"
+          }
+        ]
+      }
+    },
+    {
+      "variant": "diagram",
+      "kicker": "核心工作流",
+      "title": "收拢、分发、升级，四步闭环",
+      "accent": "四步闭环",
+      "hero": {
+        "type": "flow",
+        "vertical": true,
+        "nodes": [
+          {
+            "num": "1",
+            "t": "扫描收拢 Adopt",
+            "d": "全量备份 + Blake3 哈希去重，移入 ~/.heron/skills/"
+          },
+          {
+            "num": "2",
+            "t": "单向投影 Project",
+            "d": "按需投射至 13 款客户端与项目目录，原路径无感衔接"
+          },
+          {
+            "num": "3",
+            "t": "三方合并 Upgrade",
+            "d": "git merge-tree 内存级合并，保留上游更新与本地定制"
+          },
+          {
+            "num": "4",
+            "t": "团队同步 Lock",
+            "d": "导出 heron.lock，新成员一行命令复现一致 Skill 集"
+          }
+        ]
+      },
+      "caption": "GUI 与 CLI 共用同一套 Rust 内核，遵循「计划 → 预览 → 备份执行」"
+    },
+    {
+      "variant": "point",
+      "label": "精准控制",
+      "title": "13 款客户端，逐落点开关与真校验",
+      "body": "点开任意 Skill 抽屉，每个客户端的真实路径与生效状态一目了然；未安装的客户端只置灰，绝不伪造「生效」。",
+      "hero": {
+        "type": "shot",
+        "url": "我的 Skill · 单 Skill 启用位置抽屉",
+        "caption": "Heron v0.1.0 真实运行截图（林墨深色主题）",
+        "src": "/Users/jingyuan-mb01/javaspace/REA/heron/images/我的Skill-深色2.png"
+      }
+    },
+    {
+      "variant": "diagram",
+      "kicker": "系统架构",
+      "title": "四种投影模式，直面跨平台边界",
+      "accent": "四种投影",
+      "hero": {
+        "type": "stack",
+        "layers": [
+          {
+            "name": "表现层",
+            "items": [
+              "Tauri 2 + Vue 3 桌面端",
+              "heron CLI (--json)"
+            ]
+          },
+          {
+            "name": "编排内核",
+            "items": [
+              "Plan 预览",
+              "先备份再执行",
+              "Per-Skill Git",
+              "SQLite 审计"
+            ]
+          },
+          {
+            "name": "投影落点",
+            "items": [
+              "symlink (macOS/Linux)",
+              "junction (Win 免提权)",
+              "pointer 代理",
+              "copy 防漂移"
+            ]
+          }
+        ]
+      },
+      "caption": "macOS/Linux 零占用软链，Windows 免管理员提权连接点，特殊扫描器走 pointer"
+    },
+    {
+      "variant": "compare",
+      "title": "手工拷贝 vs Heron 纳管",
+      "accent": "Heron 纳管",
+      "left": {
+        "title": "传统手工拷贝",
+        "items": [
+          "四五个隐藏目录反复粘贴",
+          "改一处其余副本全部过期",
+          "拉上游直接覆盖本地微调",
+          "坏链或被压制全靠盲猜",
+          "新人入职靠聊天口头同步"
+        ]
+      },
+      "right": {
+        "title": "Heron 苍鹭",
+        "items": [
+          "一份单一真实源哈希去重",
+          "一处修改，13 款客户端同步",
+          "git merge-tree 三方合并升级",
+          "verify / doctor 诚实诊断",
+          "heron.lock 一行命令复现"
+        ]
+      },
+      "caption": "苍鹭静立一处，注视整片水面"
+    },
+    {
+      "variant": "ending",
+      "title": "现在就能试：开源免费",
+      "accent": "开源免费",
+      "points": [
+        "5-15MB 原生桌面端 + 完整同构 CLI",
+        "6 大内置市场一框搜索，支持任意 Git 仓库",
+        "先备份、不静默覆盖、只读体检四大安全底线",
+        "MIT 协议开源，macOS / Windows 开箱即用"
+      ],
+      "nexts": [
+        {
+          "num": "01",
+          "t": "三方合并冲突实战",
+          "d": "本地改了提示词，上游也更新了怎么无痛合"
+        },
+        {
+          "num": "02",
+          "t": "heron.lock 团队规范",
+          "d": "如何用锁文件让团队所有人的 AI 遵循同一套 Skill"
+        }
+      ],
+      "cta": "heron.v5ai.xin",
+      "ctaKicker": "官网下载 & 文档（MIT OPEN SOURCE）",
+      "qr": {
+        "url": "https://heron.v5ai.xin",
+        "label": "扫码访问官网",
+        "logoText": "H"
+      }
+    }
+  ],
+  "article": {
+    "title": "开源｜别再手动复制 SKILL.md 了，这款 Rust 工具把 13 款 AI 客户端管明白了",
+    "summary": "Rust开源Heron苍鹭：单一Git真实源管13款AI的Skill，三方合并升级不丢本地改动。",
+    "topbar": "开源工具精选｜每期深挖一个解决真实工程痛点的开源项目",
+    "cover": {
+      "kicker": "HERON 苍鹭 · MIT 开源",
+      "title": [
+        "13 款 AI 工具",
+        "一份 Git 全管住"
+      ],
+      "accent": "一份 Git",
+      "sub": "Rust + Tauri 2 本地 Agent Skill 单一真实源管理器",
+      "hero": {
+        "type": "shot",
+        "url": "heron.v5ai.xin",
+        "src": "/Users/jingyuan-mb01/javaspace/REA/heron/images/首页-深色.png"
+      },
+      "tags": [
+        "★ MIT 开源",
+        "13 款客户端",
+        "三方合并升级"
+      ]
+    },
+    "toc": [
+      "01 为什么 Agent Skill 需要真正的包管理器",
+      "02 Heron 是什么：单一真实源与四步闭环",
+      "03 核心机制拆解：投影、三方合并与诚实探测",
+      "04 极速上手：桌面端与 CLI 三步跑通",
+      "05 技术架构与参数一览",
+      "06 必须说清楚的边界与注意事项"
+    ],
+    "lead": [
+      "如果你电脑里同时装着 Claude Code、Cursor、Codex、Trae 和 GitHub Copilot，一定经历过这种窒息的瞬间：",
+      "好不容易调顺手的一个代码审查 Skill，先复制一份进 `~/.claude/skills/`，再复制一份进 `~/.cursor/skills/`，过两天在项目里微调了几行规则，回头发现另外四个隐藏目录全成了过期副本。",
+      "更让人头疼的是上游更新——原作者修了个大 Bug，你一拉代码，自己攒了半个月的本地定制提示词直接被覆盖蒸发。",
+      "今天要介绍的开源项目 **Heron（苍鹭）**，就是专门来终结「手工复制粘贴 SKILL.md」的。它用 Rust + Tauri 2 写成，体积只有 5–15 MB，核心思路非常克制：把散落在各处的 Skill 收拢成一份受 Git 版本管理的单一真实源，再按需投影到 13 款 AI 客户端。下面我们拆开看看它的机制、上手方式和真实边界。"
+    ],
+    "sections": [
+      {
+        "h": "01 为什么 Agent Skill 需要真正的包管理器",
+        "paras": [
+          "随着 `SKILL.md`（包含提示词、工作流、脚本与参考文档的目录包）成为沉淀工程经验的核心资产，开发者手里的 Skill 数量正迅速从三五个膨胀到几十个。",
+          "但行业目前的管理方式依然停留在原始的「手工拷贝到隐藏目录」，由此派生出五个典型痛点：目录散落难盘点、物理副本改一处漏四处、软链失效或被压制全靠猜、上游更新与本地微调二选一、以及团队新人拉下代码后缺少对应 Skill 环境。",
+          "Heron 的名字取自「苍鹭静立一处，注视整片水面」。它不试图替你写提示词，也不绑定任何一家 AI 厂商，只专注把 Skill 的「收拢、分发、校验、升级、协同」做成一套确定性的工程闭环。"
+        ],
+        "figure": {
+          "kicker": "行动中心",
+          "title": "概览页：只列此刻需要你决定的事",
+          "accent": "需要你决定",
+          "cap": "图1：Heron 桌面端概览页，集中呈现坏链、未纳管发现与各客户端真实生效状态",
+          "height": 760,
+          "hero": {
+            "type": "shot",
+            "url": "Heron v0.1.0 · 概览（林墨深色主题）",
+            "src": "/Users/jingyuan-mb01/javaspace/REA/heron/images/首页-深色.png"
+          }
+        }
+      },
+      {
+        "h": "02 Heron 是什么：单一真实源与四步闭环",
+        "paras": [
+          "Heron 的架构底座非常清晰：所有被纳管的 Skill 统一存放在 `~/.heron/skills/<slug>`，这里就是磁盘上唯一的真相源（Store），而且**每个 Skill 目录本身都是一个独立的 Git 仓库**。",
+          "围绕这份单一真实源，Heron 跑通了四步闭环：第一步「收拢（Adopt）」，扫描本机各工具目录与项目目录，强制全量备份后按 Blake3 内容哈希去重移入存储区，原位置无缝替换为受管链接；第二步「分发（Project）」，按需单向投影到显式指定的客户端或项目落点；第三步「升级（Upgrade）」，对比上游提交并在内存树上执行三方合并；第四步「协同（Lock）」，导出不含绝对路径的 `heron.lock` 供团队一键复现。",
+          "值得一提的是，桌面端（Tauri 2 + Vue 3）和命令行工具（`heron` CLI）共用同一套 Rust 业务编排内核 `heron-service`，任何变更操作都严格遵循「计算计划 → 预览确认（`--dry-run`）→ 备份后执行」的事务顺序。"
+        ],
+        "quote": "收拢后原有路径保持不变，原地转换为指向唯一真实源的受管投影，绝不破坏既有工程结构。"
+      },
+      {
+        "h": "03 核心机制拆解：投影、三方合并与诚实探测",
+        "paras": [
+          "**一、四种投影模式，直面跨平台兼容边界。** 装得上不等于客户端读得到。Heron 在 macOS / Linux 默认使用 `symlink` 符号链接，零磁盘占用且单点修改处处生效；在 Windows 默认使用 `junction` 目录连接点，普通用户无需管理员提权弹窗即可创建；遇到只认实体 `.md` 文件、忽略软链目录的客户端扫描器，可切换 `pointer` 模式生成轻量代理 `SKILL.md`；最后还保留了 `copy` 单向副本兜底，并内置 `E_DRIFTED` 漂移检测，绝不静默覆盖外部手改过的文件。",
+          "**二、Per-Skill Git 与三方合并升级。** 每个纳管 Skill 内部维护 `main`（本地工作分支）、`upstream`（上游镜像分支）和 `v<version>` 版本标签。升级时调用 `git merge-tree --write-tree` 在隔离树上完成内存级三方合并：如果上游更新与你的本地提示词微调不冲突，直接平滑合并；一旦有冲突，工作区保持原样不被污染（CLI 退出码 `3`），桌面端弹出逐文件左右对比界面由你裁决。任何时候想反悔，一条 `heron rollback` 即可回到历史版本标签。",
+          "**三、13 款 AI 客户端诚实探测与 6 大市场统一检索。** Heron 内置了 Claude Code、Codex、Cursor、Trae、Trae CN、Qoder、WorkBuddy、Cline、GitHub Copilot、Grok Build、Antigravity、opencode 和 `.agents` 共 13 款客户端规范。扫描时结合目录、CLI 命令和 App Bundle 复合信号探测本机安装情况，未安装的客户端只置灰标注，绝不伪造「已生效」。市场方面同样讲诚实：明确区分应用内可直接搜索安装的 `skills.sh`、`ClawHub`，以及浏览器引导的 `Qoder`、`SkillHub`、`ModelScope`、`SkillsMP`。"
+        ],
+        "figure": {
+          "kicker": "精准落点控制",
+          "title": "逐客户端一键开关与真实状态校验",
+          "accent": "逐客户端一键开关",
+          "cap": "图2：点开任意 Skill 即可在右侧抽屉逐客户端启用或停用，路径与生效状态一目了然",
+          "height": 760,
+          "hero": {
+            "type": "shot",
+            "url": "Heron v0.1.0 · 我的 Skill 抽屉",
+            "src": "/Users/jingyuan-mb01/javaspace/REA/heron/images/我的Skill-深色2.png"
+          }
+        }
+      },
+      {
+        "h": "04 极速上手：桌面端与 CLI 三步跑通",
+        "paras": [
+          "你可以直接去 GitHub Releases 或官网下载原生桌面端安装包（macOS Apple Silicon / Intel `.dmg` 或 Windows x64 `.exe`），打开后在「发现」页一键扫描并收拢本机已有 Skill；如果你更习惯终端，命令行三步就能完成初始化：",
+          "第一步，执行 `heron scan` 多线程只读扫描本机已知客户端目录与工作区；第二步，执行 `heron detected` 查看磁盘上尚未纳管的 Skill 列表；第三步，先运行 `heron adopt --all --dry-run` 预览收拢与去重计划，确认无误后去掉 `--dry-run` 正式执行。",
+          "日常维护同样极简：执行 `heron outdated` 和 `heron upgrade --all` 检查并三方合并上游更新；遇到异常执行 `heron doctor` 做只读体检，定位坏链、重复内容或病态嵌套（例如误操作产生的 `skills/.claude/skills/`）；团队协作时，在仓库根目录运行 `heron lock export` 生成 `heron.lock` 提交到 Git，新成员克隆后一条 `heron lock apply` 即可对齐整套 Skill。"
+        ],
+        "figure": {
+          "kicker": "三方合并更新",
+          "title": "清晰区分上游追踪状态，绝不伪造「已是最新」",
+          "accent": "绝不伪造",
+          "cap": "图3：更新页如实标记「已是最新」与「未追踪来源」，支持批量三方合并与冲突解决",
+          "height": 760,
+          "hero": {
+            "type": "shot",
+            "url": "Heron v0.1.0 · 更新（三方合并）",
+            "src": "/Users/jingyuan-mb01/javaspace/REA/heron/images/更新-深色.png"
+          }
+        }
+      },
+      {
+        "h": "05 技术架构与参数一览",
+        "paras": [
+          "Heron 采用严格的单向依赖多 Crate 分层设计：最底层 `heron-core` 禁止任何 IO、异步与系统时钟；中间由 `heron-scan`（rayon + walkdir + Blake3）、`heron-vcs`（git merge-tree）、`heron-projection`、`heron-source` 和内嵌 SQLite 的 `heron-store` 组成能力引擎；顶层 `src-tauri` 与 `heron-cli` 只做薄壳转发。",
+          "所有 CLI 命令均支持 `--json` 机器可读输出与 `--data-dir <DIR>` 沙箱目录隔离，方便接入 CI 流水线或便携测试而不触碰真实的 `~/.heron`。"
+        ],
+        "figure": {
+          "kicker": "分层架构",
+          "title": "GUI 与 CLI 同构的 Rust 分层内核",
+          "accent": "同构",
+          "cap": "图4：从表现层到跨平台安全契约的清晰分层",
+          "height": 880,
+          "hero": {
+            "type": "stack",
+            "layers": [
+              {
+                "name": "表现层",
+                "items": [
+                  "Vue 3 + TS 前端",
+                  "Tauri 2 外壳",
+                  "heron-cli"
+                ]
+              },
+              {
+                "name": "编排层",
+                "items": [
+                  "heron-service",
+                  "Plan/Dry-run",
+                  "备份与审计"
+                ]
+              },
+              {
+                "name": "核心引擎",
+                "items": [
+                  "heron-scan",
+                  "heron-vcs",
+                  "heron-projection",
+                  "heron-source"
+                ]
+              },
+              {
+                "name": "基础设施",
+                "items": [
+                  "heron-platform",
+                  "heron-store (SQLite)",
+                  "heron-core"
+                ]
+              }
+            ]
+          }
+        },
+        "table": {
+          "head": [
+            "维度",
+            "具体参数与实现"
+          ],
+          "rows": [
+            [
+              "开源协议 / 版本",
+              "MIT License · 当前 v0.1.0"
+            ],
+            [
+              "技术栈与体积",
+              "Rust 1.80+ · Tauri 2 · Vue 3 · 约 5–15 MB 零运行时依赖"
+            ],
+            [
+              "支持平台",
+              "macOS 12+ (Apple Silicon/Intel)、Windows 10 1803+ (x64)、Linux 源码支持"
+            ],
+            [
+              "内置生态覆盖",
+              "13 款 AI 客户端落点 · 6 大 Skill 市场 · 4 套内置主题"
+            ]
+          ]
+        }
+      },
+      {
+        "h": "06 必须说清楚的边界与注意事项",
+        "paras": [
+          "任何工具都有边界，上手 Heron 前有四件事需要提前了解：",
+          "第一，**本机需要 Git 2.38 或更高版本**。因为内存级三方合并依赖 `git merge-tree --write-tree`，老版本 Git 无法运行升级合并流程。",
+          "第二，**首次打开未签名安装包需要手动放行**。官方发布包采用 Tauri 内置的 minisign 公钥校验应用内自动更新，但暂未购买商业系统级代码签名证书——首次启动时 macOS 需右键选择「打开」，Windows 需点击「更多信息 → 仍要运行」。",
+          "第三，**拒绝静默覆盖是刻意设计**。当投影目标已存在未经纳管的非空目录时，Heron 会直接停下并报 `E_NOT_MANAGED`，需要你先收拢或手动处理，绝不替你删文件。",
+          "第四，**如果你只用一款 AI 工具且只有两三个固定 Skill**，手工维护完全够用，没必要引入额外工具；但只要你横跨两款以上 AI 客户端，或者需要和团队统一 Skill 版本，Heron 省下的排错时间会立刻值回票价。"
+        ]
+      }
+    ],
+    "closing": "把「散落在隐藏目录里靠记忆维护」变成「一份受 Git 保护、可校验、可回滚、可锁版本的工程资产」，这就是 Heron 苍鹭的价值。项目完全开源免费，值得放进你的 AI 开发工具箱。",
+    "links": [
+      {
+        "label": "官方网站",
+        "url": "https://heron.v5ai.xin"
+      },
+      {
+        "label": "GitHub 仓库",
+        "url": "https://github.com/v5note/heron"
+      },
+      {
+        "label": "安装包下载",
+        "url": "https://github.com/v5note/heron/releases"
+      }
+    ],
+    "cta": "觉得实用请点个「赞」和「在看」，转发给同样在用多款 AI 编程工具的同事。",
+    "headerImage": "cover.png"
+  },
+  "imageCaption": "多款AI工具切换烦？开源Heron苍鹭：一份Git真实源投影13款客户端，三方合并升级不丢改动，MIT免费：heron.v5ai.xin #开源 #AI编程",
+  "video": {
+    "title": "别再手动复制 SKILL.md 了，这款 Rust 工具把 13 款 AI 客户端管明白了",
+    "duration": "50s",
+    "format": "口播干货",
+    "kicker": "开源精选 · 口播",
+    "ctaKicker": "Heron 苍鹭 · heron.v5ai.xin",
+    "hook": "电脑里装了好几个 AI 编程工具，同一个 Skill 你复制了几份？",
+    "cover": {
+      "kicker": "HERON 苍鹭 · MIT 开源",
+      "title": [
+        "13 款 AI 工具",
+        "一份 Git 全管住"
+      ],
+      "accent": "一份 Git",
+      "sub": "50 秒看懂开源本地 Skill 管理器",
+      "hero": {
+        "type": "shot",
+        "url": "heron.v5ai.xin · 概览",
+        "src": "/Users/jingyuan-mb01/javaspace/REA/heron/images/首页-深色.png"
+      },
+      "tags": [
+        "★ MIT 开源",
+        "Rust + Tauri 2",
+        "50s 干货"
+      ]
+    },
+    "shots": [
+      {
+        "at": "0–3s",
+        "scene": "主理人出镜 + 大字标题与封面同款",
+        "voice": "电脑里同时装了 Claude Code、Cursor 和 Codex，同一个 Skill 你到底复制了几份？",
+        "sub": "Skill 复制几份了？",
+        "asset": "封面同款"
+      },
+      {
+        "at": "3–12s",
+        "scene": "切代码窗展示 .claude / .cursor / .codex 散落目录",
+        "voice": "改完一处提示词，另外四个隐藏目录全过期；作者一更新仓库，自己调半个月的本地微调直接被覆盖。",
+        "sub": "一改就脱节，升级丢微调",
+        "asset": "卡片 2"
+      },
+      {
+        "at": "12–22s",
+        "scene": "切 Heron 首页概览与四步闭环图",
+        "voice": "试试开源的 Heron 苍鹭：Rust 加 Tauri 2 写成，只有 5 到 15 兆。一条命令先备份再去重，把所有 Skill 收拢成一份单一 Git 真实源。",
+        "sub": "一份 Git 单一真实源",
+        "asset": "卡片 3"
+      },
+      {
+        "at": "22–34s",
+        "scene": "切单 Skill 逐客户端开关抽屉真截图，局部放大生效状态",
+        "voice": "它内置 13 款主流 AI 客户端，macOS 走软链，Windows 走免提权连接点，谁生效、谁坏链一眼看清，一处修改处处同步。",
+        "sub": "13 款客户端一处同步",
+        "asset": "卡片 4"
+      },
+      {
+        "at": "34–43s",
+        "scene": "切更新页截图 + 三方合并与 heron.lock 说明",
+        "voice": "更爽的是每个 Skill 都是独立 Git 仓库，升级用 git merge-tree 做三方合并，既吃上游新功能又不丢你的本地改动；还能导出 heron.lock 一行同步团队。",
+        "sub": "三方合并，不丢本地改动",
+        "asset": "图 3"
+      },
+      {
+        "at": "43–50s",
+        "scene": "切结尾卡 + 官网二维码与境界提醒条",
+        "voice": "需要本机 Git 2.38 以上，MIT 协议完全开源免费。官网在画面右下角，先点赞收藏，换机或带团队时直接用。",
+        "sub": "MIT 开源，点赞收藏",
+        "asset": "结尾卡"
+      }
+    ],
+    "subtitles": [
+      "Skill 复制几份了？",
+      "一改就脱节，升级丢微调",
+      "一份 Git 单一真实源",
+      "13 款客户端一处同步",
+      "三方合并，不丢本地改动",
+      "MIT 开源，点赞收藏"
+    ],
+    "tags": [
+      "#开源项目",
+      "#AI编程",
+      "#AgentSkill",
+      "#Rust"
+    ],
+    "cta": "点个赞收藏备用，官网 heron.v5ai.xin 可直接下载 macOS / Windows 安装包。"
+  }
+}
